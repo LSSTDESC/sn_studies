@@ -6,7 +6,7 @@ from .signal_bands import RestFrameBands,SignalBand
 from .ana_file import AnaMedValues,Anadf
 from .utils import flux5_to_m5,m5_to_flux5
 from sn_tools.sn_io import loopStack
-
+from . import plt
 
 class Data:
     def __init__(self,theDir,fname,
@@ -259,46 +259,119 @@ class Data:
 
 class Nvisits_cadence:
     def __init__(self,snr_calc,cadence,m5_type,choice_type,bands):
-        
+        """
+        class to estimate the number of visits
+        for a given cadence
+
+        Parameters
+        ----------
+        snr_calc: pandas df
+         with the following columns:
+          - x1: SN stretch  
+          - color: SN color 
+          - z: SN redshift 
+          - SNRcalc_r,i,z,y: SNR for r,i,z,y bands
+          - m5calc_r,i,z,y: m5 estimated from SNR for r,i,z,y bands 
+          - fracSNR_r,i,z,y: SNR distribution for r,i,z,y bands 
+          - flux_5_e_sec_r,i,z,y: 5-sigma flux (pe/sec) for r,i,z,y bands 
+        cadence: float
+         cadence value
+        m5_type: str
+         type of m5 values used
+         eg: median_m5_field_filter_season: median m5 per field and per filter and per season
+             median_m5_field_filter: median m5 per field and per filter (independent on season)
+             median_m5_filter : median m5 per filter (independent on field and season)
+        choice_type: str
+         choice for SNR:
+           - Nvisits: min tot number of visits
+           - Nvisits_y: min tot number of visits in y
+           - fracflux : SNR distrib per band close to flux fraction dist per band
+        bands: str
+         bands to consider
+        """
 
         outName = 'Nvisits_cadence_{}_{}.npy'.format(choice_type,m5_type)
 
         if not os.path.isfile(outName):
-            self.cadence = cadence
-            self.snr_calc = snr_calc
+            #file not found
+            # calculation necessary
 
+            # grab values
+            self.cadence = cadence #cadence
+            self.snr_calc = snr_calc #snrs
+
+            # new columns for output df
             self.cols = ['z','Nvisits']
             for band in bands:
                 self.cols.append('Nvisits_{}'.format(band))
 
+            # get m5 values
             medclass = AnaMedValues('medValues.npy')
             m5 = eval('{}.{}'.format('medclass',m5_type))
+
+            # df_tot: output df
             df_tot = pd.DataFrame()
 
+            # groupby fieldname and season - apply getVisits for the groups
             df_tot = m5.groupby(['fieldname','season']).apply(lambda x : self.getVisits(x)).reset_index()
 
 
             self.nvisits_cadence = df_tot
 
+            # save as numpy record
             np.save(outName,np.copy(df_tot.to_records(index=False)))
 
         else:
+            # file found: just load it!
             self.nvisits_cadence = pd.DataFrame(np.load(outName))
 
 
     def getVisits(self,grp):
+        """
+        Method to get the number of visits for the group grp
+        Calls the class Nvisits_m5
 
-       
+        Parameters
+        ----------
+        grp: group (in the pandas df group sense)
+
+        Returns
+        -------
+        df: pandas df with the following columns:
+         - x1: SN stretch 
+         - color: SN color
+         - z: SN redshift 
+         - SNRcalc_g,r,i,z,y: SNR for g,r,i,z,y bands
+         - m5calc_g,r,i,z,y: m5 from SNR for g,r,i,z,y bands
+         - fracSNR_g,r,i,z,y: SNR distribution for g,r,i,z,y bands
+         - flux_5_e_sec_g,r,i,z,y: 5-sigma flux (pe/sec) for g,r,i,z,y bands
+         - idx:
+         - m5single_g,r,i,z,y: m5 single exposure for g,r,i,z,y bands
+         - cadence: cadence
+         - Nvisits_g,r,i,z,y: total number of visits for g,r,i,z,y bands
+        """
         
+        # get the number of visits
         df = Nvisits_m5(self.snr_calc,grp).nvisits
+        
+        # select data corresponding to the cadence
         io = np.abs(df['cadence']-self.cadence)<1.e-5
-        print('iiii',df.columns)
+        #print('iiii',df.columns,self.cols)
+        
         df = df.loc[io,self.cols]
-        #df.loc[:,'fieldname'] = grp.name[0]
-        #df.loc[:,'season'] = grp.name[1]
+
         return df
 
     def plot(self):
+        """
+        Method to plot the Delta number of visits
+        as a function of the redshift
+
+        These plots (one per field) illustrate how
+        the number of visits may vary
+        depending on the season (that is on the reference m5 values)
+
+        """
 
         # this for the plot
         print(self.nvisits_cadence.groupby(['fieldname','z']).apply(lambda x: np.min(x['Nvisits'])).reset_index())
@@ -337,28 +410,64 @@ class Nvisits_cadence:
 
 class Nvisits_m5:
     def __init__(self, tab, med_m5):
+        """
+        class to estimate the number of visits 
+        requested to "reach" m5 values 
+        depending on cadence
+
+        Parameters
+        ----------
+
+        tab: panda df with the following columns:
+          - x1: SN stretch 
+         - color: SN color
+         - z: SN redshift 
+         - SNRcalc_g,r,i,z,y: SNR for g,r,i,z,y bands
+         - m5calc_g,r,i,z,y: m5 from SNR for g,r,i,z,y bands
+         - fracSNR_g,r,i,z,y: SNR distribution for g,r,i,z,y bands
+         - flux_5_e_sec_g,r,i,z,y: 5-sigma flux (pe/sec) for g,r,i,z,y bands
+        med_m5: panda df with m5 values (colname: fiveSigmaDepth) 
+
+        """
+       
 
         cols = tab.columns[tab.columns.str.startswith('m5calc')].values
 
         self.bands = ''.join([col.split('_')[-1] for col in cols])
+        # get flux5 to m5 and m5 to flux5 conversions
         self.f5_to_m5 = flux5_to_m5(self.bands)
         self.m5_to_f5 = m5_to_flux5(self.bands)
+        # snr reference values to estimate m5
         self.snr = tab
 
+        # transform m5 info: for columns to rows
         self.med_m5 = self.transform(med_m5)
 
-        print('here medians',self.med_m5)
-
+       
+        # select data with z>=0.2
         idx = tab['z']>=0.2
         tab = tab[idx]
 
+        # get the number of visits
         self.nvisits = self.estimateVisits()
 
+        """
+        #This is to plot z isocurve in the plane(cad obs frame,m5)
 
-    def estimateVisits(self,):
+        self.plot_map(self.nvisits)
+        plt.show()
+        """
+    def estimateVisits(self):
+        """
+        Method to estimate the number of visits
+        necessary to "reach" m5 values
+        defined by SNRs(per band)
+        These numbers are estimated for a set of cadences
+        """
 
         dict_cad_m5 = {}
         
+        # define the cadences 
         cads = pd.DataFrame(np.arange(0.,10.,1.),columns=['cadence'])
 
         idx = 0
@@ -371,16 +480,20 @@ class Nvisits_m5:
         m5.loc[:,'idx'] = idx
         snr.loc[:,'idx'] = idx
 
+        # perform the merging between SNR values and m5 reference (single exp) values
         snr = snr.merge(m5,left_on=['idx'],right_on=['idx'])
         
         zvals = snr['z'].unique()
         
+        # make all possible combinations of (z,cadence) pairs
         df_combi = self.make_combi(zvals,cads) 
 
+        # merge this with snr
         df_merge = snr.merge(df_combi,left_on=['z'],right_on=['z'])
 
-        print(df_merge)
+
         cols = []
+        # estimate the number of visits per band
         for b in self.bands:
             df_merge['flux_5_e_sec_{}'.format(b)]=df_merge['flux_5_e_sec_{}'.format(b)]/np.sqrt(df_merge['cadence'])
             df_merge['m5calc_{}'.format(b)] = self.f5_to_m5[b](df_merge['flux_5_e_sec_{}'.format(b)])
@@ -392,65 +505,18 @@ class Nvisits_m5:
         #estimate the total number of visits
         df_merge.loc[:,'Nvisits'] = df_merge[cols].sum(axis=1)
         
-
+        """
+        self.plot(df_merge,cads,'Nvisits')
+        plt.show()
+        """
         return df_merge
 
-
-        """
-        for val in med_m5:
-            for season in sel['season'].values:
-                seas= s[sel['season']==season]
-                tab.loc[:,'season'] = season
-                test=tab.merge(seas,left_on=['season'],right_on=['season'])
-            tab.loc[:,'season'] = val['season']
-        """
-
-        for fieldname in med_m5['fieldname'].unique():
-            idx = med_m5['fieldname']==fieldname
-            sel = med_m5[idx]
-            for season in sel['season'].values:
-                seas= sel[sel['season']==season]
-                tab.loc[:,'season'] = season
-                test=tab.merge(seas,left_on=['season'],right_on=['season'])
-                
-                zvals = test['z'].unique()
-
-                df_combi = self.make_combi(zvals,cads)
-
-                #merge with test
-
-                df_merge = test.merge(df_combi,left_on=['z'],right_on=['z'])
-
-                print(df_merge)
-                cols = []
-                for b in self.bands:
-                    df_merge['flux_5_e_sec_{}'.format(b)]=df_merge['flux_5_e_sec_{}'.format(b)]/np.sqrt(df_merge['cadence'])
-                    df_merge['m5calc_{}'.format(b)] = self.f5_to_m5[b](df_merge['flux_5_e_sec_{}'.format(b)])
-                    df_merge.loc[:,'Nvisits_{}'.format(b)]=10**(0.8*(df_merge['m5calc_{}'.format(b)]-df_merge['m5single_{}'.format(b)]))
-                    
-                    
-                
-                """
-                fig, ax = plt.subplots()
-                figb, axb = plt.subplots()
-                for b in 'grizy':
-                    test['flux_5_e_sec_{}'.format(b)]=test['flux_5_e_sec_{}'.format(b)]/np.sqrt(cadence)
-                    test['m5calc_{}'.format(b)] = self.f5_to_m5[b](test['flux_5_e_sec_{}'.format(b)])
-                    test.loc[:,'Nvisits_{}'.format(b)]=10**(0.8*(test['m5calc_{}'.format(b)]-test['m5single_{}'.format(b)]))
-                    ax.plot(test['z'],test['Nvisits_{}'.format(b)],color=filtercolors[b])
-                    axb.plot(test['z'],test['m5calc_{}'.format(b)],color=filtercolors[b])
-                ax.grid()
-                axb.grid()
-                """
-                #print(test)
-
-                #plt.show()
-    
-
-        self.map_cad_m5 = df_merge
-    
     def plot_map(self, dft):
+        """
+        Method to plot z-curves(per band) corresponding to sigma_C<0.04
+        in the plane (cadence obs frame, m5)
 
+        """
         
         mag_range = [23., 27.5] 
         dt_range=[0.5, 20.]
@@ -512,6 +578,7 @@ class Nvisits_m5:
 
     def plot(self, data, cadences, what='m5_calc',legy='m5'):
 
+        print('hhh',data.columns,cadences)
         fig, ax = plt.subplots()
         axb = None
         ls = ['-','--','-.']
@@ -526,6 +593,7 @@ class Nvisits_m5:
             idx = np.abs(data['cadence']-cad)<1.e-5
             sel = data[idx]
 
+            print(cad,len(sel))
             for b in self.bands:
                 if io == 0:
                     ax.plot(sel['z'].values,sel['{}_{}'.format(what,b)].values,color=filtercolors[b],label=b,ls=ls[io])
@@ -553,6 +621,21 @@ class Nvisits_m5:
 
 
     def make_combi(self,zv, cad):
+        """
+        Method to combine redshift and cadence values
+
+        Parameters
+        ----------
+        zv: redshift values
+        cad: cadence values
+
+        Returns
+        -------
+        pandas df with all possible combinations of (redshift, cadence) pairs
+
+        """
+        
+
 
         df = pd.DataFrame()
 
@@ -564,7 +647,20 @@ class Nvisits_m5:
         return df
 
     def transform(self, med_m5):
- 
+        """
+        Method to transform m5 data to a single row
+
+
+        Parameters
+        ----------
+        med_m5: panda df with m5 values (colname: fiveSigmaDepth)
+
+        Returns
+        -------
+        pandas df with:
+         m5single_g,r,i,z,y: m5 single-exposure for g,r,i,z,y bands
+        """
+
         dictout = {}
 
         for band in 'grizy':
@@ -590,35 +686,6 @@ class Nvisits_m5:
                              'm5single_y': [22.094841]})
         """
     """
-    def transform_old(self, med_m5):
-
-        df = med_m5.copy()
-        
-        #gr = df.groupby(['fieldname','season']).apply(lambda x: self.horizont(x))
-
-        gr = df.groupby(['fieldname']).apply(lambda x: self.horizont(x)).reset_index()
-
-        
-        if 'season' not in gr.columns:
-            gr.loc[:,'season'] = 0
-
-        
-        return pd.DataFrame({'fieldname': ['all'],
-                             'season': [0],
-                             'm5single_g': [0.],
-                             'm5single_r': [23.9632],
-                             'm5single_i': [23.5505],
-                             'm5single_z': [23.0003],
-                             'm5single_y': [22.2338]})
-        
-        return pd.DataFrame({'fieldname': ['all'],
-                             'season': [0],
-                             'm5single_g': [0.],
-                             'm5single_r': [23.829639],
-                             'm5single_i': [23.378532],
-                             'm5single_z': [22.861743],
-                             'm5single_y': [22.094841]})
-        """
     def horizont(self,grp):
         
         dictout = {}
@@ -637,18 +704,4 @@ class Nvisits_m5:
                              'm5single_i': dictout['i'],
                              'm5single_z': dictout['z'],
                              'm5single_y': dictout['y']})
-        
-
-
-
-
-"""
-        def nvisits_deltam5(m5,m5_median):
-
-            diff = m5-m5_median
-        
-            nv = 10**(0.8*diff)
-
-            #return nv.astype(int)
-            return nv
-"""
+    """
