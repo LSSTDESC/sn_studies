@@ -6,7 +6,7 @@ from .signal_bands import RestFrameBands,SignalBand
 from .ana_file import AnaMedValues,Anadf
 from .utils import flux5_to_m5,m5_to_flux5
 from sn_tools.sn_io import loopStack
-from . import plt
+from . import plt,filtercolors
 
 class Data:
     def __init__(self,theDir,fname,
@@ -419,7 +419,7 @@ class Nvisits_m5:
         ----------
 
         tab: panda df with the following columns:
-          - x1: SN stretch 
+         - x1: SN stretch 
          - color: SN color
          - z: SN redshift 
          - SNRcalc_g,r,i,z,y: SNR for g,r,i,z,y bands
@@ -451,12 +451,15 @@ class Nvisits_m5:
         # get the number of visits
         self.nvisits = self.estimateVisits()
 
-        """
+        
         #This is to plot z isocurve in the plane(cad obs frame,m5)
-
-        self.plot_map(self.nvisits)
+        """
+        self.plot_map(self.nvisits) 
+        cads = list(np.arange(0.,5.,1.))
+        self.plot(self.nvisits,cads)
         plt.show()
         """
+        
     def estimateVisits(self):
         """
         Method to estimate the number of visits
@@ -505,10 +508,6 @@ class Nvisits_m5:
         #estimate the total number of visits
         df_merge.loc[:,'Nvisits'] = df_merge[cols].sum(axis=1)
         
-        """
-        self.plot(df_merge,cads,'Nvisits')
-        plt.show()
-        """
         return df_merge
 
     def plot_map(self, dft):
@@ -516,8 +515,23 @@ class Nvisits_m5:
         Method to plot z-curves(per band) corresponding to sigma_C<0.04
         in the plane (cadence obs frame, m5)
 
+        Parameters
+        ----------
+        dft: pandas df with the following columns:
+         - x1: SN stretch 
+         - color: SN color
+         - z: SN redshift 
+         - SNRcalc_g,r,i,z,y: SNR for g,r,i,z,y bands
+         - m5calc_g,r,i,z,y: m5 from SNR for g,r,i,z,y bands
+         - fracSNR_g,r,i,z,y: SNR distribution for g,r,i,z,y bands
+         - flux_5_e_sec_g,r,i,z,y: 5-sigma flux (pe/sec) for g,r,i,z,y bands
+         - idx:
+         - m5single_g,r,i,z,y: m5 single exposure for g,r,i,z,y bands
+         - cadence: cadence
+         - Nvisits_g,r,i,z,y: total number of visits for g,r,i,z,y bands
+
         """
-        
+       
         mag_range = [23., 27.5] 
         dt_range=[0.5, 20.]
 
@@ -576,12 +590,36 @@ class Nvisits_m5:
         #plt.show()
     
 
-    def plot(self, data, cadences, what='m5_calc',legy='m5'):
+    def plot(self, data, cadences, what='m5calc',legy='m5'):
+        """
+        Method to plot m5 (per band, corresponding to sigma_C<0.04)
+        as a function of the redshift
+        x-axis is the redshift labelled as z.
 
-        print('hhh',data.columns,cadences)
+        Parameters
+        ----------
+        data: pandas df with the following columns:
+         - x1: SN stretch 
+         - color: SN color
+         - z: SN redshift 
+         - SNRcalc_g,r,i,z,y: SNR for g,r,i,z,y bands
+         - m5calc_g,r,i,z,y: m5 from SNR for g,r,i,z,y bands
+         - fracSNR_g,r,i,z,y: SNR distribution for g,r,i,z,y bands
+         - flux_5_e_sec_g,r,i,z,y: 5-sigma flux (pe/sec) for g,r,i,z,y bands
+        cadences: list of float
+         list of cadence values for the plot
+        what: str, opt
+         parameter to plot (default = m5calc)
+        legy: str,opt
+         y-axis legend (default: m5)
+ 
+
+
+        """
+        
         fig, ax = plt.subplots()
         axb = None
-        ls = ['-','--','-.']
+        ls = ['-','--','-.','-','-']
 
         if what == 'Nvisits':
             figb, axb = plt.subplots()
@@ -593,12 +631,12 @@ class Nvisits_m5:
             idx = np.abs(data['cadence']-cad)<1.e-5
             sel = data[idx]
 
-            print(cad,len(sel))
             for b in self.bands:
+                toplot = '{}_{}'.format(what,b)
                 if io == 0:
-                    ax.plot(sel['z'].values,sel['{}_{}'.format(what,b)].values,color=filtercolors[b],label=b,ls=ls[io])
+                    ax.plot(sel['z'].values,sel[toplot].values,color=filtercolors[b],label=b,ls=ls[io])
                 else:
-                   ax.plot(sel['z'].values,sel['{}_{}'.format(what,b)].values,color=filtercolors[b],ls=ls[io]) 
+                   ax.plot(sel['z'].values,sel[toplot].values,color=filtercolors[b],ls=ls[io]) 
 
             if what == 'Nvisits':
                 #estimate the total number of visits
