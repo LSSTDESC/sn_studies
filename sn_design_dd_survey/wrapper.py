@@ -10,6 +10,7 @@ from . import plt,filtercolors
 
 class Data:
     def __init__(self,theDir,fname,
+                 m5file,
                  x1=-2.0,
                  color=0.2,
                  blue_cutoff=380.,
@@ -61,8 +62,8 @@ class Data:
         self.fracSignalBand = SignalBand(self.lc)
 
         # load median m5
-
-        self.m5_FieldBandSeason, self.m5_FieldBand, self.m5_Band = self.load_m5('medValues.npy')
+        m5_fpath = '{}/{}'.format(theDir,m5file)
+        self.m5_FieldBandSeason, self.m5_FieldBand, self.m5_Band = self.load_m5(m5_fpath)
 
     def load_data(self, theDir, fname):
         """
@@ -258,7 +259,7 @@ class Data:
 
 
 class Nvisits_cadence:
-    def __init__(self,snr_calc,cadence,m5_type,choice_type,bands):
+    def __init__(self,snr_calc,cadence,theDir,m5_file,m5_type,choice_type,bands):
         """
         class to estimate the number of visits
         for a given cadence
@@ -306,7 +307,8 @@ class Nvisits_cadence:
                 self.cols.append('Nvisits_{}'.format(band))
 
             # get m5 values
-            medclass = AnaMedValues('medValues.npy')
+            m5_fpath = '{}/{}'.format(theDir,m5_file)
+            medclass = AnaMedValues(m5_fpath)
             m5 = eval('{}.{}'.format('medclass',m5_type))
 
             # df_tot: output df
