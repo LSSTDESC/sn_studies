@@ -36,21 +36,42 @@ class DD_Budget:
         # loading the number of visits for the case a single  m5 per band
         self.df_visits = df_visits
         self.nvisits, self.z, self.nvisits_band = self.interp_visits(
-            df_visits, config, runtype='')
+            df_visits,runtype='')
 
         # loading the number of visits for the case one m5 per band per season and per field
         self.df_visits_ref = df_visits_ref
         self.nvisits_ref, self.z_ref, self.nvisits_band_ref = self.interp_visits(
-            df_visits_ref, config, runtype='Nvisits_single')
-        print('alors', self.nvisits_ref)
+            df_visits_ref,runtype='Nvisits_single')
+        
         # estimate the budget
 
-        self.budget = self.budget_calc(config, runtype)
+        self.budget = self.budget_calc(runtype)
         self.runtype = runtype
-        if self.runtype == 'Nvisits_single':
-            self.summary_Nvisits_single()
+        #if self.runtype == 'Nvisits_single':
+        self.summary_Nvisits_single()
 
-    def interp_visits(self, df_tot, config, runtype):
+    def interp_visits(self, df_tot,runtype):
+        """
+        Method to interpolate the number of visits vs z
+
+        Parameters
+        ---------
+        df_tot: pandas df
+         data used to make interpolations
+        run_type: str
+         type of run: Nvisits_single or Nvisits_adjusted
+
+        Returns
+        ------
+        nvisits: dict of interp1d
+          keys: fieldName, season; parameter: z
+        z: dict of interp1d
+          keys: fieldName, season; parameter: nvisits
+        nvisits_band: dict of interp1d
+          keys: fieldName, season, band; parameter: z 
+
+        """
+
 
         fieldnames = ['COSMOS', 'CDFS', 'XMM-LSS', 'ELAIS', 'ADFS1', 'ADFS2']
         seasons = range(1, 11)
@@ -70,7 +91,7 @@ class DD_Budget:
                 idx = df_tot['fieldname'] == fieldname_ref
                 idx &= df_tot['season'] == season_ref
                 idx &= np.abs(df_tot['cadence'] -
-                              config[fieldname]['cadence']) < 1.e-5
+                              self.conf[fieldname]['cadence']) < 1.e-5
                 sel = df_tot[idx]
 
                 nvisits[fieldname][season] = interpolate.interp1d(
@@ -85,19 +106,41 @@ class DD_Budget:
 
         return nvisits, z, nvisits_band
 
+    
     def interp_ref(self, df_ref, what='Nvisits'):
 
         idx = df_ref['fieldname'] == 'all'
         idx &= df_ref['season'] == 0
         sel = df_ref[idx]
 
-        print('blllll', df_ref.columns)
         nvisits_ref = interpolate.interp1d(
             sel['z'], sel[what], bounds_error=False, fill_value=0.0)
 
         return nvisits_ref
 
-    def budget_calc(self, config, runtype):
+    def budget_calc(self,runtype):
+        """
+        Method to estimate, vs z, the DD budget
+
+        Parameters
+        ----------
+        run_type: str
+         type of run: Nvisits_single or Nvisits_adjusted
+
+        Returns
+        -------
+        pandas df with the following cols:
+         Nvisits_fieldName_season: number of visits 
+                                   for all field/season considered in the scenario (conf file)
+         z_fieldName_season: zlimit for all field/season considered in the scenario (conf file)
+         z_ref: redshift limit corresponding to the case same number of visits per field/season/night
+         Nvisits: total number of visits
+         Nvisits_night: total number of visits per night
+         DD_budget: DD budget
+
+        """
+
+
 
         zr = np.arange(0.3, 0.9, 0.05)
         df_tot = pd.DataFrame()
@@ -109,18 +152,16 @@ class DD_Budget:
         self.cols = []
         self.cols_night = []
         self.zcols = []
-        for fieldname in config['Fields']:
-            print(config[fieldname])
-            conf = config[fieldname]
-            for season in conf['seasons']:
-                print(self.nvisits_ref[fieldname][season](zr))
+        for fieldname in self.conf['Fields']:
+            theconf = self.conf[fieldname]
+            for season in theconf['seasons']:
                 if runtype == 'Nvisits_single':
                     nvisits_night = self.nvisits_ref[fieldname][season](zr)
                 else:
                     nvisits_night = self.nvisits[fieldname][season](zr)
                 nvisits_season = nvisits_night*30 * \
-                    config[fieldname]['season_length'] / \
-                    config[fieldname]['cadence']
+                    self.conf[fieldname]['season_length'] / \
+                    self.conf[fieldname]['cadence']
 
                 zvals = self.z[fieldname][season](nvisits_night)
                 zname = '{}_{}_{}'.format('z', fieldname, season)
@@ -140,21 +181,24 @@ class DD_Budget:
                     df_tot = df_tot.merge(
                         dfa, left_on=['zref'], right_on=['zref'])
 
-        print(self.cols)
         df_tot['Nvisits'] = df_tot[self.cols].sum(axis=1)
         df_tot['Nvisits_night'] = df_tot[self.cols_night].median(axis=1)
-        df_tot['DD_budget'] = df_tot['Nvisits']/config['Nvisits']
-        print(df_tot)
+        df_tot['DD_budget'] = df_tot['Nvisits']/self.conf['Nvisits']
+      
         return df_tot
 
     def summary_Nvisits_single(self):
+        """
+        Method to estimate a summary of the budget results regarding
+        the number of visits and the redshift limits.
+
+        """
 
         z = np.arange(0.3, 0.90, 0.01)
         idx = (self.budget['DD_budget'] < 0.15)
         idx &= (self.budget['DD_budget'] >= 0.)
         toplot = self.budget[idx]
 
-        print('hello', toplot)
         medz = toplot[self.zcols].median(axis=1)  # median redshift limit
         medbud = toplot['DD_budget']
         medvisits = toplot['Nvisits_night']
@@ -197,20 +241,7 @@ class DD_Budget:
             # r.append((col,interp_ddbudget(0.04),interp_ddbudget(0.08)))
 
         df_buz_z = df_bud_z.sort_values(by=['budget'])
-        # print(df_bud_z,len(buds),len(df_buz_z))
-
-        """
-        colz = np.rec.fromrecords(r, names=['col','zlim','zlimax'])
-
-        colz.sort(order='zlim')
-
-        print('oooooooo',colz)
-        colmin = colz[0]['col']
-        colmax = colz[-1]['col']
-
-        print('iii',colmin,colmax)
-        self.zmax = colz[-1]['zlimax']
-        """
+        
         df_min = df_bud_z[df_bud_z['budget'].gt(
             0.)].groupby(['z']).min().reset_index()
         df_max = df_bud_z[df_bud_z['budget'].gt(
@@ -270,10 +301,43 @@ class DD_Budget:
         self.zmax = df_max['z'].max()
 
     def zlim_Nvisits_single(self, dd_value):
+        """
+        Method to estimate some results corresponding to a given DD budget
 
-        zlim_median = self.interp_ddbudget(dd_value)
-        zlim_min = self.interpmin_ddbudget(dd_value)
-        zlim_max = self.interpmax_ddbudget(dd_value)
+        Parameters
+        ----------
+        dd_value: float
+         DD budget
+
+        Returns:
+        -------
+        zlim_median: float
+          median redshift limit
+        zlim_min: float
+          min redshift limit
+        zlim_max: float
+          max redshift limit
+        nvisits_choice: float
+          number of visits (per night) corresponding to zlim_median
+        Nvisits_band: dict
+          number of visits per night and per band (key)
+        """
+
+
+        if self.runtype == 'Nvisits_single':
+            zlim_median = self.interp_ddbudget(dd_value)
+            zlim_min = self.interpmin_ddbudget(dd_value)
+            zlim_max = self.interpmax_ddbudget(dd_value)
+        else:
+            nVisits = self.nVisits_Fields(dd_value)
+            for key, vals in nVisits.items():
+                for keyb,valb in vals.items():
+                    zlim_median = np.median(valb['zref'])
+                    zlim_min = np.min(valb['zref'])
+                    zlim_max = np.max(valb['zref'])
+                    #self.zmax = zlim_max
+
+        """
         nvisits_choice = self.interp_z(zlim_median)
         Nvisits_band = {}
         for b in 'rizy':
@@ -282,7 +346,9 @@ class DD_Budget:
             Nvisits_band[b] = myinterp(zlim_median)
 
         return zlim_median, zlim_min, zlim_max, nvisits_choice, Nvisits_band
-
+        """
+        return zlim_median, zlim_min, zlim_max
+        
     def nVisits_Fields(self, dd_value):
         """
         Method to estimate the number of visits per fields
@@ -313,7 +379,15 @@ class DD_Budget:
                 nVisits[fieldName][seas]['all'] = np.asscalar(
                     myinterp(dd_value))
                 myinterpz = interpolate.interp1d(
+                    self.budget['DD_budget'].values, self.budget[zName].values)
+                nVisits[fieldName][seas]['zlim'] = np.asscalar(
+                    myinterpz(dd_value))
+
+                myinterpz = interpolate.interp1d(
                     self.budget['DD_budget'].values, self.budget['zref'].values)
+                nVisits[fieldName][seas]['zref'] = np.asscalar(
+                    myinterpz(dd_value))
+
                 for b in 'rizy':
                     if self.runtype == 'Nvisits_single':
                         nVisits[fieldName][seas][b] = np.asscalar(self.nvisits_band_ref[fieldName][seas][b](
@@ -322,17 +396,29 @@ class DD_Budget:
                         nVisits[fieldName][seas][b] = np.asscalar(self.nvisits_band[fieldName][seas][b](
                             myinterpz(dd_value)))
 
-        print(nVisits)
         return nVisits
 
-    def plot_budget(self, dd_value, fieldName, season):
+    def plot_budget_old(self, dd_value, fieldName, season):
+        """
+        Method to plot the DD budget vs redshift limit
 
-        self.nVisits_Fields(dd_value)
+        Parameters
+        ----------
+        dd_value: float
+         DD budget
+        fieldName: str
+         name of the field used to illustrate Nvisits vs redshift
+        season: int
+         season number used to illustrate Nvisits vs redshift
+
+        """
+        """
         if self.runtype == 'Nvisits_adjusted':
             self.plot_budget_Nvisits_adjusted(dd_value)
 
         if self.runtype == 'Nvisits_single':
-            self.plot_budget_Nvisits_single(dd_value, fieldName, season)
+        """
+        self.plot_budget_Nvisits(dd_value, fieldName, season)
 
     def plot_budget_Nvisits_adjusted(self, dd_value):
 
@@ -366,36 +452,55 @@ class DD_Budget:
             fieldname = col.split('_')[2]
             season = int(col.split('_')[3])
             print(fieldname, season)
-            print('Nvisits_tot', np.round(
-                self.nvisits[fieldname][season](zlim), 1))
+            #print('Nvisits_tot', np.round(
+            #    self.nvisits[fieldname][season](zlim), 1))
             for b in 'rizy':
                 Nvisits = self.nvisits_band[fieldname][season][b](zlim)
-                print(b, np.round(Nvisits, 1), math.ceil(Nvisits))
+                #print(b, np.round(Nvisits, 1), math.ceil(Nvisits))
 
         axb.grid()
         axb.set_xlabel(r'$z_{lim}$')
         axb.set_ylabel(r'Nvisits/night')
 
-    def plot_budget_Nvisits_single(self, dd_value, fieldName, season):
+    def plot_budget(self, dd_value, fieldName, season):
+        """
+        Plot to display DD budget results 
+        The plot has two parts:
+         - left side: DD budget vs zlim for all the fields considered
+         - right side: Number of visits vs redshift limit (illustration by fieldName, season)
+
+        Parameters
+        ----------
+        dd_value: float
+         DD budget
+        fieldName: str
+         name of the field to illustrate the right-hand side of the plot
+        season:
+         name of the field to illustrate the right-hand side of the plot
+        
+        """
+        
 
         zminval = 0.3
         z = np.arange(zminval, 0.9, 0.05)
         if dd_value is not None:
-            zlim_median, zlim_min, zlim_max, nvisits_choice, Nvisits_band = self.zlim_Nvisits_single(
+            zlim_median, zlim_min, zlim_max = self.zlim_Nvisits_single(
                 dd_value)
 
-        # get the number of visits for the fields
-        nVisits = self.nVisits_Fields(dd_value)
-        nvisits_choice = nVisits[fieldName][season]['all']
+            # get the number of visits for the fields
+        
+            nVisits = self.nVisits_Fields(dd_value)
+            nvisits_choice = nVisits[fieldName][season]['all']
+            Nvisits_band = nVisits
         # Now plot
 
-        # print(plt.rcParams)
         fig, axs = plt.subplots(
             1, 2, gridspec_kw={'hspace': 0, 'wspace': 0}, figsize=(20, 12))
         (ax1, ax2) = axs
 
+        ax2.set_title('{} - season {}'.format(fieldName,season))
         ax1.set_ylim(ymax=0.10)
-        print('ooo pal', self.zmax)
+       
         ax1.set_xlim([zminval+0.01, self.zmax])
         ax1.set_ylim([self.interp_z_ddbudget(zminval), np.min(
             [0.10, self.interp_z_ddbudget(self.zmax)])])
@@ -403,20 +508,25 @@ class DD_Budget:
         ax1.fill_between(zb, self.interpmin(
             zb), self.interpmax(zb), color='yellow', alpha=0.5)
         ax1.plot(self.medz, self.medbud, color='k')
-        print(self.medz, self.medbud)
+        #print(self.medz, self.medbud)
         ax1.set_ylabel(r'DD budget')
         ax1.set_xlabel(r'z$_{lim}$')
         ax1.grid()
 
         axa = ax1.twinx()
         axa.plot(self.medz, self.medvisits, color='k')
-        print('ooo', self.medz, self.medvisits, ax1.get_ylim())
 
         zlims = self.interp_ddbudget(ax1.get_ylim())
         Nvisitslim = self.interp_z(zlims)
-        print('hhh', zlims, Nvisitslim)
+
+        myinterp = interpolate.interp1d(
+            self.budget['DD_budget'].values, self.budget['z_{}_{}'.format(fieldName, season)].values)
+        myinterp_z = interpolate.interp1d(self.budget['z_{}_{}'.format(fieldName, season)].values,
+                                          self.budget['Nvisits_night_{}_{}'.format(fieldName, season)].values)
+        zlims = myinterp(ax1.get_ylim())
+        Nvisitslim = myinterp_z(zlims)
+        
         axa.set_ylim(Nvisitslim)
-        # plt.show()
 
         if dd_value is not None:
             ax1.plot(ax1.get_xlim(), [dd_value]*2, color='r', ls='--')
@@ -430,7 +540,7 @@ class DD_Budget:
         zticks = self.interp_ddbudget(ax1.get_yticks())
         Nvisits_ticks = self.interp_z(zticks)
         axa.set_yticks(Nvisits_ticks)
-
+        
         # second plot
         # adjust axes
         ax2.set_ylim(axa.get_ylim())
@@ -440,8 +550,12 @@ class DD_Budget:
         ax3 = ax2.twinx()
         ax3.set_ylim(axa.get_ylim())
         ax3.set_xlim(ax1.get_xlim())
-        ax3.plot(z, self.nvisits_ref[fieldName]
-                 [season](z), color='k', label='all')
+        if self.runtype == 'Nvisits_single':
+            ax3.plot(z, self.nvisits_ref[fieldName]
+                     [season](z), color='k', label='all')
+        else:
+            ax3.plot(z, self.nvisits[fieldName]
+                     [season](z), color='k', label='all')
         # Nvisits_band = {}
         for b in 'rizy':
             myinterp = self.interp_ref(
@@ -451,32 +565,32 @@ class DD_Budget:
 
             # if dd_value is not None:
             #    Nvisits_band[b] = myinterp(zlim_median)
-            ax3.plot(z, self.nvisits_band_ref[fieldName][season][b](
-                z), color=filtercolors[b], label='{}'.format(b))
+            if self.runtype == 'Nvisits_single':
+                ax3.plot(z, self.nvisits_band_ref[fieldName][season][b](
+                    z), color=filtercolors[b], label='{}'.format(b))
+            else:
+               ax3.plot(z, self.nvisits_band[fieldName][season][b](
+                    z), color=filtercolors[b], label='{}'.format(b)) 
         ax2.grid()
         ax3.legend()
         ax2.yaxis.set_ticklabels([])
         axa.yaxis.set_ticklabels([])
         ax3.set_ylabel(r'Nvisits/night')
         ax2.set_xlabel(r'z')
-        # print('oooo',int(ax2.get_yticks().tolist()))
         ax3.set_yticks(ax2.get_yticks())
         # ax3.yaxis.set_major_locator(MinNLocator(integer=True))
-        ax3.set_yticklabels(np.ceil(ax3.get_yticks()).astype(int))
-        """
-        locs, labels = ax3.get_yticks()
-        yint=[]
-        for each in locs:
-            yint.append(int(each))
-        ax3.set_yticks(yint)
-        """
+        #ax3.set_yticklabels(np.ceil(ax3.get_yticks()).astype(int))
+        ax3.set_yticklabels(np.round(ax3.get_yticks()).astype(int))
+       
         if dd_value is not None:
 
             # ax2.plot(ax2.get_xlim(), [nvisits_choice]*2, color='r', ls='--')
             ax2.plot(ax2.get_xlim(), [
                      nVisits[fieldName][season]['all']]*2, color='r', ls='--')
             nvisits_choice_calc = 0
-            ax2.arrow(zlim_median, nvisits_choice, 0.0, ax3.get_ylim()[0]-nvisits_choice,
+            zName = 'zref'
+            
+            ax2.arrow(nVisits[fieldName][season][zName], nvisits_choice, 0.0, ax3.get_ylim()[0]-nvisits_choice,
                       length_includes_head=True, color='b',
                       head_length=1., head_width=0.01)
             # ax2.text(0.35,1.1*nvisits_choice,'$N_{visits}$ - sum ='+str(int(nvisits_choice)))
@@ -487,7 +601,7 @@ class DD_Budget:
                 # nvisits_band = int(Nvisits_band[band])
                 if nvisits_band > 0:
                     # ax2.arrow(zlim_median, Nvisits_band[band],
-                    ax2.arrow(zlim_median, nVisits[fieldName][season][band],
+                    ax2.arrow(nVisits[fieldName][season][zName], nVisits[fieldName][season][band],
                               ax2.get_xlim()[1]-zlim_median, 0.,
                               length_includes_head=True, color='b',
                               head_width=1., head_length=0.01)
@@ -498,3 +612,52 @@ class DD_Budget:
                      '$N_{visits}$ - sum ='+str(int(nvisits_choice_calc)))
 
         # fig.tight_layout()
+
+    def printVisits(self, dd_value):
+        """
+        Method to print(in a table) the number of visits and zlim
+        per field and per night corresponding to a DD budget
+
+        Parameters
+        ----------
+        dd_value: float
+         DD budget
+
+        """
+
+        # get infos corresponding to this budget
+
+        nVisits = self.nVisits_Fields(dd_value)
+
+        nameConv = dict(zip(['season','all','zlim','zref','r','i','z','y'],
+                            ['season','Nvisits','zlim','zref',
+                             'Nvisits_r','Nvisits_i',
+                             'Nvisits_z','Nvisits_y']))
+        
+        for key, vals in nVisits.items():
+            fig, ax = plt.subplots()
+            names = []
+            vv = []
+            names.append('season')
+            io = -1
+            for keyb,valb in vals.items():
+                io += 1
+                ro = [keyb]
+                for keyc, valc in valb.items():
+                    if keyc != 'zlim' and keyc != 'zref':
+                        ro.append(int(np.round(valc)))
+                    else:
+                       ro.append(np.round(valc,2)) 
+                    if io == 0:
+                        names.append(nameConv[keyc])
+                vv.append(ro)
+            
+            tab = np.rec.fromrecords(vv, names=names)
+            ll = '{} - {} - DD budget: {}'.format(self.conf['confName'],key,dd_value)
+            ax.text(0.2,0.8,ll)
+            ax.table(cellText=tab,colLabels=names,loc='center')
+            
+            plt.axis('off')
+
+
+
