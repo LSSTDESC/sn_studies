@@ -35,6 +35,11 @@ class DDCluster:
         # load the data
         data = self.dataDB()
 
+        #remove the u-band
+        idx = data['filter'] != 'u'
+
+        data = data[idx]
+
         # make clusters of data
         self.dataclusters = self.clusterDD(nclusters,data)
 
@@ -90,8 +95,9 @@ class DDCluster:
 
         # get DD observations only
         fieldIds = [290,744,1427, 2412, 2786]
+        
         observations_DD = getFields(observations,'DD', fieldIds,128)
-         # get clusters out of these obs
+        # get clusters out of these obs
 
         dataclusters = ClusterObs(observations_DD,nclusters=nclusters,dbName=self.dbName).dataclus
         return dataclusters
@@ -124,7 +130,7 @@ def dataWrapper(dbDir,dbName,dbExtens,nclusters):
 
     if not os.path.exists(dataName):
         clusters = DDCluster(dbDir,dbName,dbExtens,nclusters).dataclusters
-        np.save(dataName,clusters.to_records())
+        np.save(dataName,np.copy(clusters.to_records(index=False)))
 
     # load data
     dataclusters = np.load(dataName)
@@ -132,14 +138,15 @@ def dataWrapper(dbDir,dbName,dbExtens,nclusters):
     #estimate seasons
 
     restot = None
-    for clusid in np.unique(dataclusters['clusId']):
-        idx = dataclusters['clusId']==clusid
+    for fieldName in np.unique(dataclusters['fieldName']):
+        idx = dataclusters['fieldName']==fieldName
         sel = dataclusters[idx]
         if restot is None:
             restot = season(sel)
         else:
             restot = np.concatenate([restot,season(sel)])
 
+   
     return pd.DataFrame(np.copy(restot))
     
 class StatSim:
@@ -166,15 +173,12 @@ class StatSim:
         #grab the data
         datadf = dataWrapper(dbDir,dbName,dbExtens,nclusters)
 
-        print(datadf.columns)
-
         # summary per night
         fName = 'Summary_night_{}.npy'.format(dbName)
 
         if not os.path.exists(fName):
-            grp_filter = datadf.groupby(['clusId','fieldName','filter','night'])
+            grp_filter = datadf.groupby(['fieldName','filter','night'])
             summary = grp_filter.apply(lambda x: self.summarynight(x)).reset_index()
-            print(summary)
             np.save(fName,summary.to_records())
 
         summary = pd.DataFrame(np.load(fName))
@@ -182,17 +186,26 @@ class StatSim:
         self.mednight = summary
 
         
-        sumhori = summary.groupby(['clusId','fieldName','night']).apply(lambda x: self.horizont(x)).reset_index()
+        sumhori = summary.groupby(['fieldName','night']).apply(lambda x: self.horizont(x)).reset_index()
 
-       
-        
+        #print(sumhori['fieldName'].unique())
+        #idf = sumhori['fieldName'] == 'COSMOS'
+        #sumhori = sumhori[idf]
+
 
         #get the numExposures median values
         varmeds = ['numExposures_g','numExposures_r',
                    'numExposures_i','numExposures_z',
                    'numExposures_y']
-        sumhorib = sumhori.replace(0, np.NaN)
-        medians = sumhorib.groupby(['clusId','fieldName'])[varmeds].median().reset_index()
+
+        #for vv in varmeds:
+        #    sumhori[vv] = sumhori[vv].replace(0, np.NaN)
+
+        medians = sumhori.groupby(['fieldName','season'])[varmeds].median().reset_index()
+        
+        
+        for vv in varmeds:
+            sumhori[vv] = sumhori[vv].replace(np.NaN,0)
         
         for b in 'grizy':
             medians['numExposures_{}'.format(b)] = medians['numExposures_{}'.format(b)].astype(int)
@@ -210,10 +223,10 @@ class StatSim:
         #sumhori = sumhori.merge(medians,left_on=['clusId','fieldName'],right_on=['clusId','fieldName'])
 
         # final analysis: cadence and season_length estimations
-        dffi = sumhori.groupby(['clusId','fieldName','season']).apply(lambda x: self.anaTemp(x)).reset_index()
+        dffi = sumhori.groupby(['fieldName','season']).apply(lambda x: self.anaTemp(x)).reset_index()
 
         # merge with medians
-        self.data=dffi.merge(medians,left_on=['clusId','fieldName'],right_on=['clusId','fieldName'])
+        self.data=dffi.merge(medians,left_on=['fieldName','season'],right_on=['fieldName','season'])
 
 
     def summarynight(self,grp):
@@ -247,7 +260,8 @@ class StatSim:
                       'moonRA', 'moonDec', 'moonDistance', 
                       'solarElong','moonPhase', 
                       'healpixID', 'pixRa', 'pixDec', 
-                      'ebv', 'RA', 'Dec','fiveSigmaDepth']
+                      'ebv', 'RA', 'Dec','fiveSigmaDepth',
+                      'fieldRA','fieldDec','proposalId','fieldId']
         
         dfout = pd.DataFrame()
 
