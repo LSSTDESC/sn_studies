@@ -71,6 +71,13 @@ class ObsReshuffled:
         assoc = assoc[idx]
 
         print('assoc obs',assoc[['fieldName', 'season','filter','numExposures','visitExposureTime','fiveSigmaDepth','fiveSigmaDepth_med','Nvisits']])
+
+        #remove potential dithering
+
+        assoc['fieldRA'] = assoc.groupby('fieldName')['fieldRA'].transform('mean')
+        assoc['fieldDec'] = assoc.groupby('fieldName')['fieldDec'].transform('mean')
+        assoc['fiveSigmaDepth'] = assoc.groupby(['fieldName','season','filter'])['fiveSigmaDepth'].transform('median')
+
         # drop unwanted columns
         todrop = ['Nvisits','cadence','season_length','fieldName',
                   'season','RA','Dec','healpixID','pixRa','pixDec','ebv']
@@ -79,6 +86,7 @@ class ObsReshuffled:
         assoc['proposalId'] = assoc['proposalId'].astype(int)
         assoc['fieldId'] = assoc['fieldId'].astype(int)
 
+        
 
         
         outName = '{}_{}.npy'.format(self.dbName,np.around(self.zlim,decimals=2))
