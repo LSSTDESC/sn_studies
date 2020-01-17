@@ -277,6 +277,10 @@ class Nvisits_cadence:
           - flux_5_e_sec_r,i,z,y: 5-sigma flux (pe/sec) for r,i,z,y bands 
         cadence: float
          cadence value
+        theDir: str
+         location directory of m5 files
+        m5_file: str
+         m5 file name
         m5_type: str
          type of m5 values used
          eg: median_m5_field_filter_season: median m5 per field and per filter and per season
