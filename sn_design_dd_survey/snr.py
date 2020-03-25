@@ -13,7 +13,7 @@ from sn_tools.sn_calcFast import covColor
 
 class SNR:
     def __init__(self, SNRDir, data,
-                 SNR_par):
+                 SNR_par, verbose=False):
         """
         Wrapper class to estimate SNR
 
@@ -25,6 +25,8 @@ class SNR:
         data to process (LC)
         SNR_par: dict
         SNR parameters
+        verbose: str, opt
+          verbose mode for debugging
 
         """
         # get the data parameters
@@ -34,6 +36,7 @@ class SNR:
         self.bands = data.bands
         self.blue_cutoff = data.blue_cutoff
         self.red_cutoff = data.red_cutoff
+        self.verbose = verbose
 
         # define the SNR file name
         SNRName = self.name(SNRDir,
@@ -43,7 +46,7 @@ class SNR:
         if not os.path.isfile(SNRName):
 
             myclass = SNR_z(SNRDir, data,
-                            SNR_par=SNR_par)
+                            SNR_par=SNR_par, verbose=self.verbose)
 
             dfsigmaC = myclass.sigmaC_SNR()
 
@@ -52,8 +55,12 @@ class SNR:
             # plt.show()
             # now choose SNR corresponding to sigmaC~0.04 vs z
 
+            if self.verbose:
+                print('SNR class - sigma_C selection')
             SNR_dict = myclass.SNR(dfsigmaC)
 
+            if self.verbose:
+                print('SNR class - saving SNR files')
             for key, vals in SNR_dict.items():
                 SNR_par_dict = dict(
                     zip(['max', 'step', 'choice'], [50., 2., key]))
@@ -61,7 +68,7 @@ class SNR:
                 # save the file
                 np.save(thename, np.copy(vals.to_records(index=False)))
 
-        self.SNR = pd.DataFrame(np.load(SNRName))
+        self.SNR = pd.DataFrame(np.load(SNRName, allow_pickle=True))
 
     def plot(self):
         """
@@ -111,7 +118,7 @@ class SNR:
 class SNR_z:
 
     def __init__(self, dirFile, data,
-                 SNR_par={}):
+                 SNR_par={}, verbose=False):
         """
         class to estimate SNR per band vs redshift
 
@@ -123,8 +130,12 @@ class SNR_z:
          data to process (LC)
         SNR_par: dict
          SNR parameters
+        verbose: str, opt
+          verbose mode for debugging
 
         """
+        # verbose
+        self.verbose = verbose
         # get data parameters
         self.x1 = data.x1
         self.color = data.color
@@ -192,10 +203,10 @@ class SNR_z:
         Method to assess sigma_C as a function of SNRbands
 
         Parameters
-        ----------
+        ---------------
 
         Returns
-        -------
+        -----------
         pandas df with the following columns:
         x1,color,z,band
         (sum_flux,SNR,self.listcol,flux_5_e_sec,m5_calc,flux_5)_band
@@ -204,13 +215,21 @@ class SNR_z:
 
         """
 
+        if self.verbose:
+            print('SNR_z - sigmaC_SNR')
+
         # group the LC df by ('x1','color','z','band') and estimate sums
+
+        if self.verbose:
+            print('Estimating sumgrp')
 
         df = self.lcdf.groupby(['x1', 'color', 'z', 'band']).apply(
             lambda x: self.sumgrp(x)).reset_index()
 
         # make groups and estimate sigma_Color for combinations of SNR per band
 
+        if self.verbose:
+            print('estimating dfsigmaC')
         dfsigmaC = df.groupby(['x1', 'color', 'z']).apply(
             lambda x: self.sigmaC(x)).reset_index()
 
@@ -224,7 +243,7 @@ class SNR_z:
 
     def sigmaC(self, grp):
         """
-        For a given group (grp), this method estimates sigmaC 
+        For a given group (grp), this method estimates sigmaC
         for a set of SNR-band combinations
 
         Parameters
@@ -240,6 +259,8 @@ class SNR_z:
 
 
         """
+        if self.verbose:
+            print('Processing sigmaC', grp.name)
 
         # init SNR values to zero
         SNR = {}
@@ -265,8 +286,14 @@ class SNR_z:
                 snrlist = list(np.arange(0., SNR_max, self.SNR_par['step']))
                 snrlist[0] = 0.0001
                 SNR[band] = snrlist
+            if grp.name[2] <= 0.3:
+                SNR['z'] = [0.0]
+            if grp.name[2] <= 0.5:
+                SNR['y'] = [0.0]
 
-        #SNR = dict(zip('grizy',[[0.],[25.],[25.],[30.],[35.]]))
+        if self.verbose:
+            print('SNR values', SNR)
+        # SNR = dict(zip('grizy',[[0.],[25.],[25.],[30.],[35.]]))
 
         # existing bands
         bands = ''.join(list(dictband.keys()))
@@ -298,7 +325,8 @@ class SNR_z:
 
             df_tot = dfb.merge(df_to_merge, left_on=['key'], right_on=['key'])
 
-        print('after hh', time.time()-time_ref)
+        if self.verbose:
+            print('after combi', time.time()-time_ref)
 
         listb = []
         for b in bands:
@@ -308,7 +336,7 @@ class SNR_z:
             (df_tot[listb]*df_tot[listb]).sum(axis=1))
         df_tot['bands'] = ''.join(bands)
 
-        time_ref = time.time()
+        # time_ref = time.time()
 
         # Estimate sigma_Color for all the combinations build at the previous step
         for col in self.listcol:
@@ -325,8 +353,13 @@ class SNR_z:
             df_tot.loc[:, 'flux_e_sec_{}'.format(b)] = 0.0
             df_tot.loc[:, 'm5calc_{}'.format(b)] = 0.0
 
+            # select only combi with sigma_C ~ 0.04
+        idx = np.abs(df_tot['sigmaC']-0.04) < 0.0004
+
         # that's it - return the results
-        return df_tot
+        if self.verbose:
+            print('Done with', grp.name, time.time()-time_ref)
+        return df_tot[idx]
 
     def addSNR(self, df, SNR, b):
         """
@@ -337,7 +370,7 @@ class SNR_z:
         Parameters
         ----------
         df: pandas df
-         input data 
+         input data
         SNR: float
          SNR values
         b: str
@@ -362,7 +395,7 @@ class SNR_z:
 
         df_tot = df_tot.merge(df_SNR, left_on='key', right_on='key')
 
-        #df_tot = df_tot.drop(columns=['key'])
+        # df_tot = df_tot.drop(columns=['key'])
 
         # get the 5-sigma flux according to SNR vals
         df_tot['flux_5_e_sec'] = 5.*df_tot['sumflux']/df_tot['SNRcalc']
@@ -394,7 +427,7 @@ class SNR_z:
 
     def plotSigmaC_SNR(self, dfsigmaC):
         """
-        Plot sigmaC vs SNRtot vs z 
+        Plot sigmaC vs SNRtot vs z
 
         Parameters
         ----------
@@ -439,9 +472,13 @@ class SNR_z:
         pandas df with the SNR-band combi corresponding to the 3 above mentioned conditions
 
         """
+
+        if self.verbose:
+            print('SNR_z - SNR method')
+
         # select only combi with sigma_C ~ 0.04
         idx = np.abs(dfsigmaC['sigmaC']-0.04) < 0.0004
-        #idx = np.abs(dfsigmaC['sigmaC']-0.04)<0.1
+        # idx = np.abs(dfsigmaC['sigmaC']-0.04)<0.1
 
         sel = dfsigmaC[idx].copy()
 
@@ -456,15 +493,23 @@ class SNR_z:
 
         """
         if self.SNR_par['choice'] == 'fracflux':
-            res = sel.groupby(['x1','color','z']).apply(lambda x: self.SNR_redshift(x)).reset_index()
+            res = sel.groupby(['x1','color','z']).apply(
+                lambda x: self.SNR_redshift(x)).reset_index()
         else:
-            res = sel.groupby(['x1','color','z']).apply(lambda x: self.SNR_visits(x)).reset_index()
+            res = sel.groupby(['x1','color','z']).apply(
+                lambda x: self.SNR_visits(x)).reset_index()
         """
 
         res = {}
+        """
+        if self.verbose:
+            print('SNR_z-SNR -> SNR choice: fracflux')
         res['fracflux'] = sel.groupby(['x1', 'color', 'z']).apply(
             lambda x: self.SNR_redshift(x)).reset_index()
+        """
         for vv in ['Nvisits', 'Nvisits_y']:
+            if self.verbose:
+                print('SNR_z-SNR -> SNR choice: {}'.format(vv))
             res[vv] = sel.groupby(['x1', 'color', 'z']).apply(
                 lambda x: self.SNR_visits(x, vv)).reset_index()
 
@@ -501,17 +546,18 @@ class SNR_z:
         grp.loc[:, 'Nvisits'] = grp[cols].sum(axis=1)
 
         idx = int(grp[[minPar]].idxmin())
-        #idxa = int(grp[['Nvisits']].idxmin())
-        #idxb = int(grp[['Nvisits_y']].idxmin())
+        # idxa = int(grp[['Nvisits']].idxmin())
+        # idxb = int(grp[['Nvisits_y']].idxmin())
 
         cols = []
         for colname in ['SNRcalc', 'm5calc', 'fracSNR', 'flux_5_e_sec']:
             for band in 'grizy':
                 cols.append('{}_{}'.format(colname, band))
 
-        #colindex = [grp.columns.get_loc(c) for c in cols if c in grp]
+        # colindex = [grp.columns.get_loc(c) for c in cols if c in grp]
 
-        return grp.loc[idx, cols]
+        print('there man', idx, cols)
+        return grp.loc[idx].reindex(cols)
         # return grp.loc[idxa,cols], grp.loc[idxb,cols]
 
     def SNR_redshift(self, grp):
@@ -688,10 +734,10 @@ class SNR_plot:
                                      SNR_choice[0])
 
             print('loading', SNRNameb)
-            SNRb = pd.DataFrame(np.load(SNRNameb))
+            SNRb = pd.DataFrame(np.load(SNRNameb, allow_pickle=True))
 
-            #myvisits = Nvisits_m5(SNRb,medValues)
-            #m5_type = 'median_m5_filter'
+            # myvisits = Nvisits_m5(SNRb,medValues)
+            # m5_type = 'median_m5_filter'
 
             myvisits = Nvisits_cadence(
                 SNRb, self.cadence, self.theDir, self.m5_file, self.m5_type, SNR_choice[0], SNR_choice[1]).nvisits_cadence

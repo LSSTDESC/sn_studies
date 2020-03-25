@@ -329,7 +329,8 @@ class Nvisits_cadence:
 
         else:
             # file found: just load it!
-            self.nvisits_cadence = pd.DataFrame(np.load(outName))
+            self.nvisits_cadence = pd.DataFrame(
+                np.load(outName, allow_pickle=True))
 
     def getVisits(self, grp):
         """

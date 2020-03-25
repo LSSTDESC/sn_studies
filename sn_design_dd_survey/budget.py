@@ -22,7 +22,7 @@ class DD_Budget:
           season: season number
           Nvisits: total number of visits
           cadence: candence
-          Nvisits_r,i,z,y: number of visits in r,i,z,y bands
+          Nvisits_g,r,i,z,y: number of visits in g,r,i,z,y bands
          df_visits: pandas df
           with same infos as df_visits_ref
          runtype: str, opt
@@ -99,7 +99,7 @@ class DD_Budget:
                     sel['Nvisits'], sel['z'], bounds_error=False, fill_value=0.0)
                 nvisits_band[fieldname][season] = {}
 
-                for b in 'rizy':
+                for b in 'grizy':
                     nvisits_band[fieldname][season][b] = interpolate.interp1d(
                         sel['z'], sel['Nvisits_{}'.format(b)], bounds_error=False, fill_value=0.0)
 
@@ -138,7 +138,7 @@ class DD_Budget:
 
         """
 
-        zr = np.arange(0.3, 0.9, 0.05)
+        zr = np.arange(0.1, 0.9, 0.05)
         df_tot = pd.DataFrame()
 
         """
@@ -190,7 +190,7 @@ class DD_Budget:
 
         """
 
-        z = np.arange(0.3, 0.90, 0.01)
+        z = np.arange(0.1, 0.90, 0.01)
         idx = (self.budget['DD_budget'] < 0.15)
         idx &= (self.budget['DD_budget'] >= 0.)
         toplot = self.budget[idx]
@@ -207,7 +207,7 @@ class DD_Budget:
         df_bud_z = pd.DataFrame()
 
         for io, col in enumerate(self.zcols):
-            idx = toplot[col] >= 0.3
+            idx = toplot[col] >= 0.1
             idx &= toplot[col] <= 0.85
             # plt.plot(toplot[idx][col],toplot[idx]['DD_budget'],color='k')
             """
@@ -383,7 +383,7 @@ class DD_Budget:
                 nVisits[fieldName][seas]['zref'] = np.asscalar(
                     myinterpz(dd_value))
 
-                for b in 'rizy':
+                for b in 'grizy':
                     if self.runtype == 'Nvisits_single':
                         nVisits[fieldName][seas][b] = np.asscalar(self.nvisits_band_ref[fieldName][seas][b](
                             myinterpz(dd_value)))
@@ -406,7 +406,7 @@ class DD_Budget:
 
         """
 
-        zminval = 0.3
+        zminval = 0.1
         z = np.arange(zminval, 0.9, 0.05)
         if dd_budget > 0.:
             zlim_median, zlim_min, zlim_max = self.zlim_Nvisits_single(
@@ -459,7 +459,7 @@ class DD_Budget:
         DD budget (default: -1)
         """
 
-        zmin = 0.3
+        zmin = 0.1
         zmax = 0.9
         z = np.arange(zmin, zmax, 0.05)
         if dd_budget > 0.:
@@ -556,7 +556,7 @@ class DD_Budget:
         ax3.plot(zb, interp_z_visits(zb),
                  color='k', label='all')
 
-        for b in 'rizy':
+        for b in 'grizy':
             myinterp = self.interp_ref(
                 self.df_visits_ref, 'Nvisits_{}'.format(b))
             if self.runtype == 'Nvisits_single':
@@ -584,7 +584,7 @@ class DD_Budget:
                       length_includes_head=True, color='b',
                       head_length=1., head_width=0.01)
 
-            for io, band in enumerate('rizy'):
+            for io, band in enumerate('grizy'):
                 nvisits_band = int(np.round(nVisits[fieldName][season][band]))
                 if nvisits_band > 0:
 
