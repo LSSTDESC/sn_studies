@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy import interpolate
 
-from sn_tools.sn_calcFast import covColor
+from sn_tools.sn_calcFast import CovColor
 from . import plt, filtercolors
 
 
@@ -155,7 +155,7 @@ class Anadf:
                 5.*grp['flux_e_sec']/grp['flux_5'])**2.
 
             grpa = grp.groupby(['daymax', 'z']).sum().reset_index()
-            grpa['sigmaC'] = np.sqrt(covColor(grpa))
+            grpa['sigmaC'] = np.sqrt(CovColor(grpa).Cov_colorcolor)
             grpa = grpa[['daymax', 'z', 'sigmaC']]
 
             grpb = grp.groupby(['daymax', 'z', 'band']).sum().reset_index()

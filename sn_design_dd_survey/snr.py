@@ -8,7 +8,7 @@ from .utils import flux5_to_m5
 from .wrapper import Nvisits_cadence
 from . import plt
 from . import filtercolors
-from sn_tools.sn_calcFast import covColor
+from sn_tools.sn_calcFast import CovColor
 
 
 class SNR:
@@ -343,7 +343,7 @@ class SNR_z:
             df_tot.loc[:, col] = df_tot.filter(
                 regex='^{}'.format(col)).sum(axis=1)
 
-        df_tot['sigmaC'] = np.sqrt(covColor(df_tot))
+        df_tot['sigmaC'] = np.sqrt(CovColor(df_tot).Cov_colorcolor)
 
         # add the missing bands to have a uniform format z-independent
         for b in missing_bands:
