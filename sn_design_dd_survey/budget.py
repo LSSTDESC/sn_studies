@@ -541,9 +541,12 @@ class DD_Budget:
             ax1.arrow(zlimit, dd_budget, 0., -dd_budget,
                       length_includes_head=True, color='b',
                       head_length=0.005, head_width=0.01)
+            """
             ax1.text(0.35, 0.05,
-                     '$z_{lim}$='+str(np.round(zlimit, 2)))
-
+                     '$z_{lim}$='+str(np.round(zlimit, 2)), fontsize=15)
+            """
+            ax1.text(1.05*zlimit, 0.5*dd_budget,
+                     '$z_{lim}$='+str(np.round(zlimit, 2)), fontsize=15)
         # right-hand side plot: nvisits vs zlim
         # adjust axes
         ax2.set_ylim(axa.get_ylim())
@@ -588,16 +591,27 @@ class DD_Budget:
                 nvisits_band = int(np.round(nVisits[fieldName][season][band]))
                 if nvisits_band > 0:
 
+                    ymax = ax2.get_ylim()[1]
                     ax2.arrow(nVisits[fieldName][season][zName], nVisits[fieldName][season][band],
                               ax2.get_xlim()[
                         1]-nVisits[fieldName][season][zName], 0.,
                         length_includes_head=True, color='b',
                         head_width=1., head_length=0.01)
+                    """
                     ax2.text(0.35, 0.9*nvisits_choice-0.1*io*nvisits_choice,
-                             '$N_{visits}$-'+band+'='+str(nvisits_band))
+                             '$N_{visits}$-'+band+' = '+str(nvisits_band), fontsize=15)
+                    """
+                    ax2.text(0.3, 0.8*ymax-0.07*io*ymax,
+                             '$N_{visits}$-'+band+' = '+str(nvisits_band), fontsize=15)
+
                     nvisits_choice_calc += nvisits_band
+
+            ax2.text(0.3, 0.9*ymax,
+                     '$N_{visits}$ - sum = '+str(int(nvisits_choice_calc)), fontsize=15)
+            """
             ax2.text(0.35, 1.1*nvisits_choice,
-                     '$N_{visits}$ - sum ='+str(int(nvisits_choice_calc)))
+                     '$N_{visits}$ - sum = '+str(int(nvisits_choice_calc)), fontsize=15)
+            """
 
     def printVisits(self, dd_value):
         """
