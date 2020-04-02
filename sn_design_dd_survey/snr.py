@@ -557,15 +557,13 @@ class SNR_z:
 
         grp.loc[:, 'Nvisits'] = grp[cols].sum(axis=1)
 
-        # print('there man', grp)
         idx = int(grp[[minPar]].idxmin())
         if self.save_SNR_combi:
             grcp = grp.copy()
             grcp = grcp.sort_values(by=[minPar, 'Nvisits_y'])
             grcp = grcp.fillna(value=0.)
 
-            # print('sorted', grcp)
-            # print('jojojo', grcp[:1], grp.name)
+            # print('sorted', grcp, grcp[:1], grp.name)
             nameOut = 'SNR_combi_{}_{}_{}.npy'.format(
                 grp.name[0], grp.name[1], np.round(grp.name[2], 2))
             np.save(nameOut, grcp.to_records(index=False))
@@ -575,7 +573,7 @@ class SNR_z:
             # tab = tab.sort_values(by='X')
         # idxa = int(grp[['Nvisits']].idxmin())
         # idxb = int(grp[['Nvisits_y']].idxmin())
-        """
+
         cols = []
         for colname in ['SNRcalc', 'm5calc', 'fracSNR', 'flux_5_e_sec']:
             for band in 'grizy':
