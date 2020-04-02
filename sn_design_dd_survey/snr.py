@@ -581,7 +581,7 @@ class SNR_z:
 
         output = grp.loc[idx].reindex(cols)
         # colindex = [grp.columns.get_loc(c) for c in cols if c in grp]
-        output = grcp[:-1][cols]
+        #output = grcp[:-1][cols]
         # print('there man', idx, cols, output, grcp[:1][cols])
         return output
         # return grp.loc[idxa,cols], grp.loc[idxb,cols]
