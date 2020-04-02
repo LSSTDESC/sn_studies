@@ -256,6 +256,7 @@ class Anadf:
         ls = dict(zip([(0.0, 0.0), (-2.0, 0.2)], ['-', '--']))
 
         for key, grp in self.grpfi.groupby(['x1', 'color']):
+            grp = grp.sort_values(by=['z'])
             ax[0].plot(grp['z'], grp['sigmaC'], ls=ls[(key[0], key[1])],
                        color='k', label='(x1,c)=({},{})'.format(key[0], key[1]))
 
@@ -289,6 +290,7 @@ class Anadf:
 
             SNR = self.dfana[idx]['SNR'].values
 
+            grpt = grpt.sort_values(by=['sigmaC'])
             if SNR > 0.5:
                 ax[1].plot(grpt['sigmaC'].values, grpt['SNR'].values, ls=ls[(key[0], key[1])],
                            color=filtercolors[band], label='$SNR_{}$={}'.format(band, int(SNR)))
