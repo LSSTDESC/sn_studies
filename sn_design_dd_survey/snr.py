@@ -18,7 +18,7 @@ class SNR:
         Wrapper class to estimate SNR
 
         Parameters
-        ---------
+        --------------
         SNRDir: str
         directory where SNR files are located
         data: pandas df
@@ -118,7 +118,10 @@ class SNR:
 class SNR_z:
 
     def __init__(self, dirFile, data,
-                 SNR_par={}, verbose=False):
+                 SNR_par={},
+                 sigma_color_cut=0.04,
+                 save_SNR_combi=False,
+                 verbose=False):
         """
         class to estimate SNR per band vs redshift
 
@@ -130,6 +133,10 @@ class SNR_z:
          data to process (LC)
         SNR_par: dict
          SNR parameters
+        sigma_color_cut: float, opt
+          selection on sigma_color (default: 0.04)
+        save_SNR_combi: bool, opt
+          to save SNR combination for sigmaC estimation
         verbose: str, opt
           verbose mode for debugging
 
@@ -140,6 +147,8 @@ class SNR_z:
         self.x1 = data.x1
         self.color = data.color
         self.bands = data.bands
+        self.sigma_color_cut = sigma_color_cut
+        self.save_SNR_combi = save_SNR_combi
 
         # get SNR parameters
         self.SNR_par = SNR_par
@@ -353,8 +362,9 @@ class SNR_z:
             df_tot.loc[:, 'flux_e_sec_{}'.format(b)] = 0.0
             df_tot.loc[:, 'm5calc_{}'.format(b)] = 0.0
 
-            # select only combi with sigma_C ~ 0.04
-        idx = np.abs(df_tot['sigmaC']-0.04) < 0.0004
+            # select only combi with sigma_C ~ self.sigma_color_cut
+        idx = np.abs(df_tot['sigmaC'] -
+                     self.sigma_color_cut) < 0.01*self.sigma_color_cut
 
         # that's it - return the results
         if self.verbose:
@@ -451,7 +461,7 @@ class SNR_z:
             ax.set_xlabel(r'SNR$_{tot}$')
             ax.set_ylabel(r'$\sigma_{C}$')
             xlims = ax.get_xlim()
-            ax.plot(xlims, [0.04]*2, color='r')
+            ax.plot(xlims, [self.sigma_color_cut]*2, color='r')
             # ax.legend()
 
     def SNR(self, dfsigmaC):
@@ -463,12 +473,12 @@ class SNR_z:
         - nvisits_y_min: SNR combis that minimizes the total number of visits in the y band
 
         Parameters
-        ----------
+        ---------------
         dfsigmaC: pandas df
          data to process
 
         Returns
-        ------
+        ----------
         pandas df with the SNR-band combi corresponding to the 3 above mentioned conditions
 
         """
@@ -477,7 +487,8 @@ class SNR_z:
             print('SNR_z - SNR method')
 
         # select only combi with sigma_C ~ 0.04
-        idx = np.abs(dfsigmaC['sigmaC']-0.04) < 0.0004
+        idx = np.abs(dfsigmaC['sigmaC'] -
+                     self.sigma_color_cut) < 0.01*self.sigma_color_cut
         # idx = np.abs(dfsigmaC['sigmaC']-0.04)<0.1
 
         sel = dfsigmaC[idx].copy()
@@ -507,7 +518,8 @@ class SNR_z:
         res['fracflux'] = sel.groupby(['x1', 'color', 'z']).apply(
             lambda x: self.SNR_redshift(x)).reset_index()
         """
-        for vv in ['Nvisits', 'Nvisits_y']:
+        # for vv in ['Nvisits', 'Nvisits_y']:
+        for vv in ['Nvisits']:
             if self.verbose:
                 print('SNR_z-SNR -> SNR choice: {}'.format(vv))
             res[vv] = sel.groupby(['x1', 'color', 'z']).apply(
@@ -545,19 +557,35 @@ class SNR_z:
 
         grp.loc[:, 'Nvisits'] = grp[cols].sum(axis=1)
 
+        # print('there man', grp)
         idx = int(grp[[minPar]].idxmin())
+        if self.save_SNR_combi:
+            grcp = grp.copy()
+            grcp = grcp.sort_values(by=[minPar, 'Nvisits_y'])
+            grcp = grcp.fillna(value=0.)
+
+            # print('sorted', grcp)
+            # print('jojojo', grcp[:1], grp.name)
+            nameOut = 'SNR_combi_{}_{}_{}.npy'.format(
+                grp.name[0], grp.name[1], np.round(grp.name[2], 2))
+            np.save(nameOut, grcp.to_records(index=False))
+            # tab['X'] = (tab['Nvisits']/50.)**2+(tab['Nvisits_y']/tab['Nvisits'])**2 + \
+            #       (tab['Nvisits_i']/tab['Nvisits_z'])**2
+
+            # tab = tab.sort_values(by='X')
         # idxa = int(grp[['Nvisits']].idxmin())
         # idxb = int(grp[['Nvisits_y']].idxmin())
-
+        """
         cols = []
         for colname in ['SNRcalc', 'm5calc', 'fracSNR', 'flux_5_e_sec']:
             for band in 'grizy':
                 cols.append('{}_{}'.format(colname, band))
 
+        output = grp.loc[idx].reindex(cols)
         # colindex = [grp.columns.get_loc(c) for c in cols if c in grp]
-
-        print('there man', idx, cols)
-        return grp.loc[idx].reindex(cols)
+        output = grcp[:-1][cols]
+        # print('there man', idx, cols, output, grcp[:1][cols])
+        return output
         # return grp.loc[idxa,cols], grp.loc[idxb,cols]
 
     def SNR_redshift(self, grp):
@@ -568,7 +596,6 @@ class SNR_z:
         Parameters
         ----------
         grp: pandas df group
-
 
         Returns
         -------
@@ -629,12 +656,11 @@ class SNR_plot:
         SNR_step: float
          SNR step used when scanning the SNR-band parameter space
         blue_cutoff: float
-         wavelength cutoff (blue) applied to the data used for SNR-b estimation
+         wavelength cutoff(blue) applied to the data used for SNR-b estimation
         red_cutoff: float
-         wavelength cutoff (red) applied to the data used for SNR-b estimation
+         wavelength cutoff(red) applied to the data used for SNR-b estimation
         cadence: float
          cadence choice for the display of the results
-
 
         """
 
@@ -664,7 +690,7 @@ class SNR_plot:
         Method defining the name of SNR file
 
         Parameters
-        ----------  
+        ----------
         SNRDir: str
          location directory of the SNR files
         x1: float
@@ -674,9 +700,9 @@ class SNR_plot:
         SNR_step: float
          SNR step used when scanning the SNR-band parameter space
         blue_cutoff: float
-         wavelength cutoff (blue) applied to the data used for SNR-b estimation
+         wavelength cutoff(blue) applied to the data used for SNR-b estimation
         red_cutoff: float
-         wavelength cutoff (red) applied to the data used for SNR-b estimation
+         wavelength cutoff(red) applied to the data used for SNR-b estimation
         bands: str
          filters considered for SNR-b estimation
         SNR_choice: str
@@ -715,8 +741,7 @@ class SNR_plot:
         -------
         dictplot: dict
          keys: SNR_choice_bands
-         vals: number of visits (per band and in total) vs z
-
+         vals: number of visits(per band and in total) vs z
 
         """
 
@@ -754,7 +779,7 @@ class SNR_plot:
 
         Returns
         ------
-        plot of the number of visits (total) vs z for the various configuration (SNR_choices)
+        plot of the number of visits(total) vs z for the various configuration(SNR_choices)
 
         """
 
@@ -795,7 +820,7 @@ class SNR_plot:
 
         Returns
         ------
-        plot of the number of visits (per band) vs z for the various configuration (SNR_choices)
+        plot of the number of visits(per band) vs z for the various configuration(SNR_choices)
 
         """
 
@@ -834,18 +859,17 @@ class SNR_plot:
 
     def plotIndiv(self, config, bands='rizy', legy='N$_{visits}$/field/observing night'):
         """
-        plot individual (per SNR_choice) results
+        plot individual(per SNR_choice) results
 
         Parameters
         ----------
         config: str
-         config (=SNR_choice_band) chosen
+         config(=SNR_choice_band) chosen
         bands: str
          filters to plot
         legy: str, opt
-         ylabel (default: 'N$_{visits}$/field/observing night')
+         ylabel(default: 'N$_{visits}$/field/observing night')
          could also be: 'Filter allocation'
-
 
         Returns
         ------
