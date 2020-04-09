@@ -5,10 +5,16 @@ import numpy as np
 import pandas as pd
 from . import filtercolors
 from . import plt
+import tkinter as tk
+# from tkinter import tkFont
+from tkinter import font as tkFont
+from matplotlib.backends.backend_tkagg import (
+    FigureCanvasTkAgg, NavigationToolbar2Tk)
 
 
 class DD_Budget:
-    def __init__(self, configName, df_visits_ref, df_visits, runtype='Nvisits_single'):
+    def __init__(self, configName, df_visits_ref, df_visits,
+                 runtype='Nvisits_single', dir_config='input/sn_studies'):
         """
         class estimating the DD budget vs redshift limit
 
@@ -27,26 +33,43 @@ class DD_Budget:
           with same infos as df_visits_ref
          runtype: str, opt
            type of SNR run to consider (default: Nvisits_single)
-
+        dir_config: str,opt
+          directory where config files are located
         """
+        self.runtype = runtype
+        self.bands = 'grizy'
+        self.zminp = 0.2
+        self.zmaxp = 0.85
+        self.colors = dict(zip(self.bands, ['c', 'g', 'y', 'r', 'm']))
+        self.df_visits_ref = df_visits_ref
+        self.df_visits = df_visits
+        self.dir_config = dir_config
+        self.process(configName)
+        self.gui()
+
+    def process(self, configName):
 
         # loading the configuration file for this scenario
-        config = yaml.load(open(configName), Loader=yaml.FullLoader)
+        name = '{}/{}.yaml'.format(self.dir_config, configName)
+        config = yaml.load(open(name), Loader=yaml.FullLoader)
         self.conf = config
-        # loading the number of visits for the case a single  m5 per band
-        self.df_visits = df_visits
-        self.nvisits, self.z, self.nvisits_band = self.interp_visits(
-            df_visits, runtype='')
+        self.configName = configName
 
         # loading the number of visits for the case one m5 per band per season and per field
-        self.df_visits_ref = df_visits_ref
+
         self.nvisits_ref, self.z_ref, self.nvisits_band_ref = self.interp_visits(
-            df_visits_ref, runtype='Nvisits_single')
+            self.df_visits_ref, runtype='Nvisits_single')
+
+        #print('test2', self.nvisits_ref['COSMOS'][1]([0.8, 0.85]))
+        # loading the number of visits for the case a single  m5 per band
+
+        self.nvisits, self.z, self.nvisits_band = self.interp_visits(
+            self.df_visits, runtype='')
 
         # estimate the budget
 
-        self.budget = self.budget_calc(runtype)
-        self.runtype = runtype
+        self.budget = self.budget_calc(self.runtype)
+
         # if self.runtype == 'Nvisits_single':
         self.summary_Nvisits_single()
 
@@ -68,7 +91,7 @@ class DD_Budget:
         z: dict of interp1d
           keys: fieldName, season; parameter: nvisits
         nvisits_band: dict of interp1d
-          keys: fieldName, season, band; parameter: z 
+          keys: fieldName, season, band; parameter: z
 
         """
 
@@ -102,7 +125,8 @@ class DD_Budget:
                 for b in 'grizy':
                     nvisits_band[fieldname][season][b] = interpolate.interp1d(
                         sel['z'], sel['Nvisits_{}'.format(b)], bounds_error=False, fill_value=0.0)
-
+        # if runtype == 'Nvisits_single':
+        #    print('test', nvisits['COSMOS'][1]([0.80, 0.85]))
         return nvisits, z, nvisits_band
 
     def interp_ref(self, df_ref, what='Nvisits'):
@@ -128,7 +152,7 @@ class DD_Budget:
         Returns
         -------
         pandas df with the following cols:
-         Nvisits_fieldName_season: number of visits 
+         Nvisits_fieldName_season: number of visits
                                    for all field/season considered in the scenario (conf file)
          z_fieldName_season: zlimit for all field/season considered in the scenario (conf file)
          z_ref: redshift limit corresponding to the case same number of visits per field/season/night
@@ -138,7 +162,7 @@ class DD_Budget:
 
         """
 
-        zr = np.arange(0.1, 0.9, 0.05)
+        zr = np.arange(0.1, 0.95, 0.05)
         df_tot = pd.DataFrame()
 
         """
@@ -259,7 +283,7 @@ class DD_Budget:
         plt.show()
         """
         self.interpmin = interpolate.interp1d(
-            df_min['z'], df_min['budget'], bounds_error=False, fill_value=0.10)
+            df_min['z'], df_min['budget'], bounds_error=False, fill_value=0.00)
         self.interpmax = interpolate.interp1d(
             df_max['z'], df_max['budget'], bounds_error=False, fill_value=0.0)
 
@@ -330,7 +354,7 @@ class DD_Budget:
                     zlim_median = np.median(valb['zref'])
                     zlim_min = np.min(valb['zref'])
                     zlim_max = np.max(valb['zref'])
-                    #self.zmax = zlim_max
+                    # self.zmax = zlim_max
 
         """
         nvisits_choice = self.interp_z(zlim_median)
@@ -393,11 +417,235 @@ class DD_Budget:
 
         return nVisits
 
-    def plot_budget_zlim(self, dd_budget=-1):
+    def gui(self):
+        """
+        Method to build a GUI to show the results
+
+        """
+        root = tk.Tk()
+        self.fig = plt.Figure(figsize=(12, 9), dpi=100)
+        self.fig.suptitle(self.configName.split('.')[0], fontsize=15)
+        gs = self.fig.add_gridspec(2, 1)
+        self.ax1 = self.fig.add_subplot(gs[0, 0])
+        self.ax2 = self.fig.add_subplot(gs[1, 0])
+
+        self.fig.subplots_adjust(right=0.8)
+
+        self.canvas = FigureCanvasTkAgg(self.fig, master=root)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(side=tk.LEFT, fill=tk.BOTH)
+        self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=False)
+
+        self.toolbar = NavigationToolbar2Tk(self.canvas, root)
+        self.toolbar.update()
+
+        self.plotBudget_zlim()
+        self.plotNvisits()
+        self.ax1.set_xlim(self.zminp, self.zmax)
+        self.ax2.set_xlim(self.zminp, self.zmax)
+        # common font
+        helv36 = tkFont.Font(family='Helvetica', size=15, weight='bold')
+
+        # building the GUI
+        # frame
+        button_frame = tk.Frame(master=root, bg="white")
+        button_frame.pack(fill=tk.X, side=tk.BOTTOM, expand=False)
+        button_frame.place(relx=.9, rely=.5, anchor="c")
+        # entries
+        ents = self.make_entries(button_frame, font=helv36)
+
+        # buttons
+        heightb = 3
+        widthb = 6
+
+        nvisits_button = tk.Button(
+            button_frame, text="Nvisits", command=(lambda e=ents: self.updateData(e)),
+            bg='yellow', height=heightb, width=widthb, fg='red', font=helv36)
+
+        quit_button = tk.Button(button_frame, text="Quit",
+                                command=root.quit, bg='yellow',
+                                height=heightb, width=widthb, fg='black', font=helv36)
+
+        button_frame.columnconfigure(0, weight=1)
+        button_frame.columnconfigure(1, weight=1)
+
+        nvisits_button.grid(row=2, column=0, sticky=tk.W+tk.E)
+        quit_button.grid(row=2, column=1, sticky=tk.W+tk.E)
+
+        root.mainloop()
+
+    def make_entries(self, frame, font):
+        """
+        Method to make entries available to the GUI
+
+        Parameters
+        ---------------
+        frame: tk.Frame
+          frame where entries will be located
+        font: tkFont
+          font used for the label
+
+        Returns
+        ----------
+        entries: dict
+          dict of entries
+
+        """
+
+        tk.Label(frame, text='Scenario', bg='white',
+                 fg='red', font=font).grid(row=0)
+        tk.Label(frame, text='DD budget', bg='white',
+                 fg='red', font=font).grid(row=1)
+
+        entries = {}
+
+        entries['Scenario'] = tk.Entry(frame, width=10, font=font)
+        entries['DDbudget'] = tk.Entry(frame, width=10, font=font)
+
+        entries['Scenario'].insert(10, self.configName)
+        entries['DDbudget'].insert(10, "0.05")
+        entries['Scenario'].grid(row=0, column=1)
+        entries['DDbudget'].grid(row=1, column=1)
+
+        return entries
+
+    def updateData(self, entries):
+        """
+        Method to update the plot when buttons are clicked
+
+        Parameters
+        ---------------
+        entries: dict
+           dict of entries
+
+        """
+        # reset axes
+        self.ax1.cla()
+        self.ax2.cla()
+
+        new_scenario = entries['Scenario'].get()
+        if new_scenario != self.configName:
+            self.process(new_scenario)
+            self.fig.suptitle(self.configName.split('.')[0], fontsize=15)
+        # plot references
+        self.plotBudget_zlim()
+        self.plotNvisits()
+
+        # plot results of entries
+        ddbudget = float(entries['DDbudget'].get())
+        if ddbudget > 0:
+            zlim = self.plotBudget_zlim_budget(ddbudget)
+            self.plotNvisits_zlim(zlim)
+        # update canvas
+        self.ax1.set_xlim(self.zminp, self.zmax)
+        self.ax2.set_xlim(self.zminp, self.zmax)
+        self.canvas.draw()
+
+    def plotBudget_zlim(self):
         """
         Plot to display DD budget results as a function of the redshift limit
-        if dd_budget>0: an estimation of zlim (min, median, max) corresponding to dd_budget 
-        is displayed 
+
+        """
+        zminval = 0.1
+        z = np.arange(zminval, 0.9, 0.05)
+
+        self.ax1.set_ylim(ymax=0.10)
+
+        self.ax1.set_xlim([zminval+0.01, self.zmax])
+        self.ax1.set_ylim([self.interp_z_ddbudget(zminval), np.min(
+            [0.10, self.interp_z_ddbudget(self.zmax)])])
+        zb = np.arange(zminval, self.zmax, 0.01)
+        self.ax1.fill_between(zb, self.interpmin(
+            zb), self.interpmax(zb), color='yellow', alpha=0.5)
+        self.ax1.plot(self.medz, self.medbud, color='k')
+        self.ax1.set_ylabel(r'DD budget')
+        self.ax1.set_xlabel(r'z$_{lim}$')
+        self.ax1.grid()
+
+    def plotBudget_zlim_budget(self, dd_budget):
+        """
+        Method to plot zlimits (min, median, max) depending on the dd_budget
+
+        Parameters
+        ---------------
+        dd_budget: float
+          dd budget
+
+        """
+        fontsize = 15
+        zlim_median, zlim_min, zlim_max = self.zlim_Nvisits_single(
+            dd_budget)
+        self.ax1.plot(self.ax1.get_xlim(), [dd_budget]*2, color='r', ls='--')
+        alltext = ''
+        for ip, val in enumerate([('max', zlim_max), ('median', zlim_median), ('min', zlim_min)]):
+            self.ax1.arrow(val[1], dd_budget, 0., -dd_budget,
+                           length_includes_head=True, color='b',
+                           head_length=0.005, head_width=0.01)
+            # self.ax1.text(0.35, 0.05-0.01*ip,
+            #              '$z_{lim}^{'+val[0]+'}$='+str(np.round(val[1], 2)), fontsize=fontsize)
+            alltext += '$z_{lim}^{'+val[0]+'}$='+str(np.round(val[1], 2))
+            alltext += ' '
+        self.ax1.text(0.3, 0.06, alltext, fontsize=fontsize)
+        return zlim_median
+
+    def plotNvisits(self):
+
+        fieldName = 'COSMOS'
+        season = 1
+
+        zmin = 0.1
+        zmax = 0.9
+        z = np.arange(zmin, zmax, 0.01)
+
+        self.ax2.plot(z, self.nvisits_ref[fieldName][season](
+            z), color='k', label='sum')
+
+        for b in 'grizy':
+            myinterp = self.interp_ref(
+                self.df_visits_ref, 'Nvisits_{}'.format(b))
+            if self.runtype == 'Nvisits_single':
+                self.ax2.plot(z, self.nvisits_band_ref[fieldName][season][b](
+                    z), color=filtercolors[b], label='{}'.format(b))
+            else:
+                self.ax2.plot(z, self.nvisits_band[fieldName][season][b](
+                    z), color=filtercolors[b], label='{}'.format(b))
+        self.ax2.set_xlabel('z')
+        self.ax2.set_ylabel('Nvisits')
+        self.ax2.grid()
+        self.ax2.legend()
+
+    def plotNvisits_zlim(self, zlim=0.5):
+
+        fieldName = 'COSMOS'
+        season = 1
+
+        fontsize = 15
+        ylims = self.ax2.get_ylim()
+        nvisits = int(np.round(self.nvisits_ref[fieldName][season](zlim)))
+        yref = 0.9*ylims[1]
+        scale = 0.1*ylims[1]
+        self.ax2.text(0.3, yref, 'Nvisits={}'.format(
+            nvisits), fontsize=fontsize)
+        for io, b in enumerate('grizy'):
+            key = 'nvisits_{}'.format(b)
+            nvisits_b = int(
+                np.round(self.nvisits_band_ref[fieldName][season][b](zlim)))
+            self.ax2.text(0.3, 0.8*ylims[1]-scale*io,
+                          'Nvisits - ${}$ ={}'.format(b, nvisits_b), fontsize=fontsize, color=self.colors[b])
+
+        zl = 'z$_{lim}$'
+        self.ax2.text(zlim-0.15, 0.95*yref,
+                      '{} = {}'.format(zl, np.round(zlim, 2)), fontsize=fontsize)
+        self.ax2.arrow(zlim, yref, 0., -yref,
+                       length_includes_head=True, color='r',
+                       head_length=5, head_width=0.01)
+        self.ax2.set_ylim(0,)
+
+    def plot_budget_zlim_deprecated(self, dd_budget=-1):
+        """
+        Plot to display DD budget results as a function of the redshift limit
+        if dd_budget>0: an estimation of zlim (min, median, max) corresponding to dd_budget
+        is displayed
 
         Parameters
         ----------
@@ -416,7 +664,7 @@ class DD_Budget:
 
         fig1, ax1 = plt.subplots(figsize=(8, 6))
         fig1.suptitle(self.conf['confName'])
-        #ax2.set_title('{} - season {}'.format(fieldName,season))
+        # ax2.set_title('{} - season {}'.format(fieldName,season))
         ax1.set_ylim(ymax=0.10)
 
         ax1.set_xlim([zminval+0.01, self.zmax])
@@ -440,9 +688,9 @@ class DD_Budget:
                 ax1.text(0.35, 0.04-0.005*ip,
                          '$z_{lim}^{'+val[0]+'}$='+str(np.round(val[1], 2)))
 
-    def plot_budget_visits(self, fieldName, season, dd_budget=-1):
+    def plot_budget_visits_deprecated(self, fieldName, season, dd_budget=-1):
         """
-        Plot to display DD budget results 
+        Plot to display DD budget results
         The plot has two parts:
         - left side: DD budget vs zlim for the field considered
         - right side: Number of visits vs redshift limit for the field considered
@@ -454,7 +702,7 @@ class DD_Budget:
         fieldName: str
         name of the field to display
         season:
-        name of the season to display 
+        name of the season to display
         dd_budget: float, opt
         DD budget (default: -1)
         """
