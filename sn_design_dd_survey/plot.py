@@ -39,6 +39,8 @@ class ShowVisits:
 
         self.z_nvisits = self.interp_z(sel['Nvisits'], sel['z'])
 
+        self.gui()
+
     def interp_z(self, x, y):
         return interp1d(x, y, bounds_error=False, fill_value=0.)
 
@@ -92,20 +94,13 @@ class ShowVisits:
 
         self.ax.plot(self.ax.get_xlim(), [nvisits]*2,
                      color='r', linestyle='--')
-        """
-        self.ax.arrow(0.3, nvisits, -0.3, 0.01*nvisits,
-                      length_includes_head=True, color='r',
-                      head_length=5, head_width=0.01)
-        """
 
-    def __call__(self, z=0.6):
+    def gui(self, z=0.6):
 
         root = tk.Tk()
-        #boldStyle = ttk.Style()
-        #boldStyle.configure("Bold.TButton", size=10, weight="bold")
         self.fig = plt.Figure(figsize=(15, 6), dpi=100)
         self.ax = self.fig.add_subplot(111)
-        leg = 'day$^{-1}$'
+        leg = 'days$^{-1}$'
         self.fig.suptitle('cadence: {} {}'.format(int(self.cadence), leg))
         self.fig.subplots_adjust(right=0.8)
         self.ax.set_xlim(self.zmin, self.zmax)
@@ -118,8 +113,11 @@ class ShowVisits:
         self.toolbar.update()
         # self.ax.cla()
         self.plotNvisits()
-        # building widgets
+
+        # common font
         helv36 = tkFont.Font(family='Helvetica', size=15, weight='bold')
+
+        # building the GUI
         # frame
         button_frame = tk.Frame(master=root, bg="white")
         button_frame.pack(fill=tk.X, side=tk.BOTTOM, expand=False)
