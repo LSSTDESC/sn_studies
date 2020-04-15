@@ -224,7 +224,7 @@ class SNR_z:
             self.m5_from_SNR[b] = RegularGridInterpolator(
                 (snrv, zv), m5, method='linear', bounds_error=False, fill_value=0.)
 
-        print('test extrapo', self.m5_from_SNR['z'](([30.], [0.7])))
+        # print('test extrapo', self.m5_from_SNR['z'](([30.], [0.7])))
 
     def limVals(self, lc, field):
         """ Get unique values of a field in  a table
@@ -314,20 +314,22 @@ class SNR_z:
         if self.verbose:
             print('Estimating sumgrp')
 
-        # df = self.lcdf.groupby(['x1', 'color', 'z', 'band']).apply(
-        #    lambda x: self.sumgrp(x)).reset_index()
-
+        """
+        df = self.lcdf.groupby(['x1', 'color', 'z', 'band']).apply(
+            lambda x: self.sumgrp(x)).reset_index()
+        """
         # make groups and estimate sigma_Color for combinations of SNR per band
 
         if self.verbose:
             print('estimating dfsigmaC')
-        # dfsigmaC = df.groupby(['x1', 'color', 'z']).apply(
-        #    lambda x: self.sigmaC(x)).reset_index()
-
+        """
+        dfsigmaC = df.groupby(['x1', 'color', 'z']).apply(
+                lambda x: self.sigmaC(x)).reset_index()
+        """
         dfsigmaCb = self.lcdf.groupby(['x1', 'color', 'z']).apply(
             lambda x: self.sigmaC_all(x)).reset_index()
 
-        #print('ici', dfsigmaC, dfsigmaCb)
+        print('ici', dfsigmaCb.columns)
         """
         cols = ['z']
         for val in ['SNRcalc','flux_5_e_sec']:
@@ -457,7 +459,7 @@ class SNR_z:
 
         df_tot['sigmaC'] = np.sqrt(CovColor(df_tot).Cov_colorcolor)
 
-        #print('result?', df_tot['sigmaC'])
+        print('result?', df_tot['sigmaC'])
         # add the missing bands to have a uniform format z-independent
         for b in missing_bands:
             for col in self.listcol:
@@ -471,7 +473,7 @@ class SNR_z:
                      self.sigma_color_cut) < 0.01*self.sigma_color_cut
 
         # that's it - return the results
-        print('Done with', grp.name, time.time()-time_ref)
+        print('Done with', grp.name, time.time()-time_ref, df_tot.columns)
         return df_tot[idx]
 
     def sigmaC(self, grp):
@@ -560,7 +562,7 @@ class SNR_z:
                      self.sigma_color_cut) < 0.01*self.sigma_color_cut
 
         # that's it - return the results
-        print('Done with', grp.name, time.time()-time_ref)
+        print('Done with', grp.name, time.time()-time_ref, df_tot.columns)
         return df_tot[idx]
 
     def addSNR_all(self, df, SNR, b, z):
@@ -613,11 +615,14 @@ class SNR_z:
         df_tot['SNRcalc'] = df_tot['SNRcalc'].round(decimals=1)
         df_tot['m5calc'] = df_tot['m5calc'].round(decimals=2)
 
-        grp = df_tot.groupby(['key', 'SNRcalc', 'm5calc'])[
-            self.listcol].sum().reset_index()
-        grp.loc[:, 'band'] = df_tot['band'].unique()
-        grp.loc[:, 'x1'] = df_tot['x1'].unique()
-        grp.loc[:, 'color'] = df_tot['color'].unique()
+        # grp = df_tot.groupby(['key', 'SNRcalc', 'm5calc'])[
+        #    self.listcol+['flux_e_sec']].sum().reset_index()
+        grp = df_tot.groupby(['key', 'band']).apply(
+            lambda x: self.calc(x)).reset_index()
+
+        #grp.loc[:, 'band'] = df_tot['band'].unique()
+        #grp.loc[:, 'x1'] = df_tot['x1'].unique()
+       # grp.loc[:, 'color'] = df_tot['color'].unique()
 
         # add suffix corresponding to the filter
         grp = grp.add_suffix('_{}'.format(b))
@@ -626,6 +631,29 @@ class SNR_z:
         # print(grp)
 
         return grp
+
+    def calc(self, grp):
+        """
+        Method to estimate few variables for the group grp
+
+        Parameters
+        --------------
+        grp: pandas df
+
+        Returns
+        ----------
+        pandas df with some estimated values
+
+        """
+        res = pd.DataFrame()
+
+        res = grp[self.listcol].sum()
+        res['sumflux'] = np.sqrt(np.sum(grp['flux_e_sec']**2.))
+        res['SNRcalc'] = grp['SNRcalc'].median()
+        res['m5calc'] = grp['m5calc'].median()
+        res['flux_5_e_sec'] = 5.*res['sumflux']/res['SNRcalc']
+
+        return res
 
     def addSNR(self, df, SNR, b):
         """
