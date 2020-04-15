@@ -610,6 +610,9 @@ class SNR_z:
             df_tot[col] = df_tot[col] * \
                 (df_tot['SNR_indiv']/df_tot['snr_m5'])**2.
 
+        df_tot['SNRcalc'] = df_tot['SNRcalc'].round(decimals=1)
+        df_tot['m5calc'] = df_tot['m5calc'].round(decimals=2)
+
         grp = df_tot.groupby(['key', 'SNRcalc', 'm5calc'])[
             self.listcol].sum().reset_index()
         grp.loc[:, 'band'] = df_tot['band'].unique()
