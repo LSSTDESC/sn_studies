@@ -3,8 +3,10 @@ import pandas as pd
 import numpy as np
 import time
 from scipy.spatial import distance
+from scipy.interpolate import RegularGridInterpolator, interp1d
+from astropy.table import Table, unique, vstack
 
-from .utils import flux5_to_m5
+from .utils import flux5_to_m5, srand, gamma
 from .wrapper import Nvisits_cadence
 from . import plt
 from . import filtercolors
@@ -69,6 +71,7 @@ class SNR:
                 np.save(thename, np.copy(vals.to_records(index=False)))
 
         self.SNR = pd.DataFrame(np.load(SNRName, allow_pickle=True))
+        print('loading', self.SNR)
 
     def plot(self):
         """
@@ -159,6 +162,9 @@ class SNR_z:
         # load m5
         self.medm5 = data.m5_Band
 
+        # get gammas
+        self.gamma = gamma('grizy')
+
         # load signal fraction per band
         self.fracSignalBand = data.fracSignalBand.fracSignalBand
 
@@ -173,6 +179,82 @@ class SNR_z:
         # map flux5-> m5
 
         self.f5_to_m5 = flux5_to_m5(self.bands)
+
+        # load SNR_m5 and make griddata
+        snr_m5 = np.load('reference_files/SNR_m5.npy', allow_pickle=True)
+
+        self.m5_from_SNR = {}
+
+        for b in np.unique(snr_m5['band']):
+            idx = snr_m5['band'] == b
+            sela = Table(snr_m5[idx])
+            sela['z'] = sela['z'].data.round(decimals=2)
+            sela['SNR'] = sela['SNR'].data.round(decimals=2)
+
+            snr_min = np.round(np.min(sela['SNR']), 1)
+            # snr_max = np.round(np.max(sela['SNR']), 1)
+            snr_max = 200.0
+
+            snr_range = np.arange(snr_min, snr_max, 0.1)
+            sel = Table()
+            for vl in unique(sela, keys='z'):
+                idx = np.abs(sela['z']-vl['z']) < 1.e-5
+                val = sela[idx]
+                interp = interp1d(val['SNR'], val['m5'],
+                                  bounds_error=False, fill_value=0.)
+                re = interp(snr_range)
+                tabb = Table(names=['m5'])
+                tabb['m5'] = re.tolist()
+                tabb['SNR'] = snr_range.tolist()
+                tabb['z'] = [vl['z']]*len(snr_range)
+                sel = vstack([sel, tabb])
+
+            zmin, zmax, zstep, nz = self.limVals(sel, 'z')
+            snrmin, snrmax, snrstep, nsnr = self.limVals(sel, 'SNR')
+
+            zstep = np.round(zstep, 3)
+            snrstep = np.round(snrstep, 3)
+
+            zv = np.linspace(zmin, zmax, nz)
+            snrv = np.linspace(snrmin, snrmax, nsnr)
+
+            index = np.lexsort((sel['z'], sel['SNR']))
+            m5 = np.reshape(sel[index]['m5'], (nsnr, nz))
+
+            self.m5_from_SNR[b] = RegularGridInterpolator(
+                (snrv, zv), m5, method='linear', bounds_error=False, fill_value=0.)
+
+        print('test extrapo', self.m5_from_SNR['z'](([30.], [0.7])))
+
+    def limVals(self, lc, field):
+        """ Get unique values of a field in  a table
+
+        Parameters
+        ----------
+        lc: Table
+         astropy Table (here probably a LC)
+        field: str
+         name of the field of interest
+        Returns
+        -------
+        vmin: float
+         min value of the field
+        vmax: float
+         max value of the field
+        vstep: float
+         step value for this field (median)
+        nvals: int
+         number of unique values
+        """
+
+        lc.sort(field)
+        vals = np.unique(lc[field].data.round(decimals=4))
+        # print(vals)
+        vmin = np.min(vals)
+        vmax = np.max(vals)
+        vstep = np.median(vals[1:]-vals[:-1])
+
+        return vmin, vmax, vstep, len(vals)
 
     def sumgrp(self, grp):
         """
@@ -232,45 +314,40 @@ class SNR_z:
         if self.verbose:
             print('Estimating sumgrp')
 
-        df = self.lcdf.groupby(['x1', 'color', 'z', 'band']).apply(
-            lambda x: self.sumgrp(x)).reset_index()
+        # df = self.lcdf.groupby(['x1', 'color', 'z', 'band']).apply(
+        #    lambda x: self.sumgrp(x)).reset_index()
 
         # make groups and estimate sigma_Color for combinations of SNR per band
 
         if self.verbose:
             print('estimating dfsigmaC')
-        dfsigmaC = df.groupby(['x1', 'color', 'z']).apply(
-            lambda x: self.sigmaC(x)).reset_index()
+        # dfsigmaC = df.groupby(['x1', 'color', 'z']).apply(
+        #    lambda x: self.sigmaC(x)).reset_index()
 
+        dfsigmaCb = self.lcdf.groupby(['x1', 'color', 'z']).apply(
+            lambda x: self.sigmaC_all(x)).reset_index()
+
+        #print('ici', dfsigmaC, dfsigmaCb)
         """
         cols = ['z']
         for val in ['SNRcalc','flux_5_e_sec']:
             for b in self.bands:
                 cols.append('{}_{}'.format(val,b))
         """
-        return dfsigmaC
+        return dfsigmaCb
 
-    def sigmaC(self, grp):
+    def get_SNR(self, grp):
         """
-        For a given group (grp), this method estimates sigmaC
-        for a set of SNR-band combinations
+        Method to get SNR for all the bands
 
         Parameters
-        ----------
-        grp: pandas df group
+        ---------------
+        grp : pandas df group
 
         Returns
-        -------
-        pandas df with the following columns:
-        x1,color,z,band
-        (sum_flux,SNR,self.listcol,flux_5_e_sec,m5_calc,flux_5)_band
-        sigmaC,SNRcalc_tot
-
-
+        ----------
+        dict of nabds and SNR values
         """
-        if self.verbose:
-            print('Processing sigmaC', grp.name)
-
         # init SNR values to zero
         SNR = {}
         for b in self.bands:
@@ -302,7 +379,123 @@ class SNR_z:
 
         if self.verbose:
             print('SNR values', SNR)
-        # SNR = dict(zip('grizy',[[0.],[25.],[25.],[30.],[35.]]))
+        #SNR = dict(zip('grizy', [[0.], [25.], [25.], [30.], [35.]]))
+
+        return dictband, SNR
+
+    def sigmaC_all(self, grp):
+        """
+        For a given group (grp), this method estimates sigmaC
+        for a set of SNR-band combinations
+
+        Parameters
+        ----------
+        grp: pandas df group
+
+        Returns
+        -------
+        pandas df with the following columns:
+        x1,color,z,band
+        (sum_flux,SNR,self.listcol,flux_5_e_sec,m5_calc,flux_5)_band
+        sigmaC,SNRcalc_tot
+
+
+        """
+        if self.verbose:
+            print('Processing sigmaC', grp.name)
+
+        z = grp.name[2]
+        dictband, SNR = self.get_SNR(grp)
+
+        # existing bands
+        bands = ''.join(list(dictband.keys()))
+
+        # missing bands
+        missing_bands = list(set(self.bands).difference(bands))
+
+        # We are going to build a df with all SNR combinations
+        # let us start with the first band
+        df_ref = dictband[bands[0]]
+
+        # make the SNR combination for this first band
+        df_ref = self.addSNR_all(df_ref, SNR[bands[0]], bands[0], z)
+
+        # now make all the combinations
+        df_tot = pd.DataFrame()
+        df_merged = df_ref.copy()
+        time_ref = time.time()
+
+        for i in range(1, len(bands)):
+            b = bands[i]
+            df_to_merge = self.addSNR_all(dictband[b], SNR[b], b, z)
+            if not df_tot.empty:
+                df_merged = df_tot.copy()
+            dfb = pd.DataFrame()
+            for ikey in df_to_merge['key'].values:
+                df_merged.loc[:, 'key'] = ikey
+                dfb = pd.concat([dfb, df_merged], sort=False)
+
+            df_tot = dfb.merge(df_to_merge, left_on=['key'], right_on=['key'])
+
+        if self.verbose:
+            print('after combi', time.time()-time_ref)
+
+        listb = []
+        for b in bands:
+            listb.append('SNRcalc_{}'.format(b))
+
+        df_tot['SNRcalc_tot'] = np.sqrt(
+            (df_tot[listb]*df_tot[listb]).sum(axis=1))
+        df_tot['bands'] = ''.join(bands)
+
+        # time_ref = time.time()
+
+        # Estimate sigma_Color for all the combinations build at the previous step
+        for col in self.listcol:
+            df_tot.loc[:, col] = df_tot.filter(
+                regex='^{}'.format(col)).sum(axis=1)
+
+        df_tot['sigmaC'] = np.sqrt(CovColor(df_tot).Cov_colorcolor)
+
+        #print('result?', df_tot['sigmaC'])
+        # add the missing bands to have a uniform format z-independent
+        for b in missing_bands:
+            for col in self.listcol:
+                df_tot.loc[:, '{}_{}'.format(col, b)] = 0.0
+            df_tot.loc[:, 'SNRcalc_{}'.format(b)] = 0.0
+            df_tot.loc[:, 'flux_e_sec_{}'.format(b)] = 0.0
+            df_tot.loc[:, 'm5calc_{}'.format(b)] = 0.0
+
+            # select only combi with sigma_C ~ self.sigma_color_cut
+        idx = np.abs(df_tot['sigmaC'] -
+                     self.sigma_color_cut) < 0.01*self.sigma_color_cut
+
+        # that's it - return the results
+        print('Done with', grp.name, time.time()-time_ref)
+        return df_tot[idx]
+
+    def sigmaC(self, grp):
+        """
+        For a given group (grp), this method estimates sigmaC
+        for a set of SNR-band combinations
+
+        Parameters
+        ----------
+        grp: pandas df group
+
+        Returns
+        -------
+        pandas df with the following columns:
+        x1,color,z,band
+        (sum_flux,SNR,self.listcol,flux_5_e_sec,m5_calc,flux_5)_band
+        sigmaC,SNRcalc_tot
+
+
+        """
+        if self.verbose:
+            print('Processing sigmaC', grp.name)
+
+        dictband, SNR = self.get_SNR(grp)
 
         # existing bands
         bands = ''.join(list(dictband.keys()))
@@ -367,9 +560,69 @@ class SNR_z:
                      self.sigma_color_cut) < 0.01*self.sigma_color_cut
 
         # that's it - return the results
-        if self.verbose:
-            print('Done with', grp.name, time.time()-time_ref)
+        print('Done with', grp.name, time.time()-time_ref)
         return df_tot[idx]
+
+    def addSNR_all(self, df, SNR, b, z):
+        """
+        Method add SNR-band combinations
+        the five-sigma flux and corresponding m5 are estimated (SNR dependent).
+        Fisher elements are also re-evaluated (f5 dependence through LC flux errors)
+
+        Parameters
+        ----------
+        df: pandas df
+         input data
+        SNR: float
+         SNR values
+        b: str
+         band
+
+        Returns
+        -------
+        pandas df generated from the set of combinations
+
+        """
+
+        r = []
+        df_tot = pd.DataFrame()
+
+        for i, val in enumerate(SNR):
+            r.append((i, val))
+            df_cp = df.copy()
+            df_cp.loc[:, 'key'] = i
+            df_tot = pd.concat([df_tot, df_cp])
+
+        df_SNR = pd.DataFrame(r, columns=['key', 'SNRcalc'])
+
+        df_tot = df_tot.merge(df_SNR, left_on='key', right_on='key')
+
+        # estimate m5 from SNR
+
+        df_tot['m5calc'] = self.m5_from_SNR[b](
+            (df_tot['SNRcalc'].values, [z]*len(df_tot)))
+
+        df_tot['SNR_indiv'] = 1. / \
+            srand(self.gamma[b](df_tot['m5calc']),
+                  df_tot['mag'], df_tot['m5calc'])
+
+        for col in self.listcol:
+            df_tot[col] = df_tot[col] * \
+                (df_tot['SNR_indiv']/df_tot['snr_m5'])**2.
+
+        grp = df_tot.groupby(['key', 'SNRcalc', 'm5calc'])[
+            self.listcol].sum().reset_index()
+        grp.loc[:, 'band'] = df_tot['band'].unique()
+        grp.loc[:, 'x1'] = df_tot['x1'].unique()
+        grp.loc[:, 'color'] = df_tot['color'].unique()
+
+        # add suffix corresponding to the filter
+        grp = grp.add_suffix('_{}'.format(b))
+        # key here necessary for future merging
+        grp = grp.rename(columns={'key_{}'.format(b): 'key'})
+        # print(grp)
+
+        return grp
 
     def addSNR(self, df, SNR, b):
         """
@@ -411,8 +664,14 @@ class SNR_z:
         df_tot['flux_5_e_sec'] = 5.*df_tot['sumflux']/df_tot['SNRcalc']
 
         # get m5 from the 5-sigma flux
+        # this is for the background dominated case
         df_tot['m5calc'] = self.f5_to_m5[b](df_tot['flux_5_e_sec'])
+        if b == 'z':
+            ty = self.m5_from_SNR[b](
+                (df_tot['SNRcalc'].values, df_tot['z'].values))
 
+            print('hello', df_tot['m5calc'].values, ty, df_tot['sumflux'],
+                  df_tot['SNRcalc'].values, df_tot['z'].values)
         # get the ratio of the 5-sigma fluxes: the one estimated two lines ago
         # and the original one, that is the one used for the original simulation
         # (and estimated from m5)
@@ -433,6 +692,7 @@ class SNR_z:
         df_tot = df_tot.rename(columns={'key_{}'.format(b): 'key'})
 
         # that is it - return the result
+
         return df_tot
 
     def plotSigmaC_SNR(self, dfsigmaC):
@@ -581,7 +841,7 @@ class SNR_z:
 
         output = grp.loc[idx].reindex(cols)
         # colindex = [grp.columns.get_loc(c) for c in cols if c in grp]
-        #output = grcp[:-1][cols]
+        # output = grcp[:-1][cols]
         # print('there man', idx, cols, output, grcp[:1][cols])
         return output
         # return grp.loc[idxa,cols], grp.loc[idxb,cols]
