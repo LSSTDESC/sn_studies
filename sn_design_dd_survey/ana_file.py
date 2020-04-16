@@ -121,6 +121,28 @@ class Anadf:
         print(self.grpfi)
         print(self.dfana)
         """
+    """
+    def calcSNR(self, datadf):
+
+        res = datadf.groupby(['x1', 'color', 'z', 'band']
+                             ).apply(lambda x: self.calcgrp(x)).reset_index()
+        print(res)
+
+    def calcgrp(self, grp):
+
+        x1 = grp['x1'].median()
+        if x1 < 0.:
+            idx = grp['z'] <= 0.9
+
+        if x1 >= 0.:
+            idx = grp['z'] >= 0.05
+
+        grp = grp[idx]
+
+        resu = pd.DataFrame()
+        # grp['ratio'] = (grp['flux_e_sec']/grp['snr_m5'])/(grp['flux_5']/5.)
+        print(grp[['z', 'band', 'ratio', 'm5']])
+    """
 
     def calcSNR(self, datadf):
         """
@@ -153,15 +175,19 @@ class Anadf:
 
             grp.loc[:, 'err_back_reg'] = (
                 5.*grp['flux_e_sec']/grp['flux_5'])**2.
+            grp.loc[:, 'SNR'] = grp['snr_m5']**2.
 
+            print(grp.columns)
             grpa = grp.groupby(['daymax', 'z']).sum().reset_index()
             grpa['sigmaC'] = np.sqrt(CovColor(grpa).Cov_colorcolor)
             grpa = grpa[['daymax', 'z', 'sigmaC']]
 
             grpb = grp.groupby(['daymax', 'z', 'band']).sum().reset_index()
+            grpb['SNR'] = np.sqrt(grpb['SNR'])
 
-            grpb = grpb[['daymax', 'z', 'band', 'err_back_reg']]
-            grpb['SNR'] = np.sqrt(grpb['err_back_reg'])
+            grpb = grpb[['daymax', 'z', 'band', 'err_back_reg', 'SNR']]
+            # grpb['SNR'] = np.sqrt(grpb['err_back_reg'])
+            # grpb['SNR'] = np.sqrt(np.sum(grpb['snr_m5']**2.))
             grpbm = grpb.merge(
                 grpa, left_on=['daymax', 'z'], right_on=['daymax', 'z'])
             grpbm.loc[:, 'x1'] = key[0]
@@ -225,7 +251,7 @@ class Anadf:
 
         r = []
         for key, grpt in dfb:
-            #band = '{}'.format(key[2].decode()[-1])
+            # band = '{}'.format(key[2].decode()[-1])
             band = key[2]
             interp = interpolate.interp1d(
                 grpt['sigmaC'].values, grpt['SNR'].values, bounds_error=False, fill_value=0.0)
@@ -282,7 +308,7 @@ class Anadf:
         dfb = self.grpfi.groupby(['x1', 'color', 'band'])
 
         for key, grpt in dfb:
-            #band = '{}'.format(key[2].decode()[-1])
+            # band = '{}'.format(key[2].decode()[-1])
             band = key[2]
             idx = (self.dfana['x1']-key[0]) < 1.e-5
             idx &= (self.dfana['color']-key[1]) < 1.e-5
