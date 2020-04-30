@@ -15,7 +15,7 @@ from sn_tools.sn_calcFast import CovColor
 
 class SNR:
     def __init__(self, SNRDir, data,
-                 SNR_par, verbose=False):
+                 SNR_par, save_SNR_combi=False, verbose=False):
         """
         Wrapper class to estimate SNR
 
@@ -48,10 +48,12 @@ class SNR:
         if not os.path.isfile(SNRName):
 
             myclass = SNR_z(SNRDir, data,
-                            SNR_par=SNR_par, verbose=self.verbose)
+                            SNR_par=SNR_par,
+                            save_SNR_combi=save_SNR_combi,
+                            verbose=self.verbose)
 
-            dfsigmaC = myclass.sigmaC_SNR()
-
+            #dfsigmaC = myclass.sigmaC_SNR()
+            SNR_dict = myclass.sigmaC_SNR()
             # myclass.plotSigmaC_SNR(dfsigmaC) # plot the results
 
             # plt.show()
@@ -59,7 +61,7 @@ class SNR:
 
             if self.verbose:
                 print('SNR class - sigma_C selection')
-            SNR_dict = myclass.SNR(dfsigmaC)
+            #SNR_dict = myclass.SNR(dfsigmaC)
 
             if self.verbose:
                 print('SNR class - saving SNR files')
@@ -329,7 +331,7 @@ class SNR_z:
         dfsigmaCb = self.lcdf.groupby(['x1', 'color', 'z']).apply(
             lambda x: self.sigmaC_all(x)).reset_index()
 
-        print('ici', dfsigmaCb.columns)
+        print('ici pal', dfsigmaCb.columns)
         """
         cols = ['z']
         for val in ['SNRcalc','flux_5_e_sec']:
@@ -348,7 +350,7 @@ class SNR_z:
 
         Returns
         ----------
-        dict of nabds and SNR values
+        dict of bands and SNR values
         """
         # init SNR values to zero
         SNR = {}
@@ -365,6 +367,7 @@ class SNR_z:
         if grp.name[2] >= 0.65:
             SNR_min = 20.
 
+        SNR_min = 1.
         # generate SNR values of interest (per band)
         for band in grp['band'].unique():
             idx = grp['band'] == band
@@ -405,10 +408,56 @@ class SNR_z:
         """
         if self.verbose:
             print('Processing sigmaC', grp.name)
+        print('Processing sigmaC', grp.name)
 
+        x1 = grp.name[0]
+        color = grp.name[1]
         z = grp.name[2]
-        dictband, SNR = self.get_SNR(grp)
 
+        dictband, SNR = self.get_SNR(grp)
+        SNR_split = {}
+
+        nsplit = 3
+        for key, vals in SNR.items():
+            if len(vals) >= 2:
+                SNR_split[0] = {}
+                SNR_split[1] = {}
+                SNR_split[2] = {}
+                bo = int(len(vals)/nsplit)
+                SNR_split[0][key] = vals[:bo]
+                SNR_split[1][key] = vals[bo:2*bo]
+                SNR_split[2][key] = vals[2*bo:]
+
+                break
+
+        for key, vals in SNR.items():
+            for i in range(nsplit):
+                if key not in SNR_split[i].keys():
+                    SNR_split[i][key] = vals
+
+        dfres = pd.DataFrame()
+        for key, vals in SNR_split.items():
+            resi = self.combiSNR(grp, dictband, vals, x1, color, z, key)
+            if resi is not None:
+                dfres = pd.concat((dfres, resi), ignore_index=True)
+
+        print('ici', dfres)
+        minPar = 'Nvisits'
+        idx = int(dfres[[minPar]].idxmin())
+
+        # output
+        cols = []
+        for colname in ['SNRcalc', 'm5calc', 'fracSNR', 'flux_5_e_sec']:
+            for band in 'grizy':
+                cols.append('{}_{}'.format(colname, band))
+
+        print(dfres.loc[idx])
+        output = dfres.loc[idx].reindex(cols)
+        return output
+
+    def combiSNR(self, grp, dictband, SNR, x1, color, z, icombi):
+
+        print('there we go man', dictband, SNR)
         # existing bands
         bands = ''.join(list(dictband.keys()))
 
@@ -459,8 +508,8 @@ class SNR_z:
 
         df_tot['sigmaC'] = np.sqrt(CovColor(df_tot).Cov_colorcolor)
 
-        print('result?', df_tot['sigmaC'])
         # add the missing bands to have a uniform format z-independent
+
         for b in missing_bands:
             for col in self.listcol:
                 df_tot.loc[:, '{}_{}'.format(col, b)] = 0.0
@@ -468,13 +517,72 @@ class SNR_z:
             df_tot.loc[:, 'flux_e_sec_{}'.format(b)] = 0.0
             df_tot.loc[:, 'm5calc_{}'.format(b)] = 0.0
 
-            # select only combi with sigma_C ~ self.sigma_color_cut
+        # select only combi with sigma_C ~ self.sigma_color_cut
         idx = np.abs(df_tot['sigmaC'] -
                      self.sigma_color_cut) < 0.01*self.sigma_color_cut
 
-        # that's it - return the results
-        print('Done with', grp.name, time.time()-time_ref, df_tot.columns)
-        return df_tot[idx]
+        print('how many', len(df_tot[idx]))
+        if len(df_tot[idx]) < 1:
+            return None
+
+        dfres = self.SNRvisits(
+            df_tot[idx].copy(), missing_bands, x1, color, z, icombi)
+
+        print('Done with', x1, color, z,  time.time()-time_ref, dfres.columns)
+        print('result', dfres)
+        return dfres
+
+    def SNRvisits(self, dfres, missing_bands, x1, color, z, icombi):
+
+        cols = []
+
+        for b in self.bands:
+            cols.append('Nvisits_{}'.format(b))
+            dfres.loc[:, 'fracSNR_{}'.format(
+                b)] = dfres['SNRcalc_{}'.format(b)]/dfres['SNRcalc_tot']
+            if self.medm5 is not None:
+                dfres.loc[:, 'm5single_{}'.format(
+                    b)] = self.medm5[self.medm5['filter'] == b]['fiveSigmaDepth'].values
+
+            dfres.loc[:, 'Nvisits_{}'.format(
+                b)] = 10**(0.8*(dfres['m5calc_{}'.format(b)]-dfres['m5single_{}'.format(b)]))
+
+        for b in missing_bands:
+            dfres.loc[:, 'Nvisits_{}'.format(b)] = 0.0
+
+        dfres = dfres.fillna(0.0)
+        # total number of visits
+        dfres.loc[:, 'Nvisits'] = dfres[cols].sum(axis=1)
+
+        # this is to dump results of combination
+        if self.save_SNR_combi:
+            self.saveCombi(dfres, x1, color, z, icombi)
+        return dfres
+
+    def saveCombi(self, dfres, x1, color, z, icombi):
+        """
+        Method to save results of SNR combination in numpy file
+
+        Parameters
+        ---------------
+        dfres: pandas df
+           data to save 
+
+        """
+
+        outdir_combi = 'SNR_combi'
+        if not os.path.exists(outdir_combi):
+            os.system('mkdir {}'.format(outdir_combi))
+
+        #grcp = dfres.copy()
+        #grcp = grcp.sort_values(by=[minPar, 'Nvisits_y'])
+        #grcp = grcp.fillna(value=0.)
+
+        nameOut = '{}/SNR_combi_{}_{}_{}_{}.npy'.format(outdir_combi,
+                                                        x1, color, np.round(z, 2), icombi)
+
+        print('Saving', x1, color, z, icombi)
+        np.save(nameOut, dfres.to_records(index=False))
 
     def sigmaC(self, grp):
         """
@@ -849,14 +957,20 @@ class SNR_z:
         grp.loc[:, 'Nvisits'] = grp[cols].sum(axis=1)
 
         idx = int(grp[[minPar]].idxmin())
+
         if self.save_SNR_combi:
+            outdir_combi = 'SNR_combi'
+            if not os.path.exists(outdir_combi):
+                os.system('mkdir {}'.format(outdir_combi))
+
             grcp = grp.copy()
             grcp = grcp.sort_values(by=[minPar, 'Nvisits_y'])
             grcp = grcp.fillna(value=0.)
 
             # print('sorted', grcp, grcp[:1], grp.name)
-            nameOut = 'SNR_combi_{}_{}_{}.npy'.format(
-                grp.name[0], grp.name[1], np.round(grp.name[2], 2))
+            nameOut = '{}/SNR_combi_{}_{}_{}.npy'.format(outdir_combi,
+                                                         grp.name[0], grp.name[1], np.round(grp.name[2], 2))
+            print('SAVING DATA')
             np.save(nameOut, grcp.to_records(index=False))
             # tab['X'] = (tab['Nvisits']/50.)**2+(tab['Nvisits_y']/tab['Nvisits'])**2 + \
             #       (tab['Nvisits_i']/tab['Nvisits_z'])**2
