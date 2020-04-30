@@ -91,7 +91,7 @@ class Anadf:
 
     def __init__(self, datadf):
         """
-        class to analyze LC :
+        class to analyze LC from fake LC:
         - redshift limit estimation
 
         Parameters
@@ -173,6 +173,7 @@ class Anadf:
 
             grp = grp[idx]
 
+            print('after selection', grp)
             grp.loc[:, 'err_back_reg'] = (
                 5.*grp['flux_e_sec']/grp['flux_5'])**2.
             grp.loc[:, 'SNR'] = grp['snr_m5']**2.
@@ -223,7 +224,7 @@ class Anadf:
             interp = interpolate.interp1d(
                 grp['sigmaC'], grp['z'], bounds_error=False, fill_value=0.0)
             resinterp = interp(0.04)
-            r.append([key[0], key[1], np.round(resinterp, 2)])
+            r.append([key[0], key[1], np.round(resinterp, 3)])
         dfana = pd.DataFrame(r, columns=('x1', 'color', 'zlim'))
 
         return dfana
@@ -289,17 +290,20 @@ class Anadf:
             idx = (self.dfana['x1']-key[0]) < 1.e-5
             idx &= (self.dfana['color']-key[1]) < 1.e-5
 
-            zlim = self.dfana[idx]['zlim'].unique()
+            zlim = self.dfana[idx]['zlim'].unique()[0]
             ylims = ax[0].get_ylim()
             ax[0].plot([zlim, zlim], ylims, color='r', ls='dotted')
+            """
             ax[0].text(zlim-0.05, ylims[1],
-                       '{}={}'.format('$z_{lim}$', np.round(zlim, 2)))
-
+                       '{}={}'.format('$z_{lim}$', np.round(zlim, 3)))
+            """
+        ax[0].text(0.5, 0.06,
+                   '{}={}'.format('$z_{lim}$', np.round(zlim, 3)), fontsize=15)
         ylims = ax[0].get_ylim()
         xlims = ax[0].get_xlim()
         ax[0].plot(xlims, [0.04, 0.04], color='r', ls='dotted')
-        ax[0].set_xlim(0., 1.)
-        ax[0].set_ylim(0., ylims[1])
+        ax[0].set_xlim(0., 0.8)
+        ax[0].set_ylim(0., 0.1)
         ax[0].set_xlabel('z')
         ax[0].set_ylabel(r'$\sigma_{C}$')
         ax[0].grid()
