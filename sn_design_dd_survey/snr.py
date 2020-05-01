@@ -59,19 +59,28 @@ class SNR:
             # plt.show()
             # now choose SNR corresponding to sigmaC~0.04 vs z
 
+            print('resultat', SNR_dict)
             if self.verbose:
                 print('SNR class - sigma_C selection')
             #SNR_dict = myclass.SNR(dfsigmaC)
 
             if self.verbose:
                 print('SNR class - saving SNR files')
+
+            SNR_par_dict = dict(
+                zip(['max', 'step', 'choice'], [50., 2., 'Nvisits']))
+            thename = self.name(SNRDir, SNR_par_dict)
+            # save the file
+            np.save(thename, np.copy(SNR_dict.to_records(index=False)))
+
+            """
             for key, vals in SNR_dict.items():
                 SNR_par_dict = dict(
                     zip(['max', 'step', 'choice'], [50., 2., key]))
                 thename = self.name(SNRDir, SNR_par_dict)
                 # save the file
                 np.save(thename, np.copy(vals.to_records(index=False)))
-
+           """
         self.SNR = pd.DataFrame(np.load(SNRName, allow_pickle=True))
         print('loading', self.SNR)
 
@@ -159,8 +168,16 @@ class SNR_z:
         self.SNR_par = SNR_par
 
         # load LC
+
+        #idx = np.abs(data.lc['z']-0.1) < 1.e-5
+        # print(data.lc[idx]['band'].unique())
+        #idx &= data.lc['band'] == 'z'
         self.lcdf = data.lc
 
+        # for index, val in self.lcdf.iterrows():
+        #    print('lc', val['flux_e_sec'])
+
+        # print(test)
         # load m5
         self.medm5 = data.m5_Band
 
@@ -328,10 +345,18 @@ class SNR_z:
         dfsigmaC = df.groupby(['x1', 'color', 'z']).apply(
                 lambda x: self.sigmaC(x)).reset_index()
         """
+        self.lcdf = self.lcdf.round({'x1': 1, 'color': 1, 'z': 2})
+
+        groups = self.lcdf.groupby(['x1', 'color', 'z'])
+
+        print('groups', len(groups))
+        for name, grp in groups:
+            print(name)
+
         dfsigmaCb = self.lcdf.groupby(['x1', 'color', 'z']).apply(
             lambda x: self.sigmaC_all(x)).reset_index()
 
-        print('ici pal', dfsigmaCb.columns)
+        print('Done sigma', dfsigmaCb.columns)
         """
         cols = ['z']
         for val in ['SNRcalc','flux_5_e_sec']:
@@ -415,25 +440,8 @@ class SNR_z:
         z = grp.name[2]
 
         dictband, SNR = self.get_SNR(grp)
-        SNR_split = {}
 
-        nsplit = 3
-        for key, vals in SNR.items():
-            if len(vals) >= 2:
-                SNR_split[0] = {}
-                SNR_split[1] = {}
-                SNR_split[2] = {}
-                bo = int(len(vals)/nsplit)
-                SNR_split[0][key] = vals[:bo]
-                SNR_split[1][key] = vals[bo:2*bo]
-                SNR_split[2][key] = vals[2*bo:]
-
-                break
-
-        for key, vals in SNR.items():
-            for i in range(nsplit):
-                if key not in SNR_split[i].keys():
-                    SNR_split[i][key] = vals
+        SNR_split = self.splitSNR(SNR, nbands=2, nsplit=3)
 
         dfres = pd.DataFrame()
         for key, vals in SNR_split.items():
@@ -441,7 +449,6 @@ class SNR_z:
             if resi is not None:
                 dfres = pd.concat((dfres, resi), ignore_index=True)
 
-        print('ici', dfres)
         minPar = 'Nvisits'
         idx = int(dfres[[minPar]].idxmin())
 
@@ -451,13 +458,64 @@ class SNR_z:
             for band in 'grizy':
                 cols.append('{}_{}'.format(colname, band))
 
-        print(dfres.loc[idx])
         output = dfres.loc[idx].reindex(cols)
+        output = output.fillna(0.0)
         return output
+
+    def splitSNR(self, SNR, nbands=1, nsplit=3):
+        """
+        Method to split SNR dict
+
+        Parameters
+        ---------------
+        SNR: dict
+          dict of SNR values (key: band)
+        nbands: int, opt
+           number of SNR bands to split (default: 1)
+        nsplit: int, opt
+           number of splits per band
+
+        Returns
+        -----------
+        dict: dict of splitted SNRs
+
+        """
+
+        SNR_band = {}
+
+        for key in SNR.keys():
+            SNR_band[key] = {}
+
+        nb_split = 0
+        for key, vals in SNR.items():
+            if len(vals) >= 2 and nb_split < nbands:
+                rr = np.linspace(0, len(vals), nsplit+1, dtype='int')
+                for io in range(len(rr)-1):
+                    SNR_band[key][io] = vals[rr[io]:rr[io+1]]
+                nb_split += 1
+            else:
+                SNR_band[key][0] = vals
+
+        # now all combinations
+        icombi = -1
+        SNR_split = {}
+        for ig in range(len(SNR_band['g'])):
+            for ir in range(len(SNR_band['r'])):
+                for ii in range(len(SNR_band['i'])):
+                    for iz in range(len(SNR_band['z'])):
+                        for iy in range(len(SNR_band['y'])):
+                            icombi += 1
+                            SNR_split[icombi] = {}
+                            SNR_split[icombi]['g'] = SNR_band['g'][ig]
+                            SNR_split[icombi]['r'] = SNR_band['r'][ir]
+                            SNR_split[icombi]['i'] = SNR_band['i'][ii]
+                            SNR_split[icombi]['z'] = SNR_band['z'][iz]
+                            SNR_split[icombi]['y'] = SNR_band['y'][iy]
+
+        return SNR_split
 
     def combiSNR(self, grp, dictband, SNR, x1, color, z, icombi):
 
-        print('there we go man', dictband, SNR)
         # existing bands
         bands = ''.join(list(dictband.keys()))
 
@@ -521,15 +579,14 @@ class SNR_z:
         idx = np.abs(df_tot['sigmaC'] -
                      self.sigma_color_cut) < 0.01*self.sigma_color_cut
 
-        print('how many', len(df_tot[idx]))
         if len(df_tot[idx]) < 1:
             return None
 
+        # complete with the number of visits
         dfres = self.SNRvisits(
             df_tot[idx].copy(), missing_bands, x1, color, z, icombi)
 
-        print('Done with', x1, color, z,  time.time()-time_ref, dfres.columns)
-        print('result', dfres)
+        print('Done with', x1, color, z,  time.time()-time_ref)
         return dfres
 
     def SNRvisits(self, dfres, missing_bands, x1, color, z, icombi):
@@ -761,6 +818,7 @@ class SNR_z:
         res['m5calc'] = grp['m5calc'].median()
         res['flux_5_e_sec'] = 5.*res['sumflux']/res['SNRcalc']
 
+        res = res.replace([np.inf, -np.inf], 0.0)
         return res
 
     def addSNR(self, df, SNR, b):
@@ -985,6 +1043,7 @@ class SNR_z:
                 cols.append('{}_{}'.format(colname, band))
 
         output = grp.loc[idx].reindex(cols)
+        output = output.fillna(0.0)
         # colindex = [grp.columns.get_loc(c) for c in cols if c in grp]
         # output = grcp[:-1][cols]
         # print('there man', idx, cols, output, grcp[:1][cols])
