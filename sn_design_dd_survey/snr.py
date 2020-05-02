@@ -52,7 +52,7 @@ class SNR:
                             save_SNR_combi=save_SNR_combi,
                             verbose=self.verbose)
 
-            #dfsigmaC = myclass.sigmaC_SNR()
+            # dfsigmaC = myclass.sigmaC_SNR()
             SNR_dict = myclass.sigmaC_SNR()
             # myclass.plotSigmaC_SNR(dfsigmaC) # plot the results
 
@@ -62,7 +62,7 @@ class SNR:
             print('resultat', SNR_dict)
             if self.verbose:
                 print('SNR class - sigma_C selection')
-            #SNR_dict = myclass.SNR(dfsigmaC)
+            # SNR_dict = myclass.SNR(dfsigmaC)
 
             if self.verbose:
                 print('SNR class - saving SNR files')
@@ -169,10 +169,10 @@ class SNR_z:
 
         # load LC
 
-        #idx = np.abs(data.lc['z']-0.1) < 1.e-5
+        idx = np.abs(data.lc['z']-0.7) < 1.e-5
         # print(data.lc[idx]['band'].unique())
-        #idx &= data.lc['band'] == 'z'
-        self.lcdf = data.lc
+        # idx &= data.lc['band'] == 'z'
+        self.lcdf = data.lc[idx]
 
         # for index, val in self.lcdf.iterrows():
         #    print('lc', val['flux_e_sec'])
@@ -202,6 +202,7 @@ class SNR_z:
         # load SNR_m5 and make griddata
         snr_m5 = np.load('reference_files/SNR_m5.npy', allow_pickle=True)
 
+        """
         self.m5_from_SNR = {}
 
         for b in np.unique(snr_m5['band']):
@@ -213,7 +214,7 @@ class SNR_z:
             snr_min = np.round(np.min(sela['SNR']), 1)
             # snr_max = np.round(np.max(sela['SNR']), 1)
             snr_max = 200.0
-
+            print('hello', snr_min, snr_max)
             snr_range = np.arange(snr_min, snr_max, 0.1)
             sel = Table()
             for vl in unique(sela, keys='z'):
@@ -228,22 +229,86 @@ class SNR_z:
                 tabb['z'] = [vl['z']]*len(snr_range)
                 sel = vstack([sel, tabb])
 
+            sel['z'] = sel['z'].data.round(decimals=2)
+            sel['SNR'] = sel['SNR'].data.round(decimals=2)
+            sel['m5'] = sel['m5'].data.round(decimals=3)
+
             zmin, zmax, zstep, nz = self.limVals(sel, 'z')
             snrmin, snrmax, snrstep, nsnr = self.limVals(sel, 'SNR')
+            m5min, m5max, m5step, nm5 = self.limVals(sel, 'm5')
 
+            zv = np.linspace(zmin, zmax, nz)
+            snrv = np.linspace(snrmin, snrmax, nsnr)
+            m5v = np.linspace(m5min, m5max, nm5)
+
+            print('hello', nsnr, nz, len(sel))
+            index = np.lexsort((sel['z'], sel['SNR']))
+            m5extra = np.reshape(sel[index]['m5'], (nsnr, nz))
+
+            self.m5_from_SNR[b] = RegularGridInterpolator(
+                (snrv, zv), m5extra, method='linear', bounds_error=False, fill_value=0.)
+
+        print('test extrapo', self.m5_from_SNR['z'](([30.], [0.7])))
+        """
+        self.m5_from_SNR = self.grid_z(snr_m5, minx=0.)
+
+        self.SNR_from_m5 = self.grid_z(
+            snr_m5, whatx='m5', minx=20., maxx=30., whatstep=0.1, whatz='SNR')
+
+    def grid_z(self, snr_m5, whatx='SNR', minx=1., maxx=200., whatstep=0.1, whatz='m5'):
+
+        dict_extrapo = {}
+
+        for b in np.unique(snr_m5['band']):
+            idx = snr_m5['band'] == b
+            sela = Table(snr_m5[idx])
+            sela['z'] = sela['z'].data.round(decimals=2)
+            sela[whatx] = sela[whatx].data.round(decimals=4)
+
+            snr_min = np.round(minx, 1)
+            # snr_max = np.round(np.max(sela['SNR']), 1)
+            snr_max = maxx
+
+            snr_range = np.arange(snr_min, snr_max, whatstep)
+            sel = Table()
+            for vl in unique(sela, keys='z'):
+                idx = np.abs(sela['z']-vl['z']) < 1.e-5
+                val = sela[idx]
+                interp = interp1d(val[whatx], val[whatz],
+                                  bounds_error=False, fill_value=0.)
+                re = interp(snr_range)
+                tabb = Table(names=[whatz])
+                tabb[whatz] = re.tolist()
+                tabb[whatx] = snr_range.tolist()
+                tabb['z'] = [vl['z']]*len(snr_range)
+                sel = vstack([sel, tabb])
+
+            """
+            sel['z'] = sel['z'].data.round(decimals=2)
+            sel[whatx] = sel[whatx].data.round(decimals=2)
+            sel[whatz] = sel[whatz].data.round(decimals=3)
+            """
+            zmin, zmax, zstep, nz = self.limVals(sel, 'z')
+            snrmin, snrmax, snrstep, nsnr = self.limVals(sel, whatx)
+
+            """
             zstep = np.round(zstep, 3)
             snrstep = np.round(snrstep, 3)
+            m5step = np.round(m5step, 3)
+            """
 
             zv = np.linspace(zmin, zmax, nz)
             snrv = np.linspace(snrmin, snrmax, nsnr)
 
-            index = np.lexsort((sel['z'], sel['SNR']))
-            m5 = np.reshape(sel[index]['m5'], (nsnr, nz))
+            index = np.lexsort((sel['z'], sel[whatx]))
+            m5extra = np.reshape(sel[index][whatz], (nsnr, nz))
 
-            self.m5_from_SNR[b] = RegularGridInterpolator(
-                (snrv, zv), m5, method='linear', bounds_error=False, fill_value=0.)
+            dict_extrapo[b] = RegularGridInterpolator(
+                (snrv, zv), m5extra, method='linear', bounds_error=False, fill_value=0.)
 
-        # print('test extrapo', self.m5_from_SNR['z'](([30.], [0.7])))
+        # print('test extrapo 2', dict_extrapo['z'](([30.], [0.7])))
+
+        return dict_extrapo
 
     def limVals(self, lc, field):
         """ Get unique values of a field in  a table
@@ -378,38 +443,58 @@ class SNR_z:
         dict of bands and SNR values
         """
         # init SNR values to zero
+
+        z = grp.name[2]
         SNR = {}
         for b in self.bands:
             SNR[b] = [0.0]
 
         # identify bands of interest and set SNRs
         # bands not present have SNR equal to 0.0
+        # others should have a minimum SNR that would correspond to a single visit
+
         dictband = {}
 
-        SNR_min = 10.
+        #SNR_min = 10.
         SNR_max = self.SNR_par['max']
 
-        if grp.name[2] >= 0.65:
+        """
+        if z >= 0.65:
             SNR_min = 20.
 
         SNR_min = 1.
+
+        """
+
         # generate SNR values of interest (per band)
         for band in grp['band'].unique():
             idx = grp['band'] == band
             dictband[band] = grp[idx]
+            # Get SNR_min
+            idxb = self.medm5['filter'] == band
+            m5_single = self.medm5[idxb]['fiveSigmaDepth'].values
+            print('m5single', m5_single)
+            SNR_min = self.SNR_from_m5[band]((m5_single, z))
+            print('snrmin', band, z, m5_single, SNR_min)
             SNR[band] = list(np.arange(SNR_min, SNR_max, self.SNR_par['step']))
+            """
+            if band == 'y':
+                SNR[band] = [0.]
+            """
+            """
             if band == 'y':
                 snrlist = list(np.arange(0., SNR_max, self.SNR_par['step']))
                 snrlist[0] = 0.0001
                 SNR[band] = snrlist
-            if grp.name[2] <= 0.3:
+            """
+            if z <= 0.3:
                 SNR['z'] = [0.0]
-            if grp.name[2] <= 0.5:
+            if z <= 0.5:
                 SNR['y'] = [0.0]
 
         if self.verbose:
             print('SNR values', SNR)
-        #SNR = dict(zip('grizy', [[0.], [25.], [25.], [30.], [35.]]))
+        # SNR = dict(zip('grizy', [[0.], [25.], [25.], [30.], [35.]]))
 
         return dictband, SNR
 
@@ -483,6 +568,8 @@ class SNR_z:
 
         SNR_band = {}
 
+        print('SNR', SNR)
+
         for key in SNR.keys():
             SNR_band[key] = {}
 
@@ -491,7 +578,7 @@ class SNR_z:
             if len(vals) >= 2 and nb_split < nbands:
                 rr = np.linspace(0, len(vals), nsplit+1, dtype='int')
                 for io in range(len(rr)-1):
-                    SNR_band[key][io] = vals[rr[io]:rr[io+1]]
+                    SNR_band[key][io] = vals[rr[io]: rr[io+1]]
                 nb_split += 1
             else:
                 SNR_band[key][0] = vals
@@ -576,8 +663,12 @@ class SNR_z:
             df_tot.loc[:, 'm5calc_{}'.format(b)] = 0.0
 
         # select only combi with sigma_C ~ self.sigma_color_cut
+        """
         idx = np.abs(df_tot['sigmaC'] -
                      self.sigma_color_cut) < 0.01*self.sigma_color_cut
+        """
+        idx = df_tot['sigmaC'] >= 0.039
+        idx &= df_tot['sigmaC'] < 0.041
 
         if len(df_tot[idx]) < 1:
             return None
@@ -623,7 +714,7 @@ class SNR_z:
         Parameters
         ---------------
         dfres: pandas df
-           data to save 
+           data to save
 
         """
 
@@ -631,9 +722,9 @@ class SNR_z:
         if not os.path.exists(outdir_combi):
             os.system('mkdir {}'.format(outdir_combi))
 
-        #grcp = dfres.copy()
-        #grcp = grcp.sort_values(by=[minPar, 'Nvisits_y'])
-        #grcp = grcp.fillna(value=0.)
+        # grcp = dfres.copy()
+        # grcp = grcp.sort_values(by=[minPar, 'Nvisits_y'])
+        # grcp = grcp.fillna(value=0.)
 
         nameOut = '{}/SNR_combi_{}_{}_{}_{}.npy'.format(outdir_combi,
                                                         x1, color, np.round(z, 2), icombi)
@@ -692,7 +783,8 @@ class SNR_z:
                 df_merged.loc[:, 'key'] = ikey
                 dfb = pd.concat([dfb, df_merged], sort=False)
 
-            df_tot = dfb.merge(df_to_merge, left_on=['key'], right_on=['key'])
+            df_tot = dfb.merge(df_to_merge, left_on=[
+                'key'], right_on=['key'])
 
         if self.verbose:
             print('after combi', time.time()-time_ref)
@@ -785,8 +877,8 @@ class SNR_z:
         grp = df_tot.groupby(['key', 'band']).apply(
             lambda x: self.calc(x)).reset_index()
 
-        #grp.loc[:, 'band'] = df_tot['band'].unique()
-        #grp.loc[:, 'x1'] = df_tot['x1'].unique()
+        # grp.loc[:, 'band'] = df_tot['band'].unique()
+        # grp.loc[:, 'x1'] = df_tot['x1'].unique()
        # grp.loc[:, 'color'] = df_tot['color'].unique()
 
         # add suffix corresponding to the filter
