@@ -1,0 +1,270 @@
+class PSF_pixels:
+    """
+    class to estimate the max flux fraction in a pixel
+    depending on a psf
+
+    Parameters
+    ---------------
+    seeing: float
+      seeing value
+    psf_type: str
+      type of the psf
+
+    """
+    def __init__(self, seeing,psf_type):
+
+        self.seeing = seeing
+        self.seeing_pixel = seeing/0.2 # 1 LSST pixel~ 0.2"
+        self.flux = 1000.
+        if psf_type == 'single_gauss':
+            self.PSF = self.PSF_single_gauss
+        if psf_type == 'double_gauss':
+            self.PSF= self.PSF_double_gauss
+            
+            
+    def PSF_single_gauss(self,x,y,xc,yc,sigma):
+        #sigma = self.seeing_pixel/2.355
+        if isinstance(x,np.ndarray):
+            val = (x[...,None]-xc)**2+(y[...,None]-yc)**2
+        else:
+            val = (x-xc)**2+(y-yc)**2
+        func = np.exp(-val/2./sigma**2)
+        func /= (sigma**2*2.*np.pi)
+        return self.flux*func
+    
+    def PSF_double_gauss(self,x,y,xc,yc,sigma):
+        return 0.909*(self.PSF_single_gauss(x,y,xc,yc,sigma)+0.1*self.PSF_single_gauss(x,y,xc,yc,2.*sigma))
+        
+    def GetCenters(self,xmin,xmax,dx,ymin,ymax,dy):
+        """
+        Estimate centers of a grid defined by (xmin,xmax,ymin,ymax)
+        
+        Parameters:
+        -----------
+        xmin, xmax, dx: min x, max x, grid space in x
+        ymin, ymax, dy: min y, max y, grid space in y
+        
+        Returns:
+        --------
+        xc, yc : coordinates of the center
+        
+        """
+        X , Y = self.Mesh(xmin, xmax, dx, ymin, ymax, dy)
+        xc = (X[:-1,1:]+X[:-1,:-1])*0.5
+        yc = (Y[1:,:-1]+Y[:-1,:-1])*0.5
+    
+        return xc, yc
+    
+    def Mesh(self,xmin, xmax, dx, ymin, ymax,dy):
+        """
+        Estimate a mesh grid
+        
+        P Parameters:
+        -----------
+        xmin, xmax, dx: min x, max x, grid space in x
+        ymin, ymax, dy: min y, max y, grid space in y
+        
+        Returns:
+        --------
+        X,Y : mesh grid
+        
+        """
+        
+        nx = int((xmax-xmin)/dx)+1
+        ny = int((ymax-ymin)/dy)+1
+        x = np.linspace(xmin, xmax, nx)
+        y = np.linspace(ymin, ymax, ny)
+        X, Y = np.meshgrid(x, y)
+        return X,Y
+    
+    def get_psf_flux(self,integ_type,xmin, xmax, dx, ymin, ymax, dy, xc, yc):
+
+        """
+        Estimate fluxes from PSF on a grid
+        
+        P Parameters:
+        -----------
+        xmin, xmax, dx: min x, max x, grid space in x
+        ymin, ymax, dy: min y, max y, grid space in y
+        xc, yc: flux coordinates
+        
+        Returns:
+        --------
+        X,Y : mesh grid
+        
+        """
+        
+        xpixel = 0.5*(xmin+xmax)
+        ypixel = 0.5*(ymin+ymax)
+        n_echant = 20
+        dx_new = dx/n_echant
+        dy_new = dy/n_echant
+    
+        xc_bary, yc_bary = self.GetCenters(xmin, xmax, dx_new, ymin, ymax, dy_new)
+        sigma = self.seeing_pixel/2.355
+        if integ_type == 'num':
+            flux_pixel = self.PSF(xc_bary,yc_bary,xc,yc,sigma)*dx_new*dy_new
+        if integ_type == 'quad':
+            flux_from_psf_vect = np.vectorize(self.integr)
+            flux_pixel = flux_from_psf_vect(xmin,xmax,ymin,ymax,xc,yc,sigma)
+
+        if flux_pixel.ndim > 1:
+            res = np.array(np.sum(flux_pixel,axis=(0,1))/self.flux, dtype=[('pixel_frac','f8')])
+        else:
+            res = np.array(flux_pixel/self.flux, dtype=[('pixel_frac','f8')])
+            
+        res = rf.append_fields(res,'xc',xc)
+        res = rf.append_fields(res,'yc',yc)
+        res = rf.append_fields(res,'seeing',[seeing]*len(res))
+        res = rf.append_fields(res,'xpixel',[xpixel]*len(res))
+        res = rf.append_fields(res,'ypixel',[ypixel]*len(res))
+        res = rf.append_fields(res,'dx',[dx]*len(res))
+        res = rf.append_fields(res,'dy',[dy]*len(res))
+
+        return res
+    
+    def integr(self,xmin,xmax,ymin,ymax,xc,yc,sigma):
+        """
+        Flux integration over (xmin, xmax, ymin, ymax)
+        
+        
+        Returns:
+        --------
+        numpy array of results
+        
+        """
+        return dblquad(self.PSF,xmin,xmax,lambda x:ymin,lambda y:ymax,
+                            args=(xc,yc,sigma))[0]
+                       
+    def get_flux_map(self, integ_type='num'):
+        """
+        Estimate fluxes from PSF
+        
+        
+        Returns:
+        --------
+        numpy array with the following fields:
+    
+        pixel_frac: fraction of signal in the pixel
+        xc: x position of the flux 
+        yc: y position of the flux
+        seein: seeing value
+        xpixel: x coodrinate of the pixel center
+        ypixel: y coordinate of the pixel center
+        dx: pixel size in x
+        dy: pixel size in y
+        """
+        # limits of the grid
+        dx, dy = 1., 1.
+        dgrid = int(3.*self.seeing_pixel)
+        print('dgrid', dgrid, seeing)
+        if dgrid < 3:
+            dgrid = 5
+        #dgrid = 1
+        valgrid = (dgrid-1)
+        xmin, xmax = -dx/2.-valgrid, dx/2.+valgrid
+        ymin, ymax = -dy/2.-valgrid, dy/2.+valgrid
+    
+    
+        dxc = 0.01
+        dyc = 0.01
+        xmin_c, xmax_c = -dx/2., dx/2
+        ymin_c, ymax_c = -dy/2, dy/2
+        nxc = int((xmax_c-xmin_c)/dxc)+1
+        nyc = int((ymax_c-ymin_c)/dyc)+1
+        xc = np.linspace(xmin_c, xmax_c, nxc)
+        yc = np.linspace(ymin_c, ymax_c, nyc)
+    
+        xcm, ycm = np.mgrid[xmin_c:xmax_c:10j,ymin_c:ymax_c:10j]
+        positions = np.vstack([xcm.ravel(), ycm.ravel()])
+    
+        xc_grid, yc_grid = self.GetCenters(xmin, xmax, dx, ymin, ymax, dy)
+                      
+        xc_grid = np.unique(xc_grid)
+        yc_grid = np.unique(yc_grid)
+    
+        positions_main = [(x,y) for x in xc_grid for y in yc_grid]
+        restot = None
+    
+        time_ref = time.time()
+    
+        if len(xc_grid) > 1:
+            nmulti = 4
+            ntoprocess = len(positions_main)
+            nperbatch = int(ntoprocess/nmulti)
+            batches = range(0,ntoprocess,nperbatch)
+            njobs = len(batches)-1
+            if ntoprocess not in batches:
+                batches = np.append(batches,ntoprocess)
+        
+            print('npos',ntoprocess)
+            result_queue = multiprocessing.Queue()
+            for j in range(njobs+1):
+                imin = batches[j]
+                imax = batches[j+1]
+                pos=positions_main[imin:imax]
+                p = multiprocessing.Process(name='Subprocess-'+str(j), 
+                                        target=self.loop_process, args=(integ_type,pos,dx,dy,positions[0],positions[1],j, result_queue))
+                p.start()
+    
+            resultdict = {}
+            for j in range(njobs+1):
+                resultdict.update(result_queue.get())
+
+            for p in multiprocessing.active_children():
+                p.join()
+    
+            for j in range(njobs+1):
+                if restot is None:
+                    restot = resultdict[j]
+                else:
+                    restot=np.concatenate((restot,resultdict[j]))
+        
+        else:
+           restot =self.loop_process(integ_type,positions_main,dx,dy,positions[0],positions[1])
+        print('Done', time.time()-time_ref)
+        return restot
+
+    def loop_process(self,integ_type,positions,dx,dy,xc,yc,j=-1,output_q=None):
+        """
+        Loop over pixel centers to get the flux, depending on the position
+        
+        Parameters:
+        -----------
+        integ_type: type of integration ('num' or 'quad')
+        positions: positions (x,y) of the center of the considered pixel
+        dx, dy: pixel size in x and y
+        xc, yc: coordinates of the flux center
+        
+        Returns:
+        -------
+        numpy array with the following fields:
+        pixel_frac: fraction of signal in the pixel
+        xc: x position of the flux 
+        yc: y position of the flux
+        seein: seeing value
+        xpixel: x coodrinate of the pixel center
+        ypixel: y coordinate of the pixel center
+        dx: pixel size in x
+        dy: pixel size in y
+            
+
+        
+        """
+    
+        res = None
+        for (x,y) in positions:
+            #print('processing',j,x,y)
+            #print('ici',xc,yc)
+            fluxes = self.get_psf_flux(integ_type,x-dx/2.,x+dx/2.,dx,y-dy/2.,y+dy/2.,dy,xc,yc)
+    
+                
+            if res is None:
+                res = fluxes
+            else:
+                res = np.concatenate((res,fluxes))
+            
+        if output_q is not None:
+            output_q.put({j: res})
+        else:
+            return res
