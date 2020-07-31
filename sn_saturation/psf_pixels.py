@@ -1,5 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt
+from . import plt
 import numpy.lib.recfunctions as rf
 import time
 import multiprocessing
@@ -345,10 +345,19 @@ class PSF_pixels:
             return res
 
 def PlotMaxFrac(psf_type='single_gauss',title='Single gaussian profile'):
+    """
+    Function to display max frac pixel vs seeing
 
+    Parameters
+    --------------
+    psf_type: str, opt
+      PSF type (default: single_gauss)
+    title: str, opt
+      title for the plot (default: Single gaussian profile)
+
+    """
+    
     tab = np.load('PSF_pixels_{}.npy'.format(psf_type))
-
-    print(tab.dtype)
     
     # first grab the pixels with the frac max flux (per seeing)
 
@@ -369,17 +378,23 @@ def PlotMaxFrac(psf_type='single_gauss',title='Single gaussian profile'):
                                                                  'pixel_frac_med':[x['pixel_frac'].median()]})).reset_index()
     print(grp)
     
-    fontsize = 20
+    #fontsize = 20
     fig, ax = plt.subplots()
-    ax.set_title(title,fontsize=fontsize)
+    #ax.set_title(title,fontsize=fontsize)
+    ax.set_title(title)
     ax.plot(grp['seeing'],grp['pixel_frac_med'],ls='-',color='r',linewidth=2)
     ax.fill_between(grp['seeing'],grp['pixel_frac_min'],grp['pixel_frac_max'],alpha=0.5)
     #ax[i].set_ylim([0.,0.35])
     ax.set_xlim([min_seeing,max_seeing])
     ax.grid()
+    """
     ax.set_xlabel(r'seeing ["]',fontsize=fontsize)
     ax.set_ylabel(r'Max frac pixel flux',fontsize=fontsize)
     ax.tick_params(labelsize = fontsize)
+    """
+    ax.set_xlabel(r'seeing ["]')
+    ax.set_ylabel(r'Max frac pixel flux')
+    #ax.tick_params(labelsize = fontsize)
     plt.savefig('max_frac_seeing_{}.png'.format(psf_type))
                 
 def PlotPixel(seeing,psf_type,varxsel,xp,varysel,yp,varxplot,varyplot,titleadd,type_plot='imshow'):
@@ -418,7 +433,8 @@ def PlotPixel(seeing,psf_type,varxsel,xp,varysel,yp,varxplot,varyplot,titleadd,t
     #titleform = 'seeing: {} - sigma: {} pixel'.format(np.round(seeing,2),np.round(sigma,2))
     titleform = '{} - seeing: {}"'.format(titleadd,np.round(seeing,2))
     #fig.suptitle(titleform,fontsize=fontsize)
-    ax.set_title(titleform,fontsize=fontsize)
+    #ax.set_title(titleform,fontsize=fontsize)
+    ax.set_title(titleform)
     dim = int(np.sqrt(len(sel)))
     xcm = np.reshape(sel[varxplot],(dim,dim))
     ycm = np.reshape(sel[varyplot],(dim,dim))
@@ -437,11 +453,18 @@ def PlotPixel(seeing,psf_type,varxsel,xp,varysel,yp,varxplot,varyplot,titleadd,t
     shrink = 0.82
     #shrink = 1.
     cbar = fig.colorbar(CS, ax=ax,ticks=np.arange(vmin,vmax,0.01),shrink=shrink)
+    """
     cbar.set_label('Flux fraction', rotation=270, fontsize=fontsize,labelpad=30)# position=(12.,0.5))
     cbar.ax.tick_params(labelsize=fontsize)
     ax.set_xlabel(r'x [pixel]',fontsize=fontsize)
     ax.set_ylabel(r'y [pixel]',fontsize=fontsize)
     ax.tick_params(labelsize = fontsize)
+    """
+    cbar.set_label('Flux fraction', rotation=270,labelpad=30)# position=(12.,0.5))
+    #cbar.ax.tick_params(labelsize=fontsize)
+    ax.set_xlabel(r'x [pixel]')
+    ax.set_ylabel(r'y [pixel]')
+    #ax.tick_params(labelsize = fontsize)
     ax = plt.gca()
     ax.set_aspect('equal')
     #ax.set_xlim([-3.,3.])
