@@ -1,6 +1,8 @@
 import numpy as np
 from . import plt
-
+import numpy.lib.recfunctions as rf
+from scipy.interpolate import interp1d
+import os
 
 class Observations:
 
@@ -9,10 +11,12 @@ class Observations:
         self.dbDir = dbDir
         self.dbName = dbName
 
+        self.tab = np.load('{}/{}.npy'.format(self.dbDir,self.dbName))
+        print(self.tab.dtype)
+        
     def plotSeeings(self):
 
-        tab = np.load('{}/{}.npy'.format(self.dbDir,self.dbName))
-        print(tab.dtype)
+       
         bands='ugrizy'
 
         fig, ax = plt.subplots(nrows=3,ncols=2,figsize=(12,15))
@@ -162,3 +166,142 @@ class Observations:
             r.append((round(bin_center[i],3),float(hista[i])/float(np.sum(hista)))) 
         
         return np.rec.fromrecords(r, names=[varnamea,varnameb])
+
+    def dist(self):
+
+        res = {}
+        for band in 'gri':
+            resband = None
+            idx = self.tab['band'] ==band
+            sel = self.tab[idx]
+            sel.sort(order='mjd')
+            mjdmin, mjdmax = np.min(sel['mjd']),np.max(sel['mjd'])
+            for mjd in np.arange(mjdmin, mjdmax, 365.):
+        
+                mjds = np.arange(mjd,mjd+365,3.)
+        
+                mjd_tile = np.tile(sel['mjd'],(len(mjds),1))
+                m5_tile = np.tile(sel['fiveSigmaDepth'],(len(mjds),1))
+                seeingFwhmEff_tile =  np.tile(sel['seeingFwhmEff'],(len(mjds),1))
+                seeingFwhmGeom_tile = np.tile(sel['seeingFwhmGeom'],(len(mjds),1))
+                diff = mjd_tile-mjds[:,None]
+                #print(diff)
+                idxb = np.abs(diff)<1.
+                flag = np.argwhere(idxb)
+        
+                mjd_ma = np.ma.array(mjd_tile,mask=~idxb)
+                m5_ma = np.ma.array(m5_tile,mask=~idxb)
+                seeingFwhmEff_ma = np.ma.array(seeingFwhmEff_tile, mask=~idxb)
+                seeingFwhmGeom_ma = np.ma.array(seeingFwhmGeom_tile, mask=~idxb)
+        
+                mjdcol = np.ma.median(mjd_ma,axis=1)
+                m5col = np.ma.median(m5_ma,axis=1)
+                seeingFwhmEffcol = np.ma.median(seeingFwhmEff_ma,axis=1)
+                seeingFwhmGeomcol = np.ma.median(seeingFwhmGeom_ma, axis=1)
+        
+                resb = np.array(mjdcol, dtype=[('mjd','f8')])
+                resb= rf.append_fields(resb,'m5',m5col)
+                resb= rf.append_fields(resb,'seeingFwhmEff',seeingFwhmEffcol)
+                resb= rf.append_fields(resb,'seeingFwhmGeom',seeingFwhmGeomcol)
+        
+        
+                if resband is None:
+                    resband = resb
+                else:
+                    resband = np.concatenate((resband, resb))
+            print(band,'band processed')
+            res[band] = resband
+            #plt.plot(res[band]['mjd'],res[band]['m5'])
+            #break
+    
+    
+        idx = self.tab['band'] == 'g'
+        sel = self.tab[idx]
+        sel.sort(order='mjd')
+        mjdmin, mjdmax = np.min(sel['mjd']),np.max(sel['mjd'])
+        mjds = np.arange(mjdmin,mjdmax,3.)
+
+        resfi = None
+        for band in 'gri':
+            tabb = res[band]
+            resfib = None
+            for val in ['m5','seeingFwhmEff','seeingFwhmGeom']:
+                interpol = interp1d(tabb['mjd'],tabb[val],fill_value=-1,bounds_error=False)
+                if resfib is None:
+                    resfib = np.array(interpol(mjds), dtype=[(val,'f8')])
+                else:
+                    resfib = rf.append_fields(resfib,val,interpol(mjds))
+            resfib = rf.append_fields(resfib,'band',[band]*len(resfib))
+            resfib = rf.append_fields(resfib,'mjd',mjds)
+            if resfi is None:
+                resfi = resfib
+            else:
+                resfi = np.concatenate((resfi,resfib))
+        
+        np.save('distrib.npy',np.copy(resfi))
+
+
+    def make_all_obs(self):
+        
+        if not os.path.exists('distrib.npy'):
+            self.dist()
+
+        restot = np.load('distrib.npy')
+        
+        nexp_expt = [(1,15),(1,30)]
+
+        for (nexp,expt) in nexp_expt:
+            obs = self.make_obs(restot,nexp,expt)
+            namesim = 'Observations_{}_{}.npy'.format(nexp,expt)
+            np.save(namesim,np.copy(obs))
+            
+        
+    def make_obs(self,restot,nexp,exptime):
+    
+        mjdCol = 'observationStartMJD'
+        RaCol = 'fieldRA'
+        DecCol = 'fieldDec'
+        filterCol = 'filter'
+        m5Col = 'fiveSigmaDepth'
+        exptimeCol = 'visitExposureTime'
+        nightCol = 'night'
+        nexpCol = 'numExposures'
+        seasoncol = 'season'
+        seeinga = 'seeingFwhmEff'
+        seeingb = 'seeingFwhmGeom'
+    
+
+        Ra = 0.0
+        Dec = 0.0
+
+        resu = None
+        for band in np.unique(restot['band']):
+            idd = (restot['band'] == band)&(restot['m5']>10)
+            sel = restot[idd]
+    
+            #plt.plot(sel['mjd'],sel['m5'])
+            cad = sel['mjd'][1:]-sel['mjd'][:-1]
+            print(band,np.mean(cad))
+            res = np.array(sel['mjd'],dtype=[(mjdCol,'f8')])
+            m5 = sel['m5']+1.25*np.log10(exptime/30.)
+            res = rf.append_fields(res,m5Col,m5)
+            res = rf.append_fields(res,filterCol,sel['band'])
+            res = rf.append_fields(res,seeinga,sel[seeinga])
+            res = rf.append_fields(res,seeingb,sel[seeingb])
+    
+            res = rf.append_fields(res,RaCol,[Ra]*len(res))
+            res = rf.append_fields(res,DecCol,[Dec]*len(res))
+            res = rf.append_fields(res,exptimeCol,[exptime]*len(res))
+            res = rf.append_fields(res,nexpCol,[nexp]*len(res))
+
+            mjdmin = np.min(sel['mjd'])
+            night = sel['mjd']-mjdmin
+            season = np.rint(night/365.)+1
+        
+            res = rf.append_fields(res,nightCol,night)
+            res = rf.append_fields(res,seasoncol,season)
+            if resu is None:
+                resu = res
+            else:
+                resu = np.concatenate((resu,res))
+        return resu
