@@ -170,6 +170,7 @@ class Observations:
     def dist(self):
 
         res = {}
+        cadence = 1
         for band in 'gri':
             resband = None
             idx = self.tab['band'] ==band
@@ -178,7 +179,7 @@ class Observations:
             mjdmin, mjdmax = np.min(sel['mjd']),np.max(sel['mjd'])
             for mjd in np.arange(mjdmin, mjdmax, 365.):
         
-                mjds = np.arange(mjd,mjd+365,3.)
+                mjds = np.arange(mjd,mjd+365,cadence)
         
                 mjd_tile = np.tile(sel['mjd'],(len(mjds),1))
                 m5_tile = np.tile(sel['fiveSigmaDepth'],(len(mjds),1))
@@ -219,7 +220,7 @@ class Observations:
         sel = self.tab[idx]
         sel.sort(order='mjd')
         mjdmin, mjdmax = np.min(sel['mjd']),np.max(sel['mjd'])
-        mjds = np.arange(mjdmin,mjdmax,3.)
+        mjds = np.arange(mjdmin,mjdmax,cadence)
 
         resfi = None
         for band in 'gri':
@@ -241,14 +242,12 @@ class Observations:
         np.save('distrib.npy',np.copy(resfi))
 
 
-    def make_all_obs(self):
+    def make_all_obs(self,nexp_expt = [(1,5),(1,15),(1,30)]):
         
         if not os.path.exists('distrib.npy'):
             self.dist()
 
         restot = np.load('distrib.npy')
-        
-        nexp_expt = [(1,15),(1,30)]
 
         for (nexp,expt) in nexp_expt:
             obs = self.make_obs(restot,nexp,expt)
@@ -305,3 +304,23 @@ class Observations:
             else:
                 resu = np.concatenate((resu,res))
         return resu
+
+
+def prepareYaml(input_file, nexp, exptime, x1, color,season,nproc,output_file):
+    """"
+    Function to generate a yaml file for simulation
+
+    """
+
+    
+    with open(input_file, 'r') as file:
+        filedata = file.read()
+    filedata = filedata.replace('nexp', str(nexp))
+    filedata = filedata.replace('exptime', str(exptime))
+    filedata = filedata.replace('x1v', str(x1))
+    filedata = filedata.replace('colorv', str(color))
+    filedata = filedata.replace('seasonval', str(season))
+    filedata = filedata.replace('nprocval', str(nproc))
+
+    with open(output_file, 'w') as file:
+        file.write(filedata)
