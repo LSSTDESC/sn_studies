@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d
 import os
 
 class Observations:
-
+    
     def __init__(self, dbDir,dbName):
 
         self.dbDir = dbDir
@@ -167,10 +167,9 @@ class Observations:
         
         return np.rec.fromrecords(r, names=[varnamea,varnameb])
 
-    def dist(self):
+    def dist(self, cadence=3):
 
         res = {}
-        cadence = 1
         for band in 'gri':
             resband = None
             idx = self.tab['band'] ==band
@@ -242,16 +241,16 @@ class Observations:
         np.save('distrib.npy',np.copy(resfi))
 
 
-    def make_all_obs(self,nexp_expt = [(1,5),(1,15),(1,30)]):
+    def make_all_obs(self,nexp_expt = [(1,5),(1,15),(1,30)],cadence=3):
         
-        if not os.path.exists('distrib.npy'):
-            self.dist()
+        if not os.path.exists('distrib_{}.npy'.format(cadence)):
+            self.dist(cadence=cadence)
 
-        restot = np.load('distrib.npy')
+        restot = np.load('distrib_{}.npy'.format(cadence))
 
         for (nexp,expt) in nexp_expt:
             obs = self.make_obs(restot,nexp,expt)
-            namesim = 'Observations_{}_{}.npy'.format(nexp,expt)
+            namesim = 'Observations_{}_{}_{}.npy'.format(nexp,expt,cadence)
             np.save(namesim,np.copy(obs))
             
         
@@ -306,7 +305,7 @@ class Observations:
         return resu
 
 
-def prepareYaml(input_file, nexp, exptime, x1, color,season,nproc,output_file):
+def prepareYaml(input_file, nexp, exptime, x1, color,season,nproc,output_file,cadence):
     """"
     Function to generate a yaml file for simulation
 
@@ -321,6 +320,7 @@ def prepareYaml(input_file, nexp, exptime, x1, color,season,nproc,output_file):
     filedata = filedata.replace('colorv', str(color))
     filedata = filedata.replace('seasonval', str(season))
     filedata = filedata.replace('nprocval', str(nproc))
-
+    filedata = filedata.replace('cadence', str(int(cadence)))
+    
     with open(output_file, 'w') as file:
         file.write(filedata)

@@ -3,7 +3,7 @@ from . import plt
 import numpy.lib.recfunctions as rf
 import time
 import multiprocessing
-from scipy.integrate import dblquad
+from scipy.integrate import dblquad,quad
 from astropy.table import Table
 import pandas as pd
 
@@ -61,10 +61,14 @@ class PSF_pixels:
         #sigma = self.seeing_pixel/2.355
         if isinstance(x,np.ndarray):
             val = (x[...,None]-xc)**2+(y[...,None]-yc)**2
+            #val = (x[...,None]-xc)**2
         else:
             val = (x-xc)**2+(y-yc)**2
+   
         func = np.exp(-val/2./sigma**2)
-        func /= (sigma**2*2.*np.pi)
+        func /= (2.*np.pi*sigma**2)
+        #func /= (2.*np.pi)
+        #func /= (sigma*np.sqrt(2.*np.pi))
         return self.flux*func
     
     def PSF_double_gauss(self,x,y,xc,yc,sigma):
@@ -163,7 +167,8 @@ class PSF_pixels:
         if integ_type == 'quad':
             flux_from_psf_vect = np.vectorize(self.integr)
             flux_pixel = flux_from_psf_vect(xmin,xmax,ymin,ymax,xc,yc,sigma)
-
+            #flux_pixel = flux_from_psf_vect(xmin,xmax,0,0,xc,yc,sigma)
+            
         if flux_pixel.ndim > 1:
             res = np.array(np.sum(flux_pixel,axis=(0,1))/self.flux, dtype=[('pixel_frac','f8')])
         else:
@@ -189,9 +194,14 @@ class PSF_pixels:
         numpy array of results
         
         """
+        
         return dblquad(self.PSF,xmin,xmax,lambda x:ymin,lambda y:ymax,
                             args=(xc,yc,sigma))[0]
-                       
+        """
+        res = quad(lambda x : np.exp(-(x-xc)**2/2./sigma**2)/np.sqrt(2.*np.pi)/sigma,xmin,xmax)[0]
+        #print('hello',xmin,xmax,xc,yc,sigma,res)
+        return self.flux*res
+        """
     def get_flux_map(self, integ_type='num'):
         """
         Estimate fluxes from PSF
