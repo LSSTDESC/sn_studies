@@ -206,6 +206,7 @@ class SaturationTime:
         grp['flux_e'] = grp['flux_e_sec']*grp['visitExposureTime']*self.pixel_max(grp[self.seeing_simu])
 
 
+        """
         print(grp.columns)
         import matplotlib.pyplot as plt
         plt.suptitle('{} band '.format(np.unique(grp['band'])))
@@ -213,7 +214,7 @@ class SaturationTime:
         #plt.plot(grp['time'],grp['flux_e_sec']*grp['visitExposureTime'])
         plt.plot(grp['phase'],grp['flux_e_sec'])
         plt.show()
-            
+        """
         timeBegin = 0.
         timeSat = 0.
         timeSat_interp =0.
@@ -313,7 +314,7 @@ def plotTimeSaturation(x1,color,data):
                       verticalalignment='center', transform=myax.transAxes,fontsize=20)
     # Defining custom 'xlim' and 'ylim' values.
     custom_xlim = (0.01, 0.03)
-    custom_ylim = (0.5,15.)
+    custom_ylim = (5.,17.5)
     # Setting the values for all axes.
     plt.setp(ax, xlim=custom_xlim, ylim=custom_ylim)
     
