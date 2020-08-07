@@ -157,7 +157,7 @@ class SaturationTime:
             for b in np.unique(lc['band']):
                 io = lc['band'] == b
                 mydf = pd.DataFrame(np.array(lc[io]))
-                dg = self.time_saturation_band(mydf,full_well)
+                dg = self.time_saturation_band(mydf,full_well,lc.meta['daymax'])
                 dg['x1'] =  lc.meta['x1']
                 dg['color'] =  lc.meta['color']
                 dg['daymax'] = lc.meta['daymax']
@@ -185,7 +185,7 @@ class SaturationTime:
             return dfres
             
 
-    def time_saturation_band(self, grp,full_well):
+    def time_saturation_band(self, grp,full_well,T0):
         """
         Method to estimate the saturation time per band
 
@@ -244,7 +244,8 @@ class SaturationTime:
             timeSat = lcsat['time'].iloc[0]
             timeSat_interp = ttime[isattime][0]
 
-
+        idxt = np.abs(lcnosat['time']-T0) <=5.
+        np_near_max = len(lcnosat[idxt])
         """
         df = pd.DataFrame([lc.meta['z']],columns=['z'])
         df['x1'] =  lc.meta['x1']
@@ -256,7 +257,7 @@ class SaturationTime:
         df['tSat'] = timeSat
         df['tSat_interp'] = timeSat_interp
         df['exptime'] = np.mean(grp['visitExposureTime'])
-
+        df['npts_around_max'] = np_near_max
         return df
 
 
@@ -333,5 +334,74 @@ def plotBands(ax,full_well,exptime,data,bands='gri'):
         print(selb)
         ax.plot(selb['z'],selb['deltaT'],color=colors[b],label='{} band'.format(b))
     
+def gefficiency(grp):
+
+    idx = (grp['band'] == 'LSST::g') & (grp['z'] >= 0.01)
+    sel = pd.DataFrame(grp[idx])
+
+    df = sel.groupby(['z']).apply(lambda x: calcEffi(x)).reset_index()
     
-    
+    return df
+def calcEffi(grp):
+
+    isel = grp['npts_around_max']>=3
+    return pd.DataFrame({'effi': [len(grp[isel])/len(grp)]})
+
+          
+def plot_gefficiency(x1, color, tab):
+
+    name = dict(zip([(0.0, 0.0), (-2.0, 0.2), (2.0, -0.2)],
+                    ['medium', 'faint', 'bright']))
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    fontsize = 15
+    print(np.unique(tab[['exptime', 'full_well']]))
+    """
+    for exptime, fwell in np.unique(tab[['exptime', 'full_well']]):
+        ida = np.abs(tab['exptime']-exptime) < 1.e-5
+        ida &= (np.abs(tab['full_well']-fwell) < 1.e-5)
+        snrtab = tab[ida]
+        idx = (snrtab['band'] == 'LSST::g') & (snrtab['z'] >= 0.01)
+        sel = Table(snrtab[idx])
+
+        groups = sel.group_by('z')
+        
+        for group in groups.groups:
+            z = np.unique(group['z'])[0]
+            norm = len(group)
+            isel = group['npts_around_max']>=3
+            r.append((x1,color,z,exptime,fwell,len(group[isel])/norm,key))
+        
+    resu = np.rec.fromrecords(r, names=['x1','color','z','exptime','fwell','eff','psf_profile'])
+    """
+    resu = tab.groupby(['exptime', 'full_well']).apply(lambda x: gefficiency(x)).reset_index()
+    print(resu)
+    refs = [(15., 90000.), (15., 120000.), (30., 90000.), (30., 120000.)]
+
+    ls = dict(zip(refs,['solid','dotted','dashed','dashdot']))
+    colors = dict(zip(refs,['k','b','r','m']))
+    ls = dict(zip(['double_gaussian','single_gaussian'],['solid','solid']))
+
+    for exptime, fwell in refs:
+        ida = np.abs(resu['exptime']-exptime) < 1.e-5
+        ida &= (np.abs(resu['full_well']-fwell) < 1.e-5)
+        sel = resu[ida]
+      
+        ax.plot(sel['z'],sel['effi'], label='({}s,{} kpe)'.format(int(exptime),int(fwell/1000)), color=colors[(exptime, fwell)])
+            
+    """
+    ib = -1
+    for key, val in ls.items():
+        ib +=1 
+        #ax.hlines(0.9,0.011+5.*0.01*ib,0.013+5.*0.01*ib,linestyles=val)
+        ax.hlines(0.97-0.05*ib,0.010,0.011,linestyles=val)
+        ax.text(0.0112,0.97-0.05*ib-0.007,corresp[key],fontsize=fontsize-3)
+    """
+    ax.legend(loc='lower right', fontsize=fontsize)
+    ax.set_xlim([0.0095,0.05])
+    ax.set_ylim([0.0,1.01])
+    ax.set_xlabel('z', fontsize=fontsize)
+    ax.set_ylabel('Efficiency', fontsize=fontsize)
+    ax.tick_params(labelsize=fontsize)
+    ax.grid()
+    plt.savefig('Plot_Sat/Effi_{}.png'.format(name[(x1, color)]))
