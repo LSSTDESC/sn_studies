@@ -482,3 +482,76 @@ def PlotPixel(seeing,psf_type,varxsel,xp,varysel,yp,varxplot,varyplot,titleadd,t
     #cbar.set_clim(np.round(vmin,1), np.round(vmax,1))
     #plt.show()
     plt.savefig('flux_dist_center_position.png')
+
+
+
+def test_newmethod():
+    def PSF_single_gauss(x,y,xc,yc,sigma):
+        """
+        Method to estimate a single gaussian PSF
+    
+        Parameters
+        --------------
+        x: float
+        x-coordinate where the PSF has to be estimated
+        y: float
+        y-coordinate where the PSF has to be estimated
+        xc: float
+        x-center of the pixel
+        yc: float
+        y-center of the pixel
+        sigma: float
+        sigma of the gaussian
+        
+        Returns
+        ---------
+        flux in the pixel (float)
+
+        """
+        #sigma = self.seeing_pixel/2.355
+        val = (x-xc)**2+(y-yc)**2
+   
+        func = np.exp(-val/2./sigma**2)
+        func /= (2.*np.pi*sigma**2)
+        #func /= (2.*np.pi)
+        #func /= (sigma*np.sqrt(2.*np.pi))
+        return func
+
+
+    dx = 0.1
+    dy = 0.1
+    pixel_LSST = 0.2
+
+
+    seeing = 0.5
+    seeing_pixel = seeing/pixel_LSST
+    sigma = seeing_pixel/2.355
+
+
+    nsize = int(5.*sigma)
+
+    x = np.arange(-nsize+dx,nsize,dx)
+    y = np.arange(-nsize+dy,nsize,dy)
+
+
+    xtile = np.tile(x,(len(y),1))
+    ytile = np.tile(y,(len(x),1)).transpose()
+
+    xc = 0.
+    yc = 0.
+    fluxes = PSF_single_gauss(xtile,ytile,xc,yc,sigma)*dx*dy
+
+    plt.plot(xtile,ytile,'ko')
+    plt.show()
+
+    #for i in range(-nsize,nsize):
+    #    for j in range(-nsize,nsize):
+    for ix in range(len(x)-1):
+        for iy in range(len(y)-1):
+            idx = xtile >= x[ix]
+            idx &= xtile < x[ix+1]
+            idy = ytile >= y[iy]
+            idy &= ytile < y[iy+1]
+            print(0.5*(x[ix]+x[ix+1]),0.5*(y[iy]+y[iy+1]),np.sum(fluxes[idx&idy]))
+
+    print(fluxes)
