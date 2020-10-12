@@ -16,6 +16,7 @@ class Data:
                  color=0.2,
                  blue_cutoff=380.,
                  red_cutoff=800.,
+                 error_model=0,
                  bands='grizy'):
         """
         class to handle data: 
@@ -37,6 +38,8 @@ class Data:
          wavelength cutoff for SN (blue part) (default: 380 nm)
         red_cutoff: float, opt
          wavelength cutoff for SN (red part) (default: 800 nm)
+        error_model: bool, opt
+          simulation with (1) or without (0) error model
         bands: str, opt
          filters to consider (default: grizy)
 
@@ -55,9 +58,12 @@ class Data:
         self.zband = RestFrameBands(blue_cutoff=blue_cutoff,
                                     red_cutoff=red_cutoff).zband
 
-        # apply these cutoffs
-        self.lc = self.wave_cutoff(lc)
-
+        # apply these cutoffs if error_model=0
+        if error_model:
+            self.lc = lc
+        else:
+            self.lc = self.wave_cutoff(lc)
+            
         # get the flux fraction per band
         self.fracSignalBand = SignalBand(self.lc)
 

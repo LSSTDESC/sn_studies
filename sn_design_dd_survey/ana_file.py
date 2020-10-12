@@ -281,7 +281,7 @@ class Anadf:
 
         fig, ax = plt.subplots(nrows=2)
         ls = dict(zip([(0.0, 0.0), (-2.0, 0.2)], ['-', '--']))
-
+        
         for key, grp in self.grpfi.groupby(['x1', 'color']):
             grp = grp.sort_values(by=['z'])
             ax[0].plot(grp['z'], grp['sigmaC'], ls=ls[(key[0], key[1])],
@@ -302,7 +302,7 @@ class Anadf:
         ylims = ax[0].get_ylim()
         xlims = ax[0].get_xlim()
         ax[0].plot(xlims, [0.04, 0.04], color='r', ls='dotted')
-        ax[0].set_xlim(0., 0.8)
+        ax[0].set_xlim(0.1, 0.9)
         ax[0].set_ylim(0., 0.1)
         ax[0].set_xlabel('z')
         ax[0].set_ylabel(r'$\sigma_{C}$')
@@ -329,7 +329,7 @@ class Anadf:
                            color=filtercolors[band])
 
         ax[1].set_ylim(0.0, 100.)
-        ax[1].set_xlim(0.0, 0.10)
+        ax[1].set_xlim(0.015, 0.07)
         ax[1].plot([0.04, 0.04], ax[1].get_ylim(), color='r', ls='dotted')
         ax[1].grid()
         ax[1].set_xlabel(r'$\sigma_{C}$')

@@ -31,7 +31,7 @@ def flux5_to_m5(bands):
     f5_dict = {}
     for band in bands:
         flux_5 = telescope.mag_to_flux_e_sec(
-            m5_range, [band]*len(m5_range), [30.]*len(m5_range))[:, 1]
+            m5_range, [band]*len(m5_range), [30.]*len(m5_range),[1]*len(m5_range))[:, 1]
         f5_dict[band] = interpolate.interp1d(
             flux_5, m5_range, bounds_error=False, fill_value=0.0)
 
@@ -114,7 +114,7 @@ def gamma(bands, exptime=30.):
     """
     # load the gamma file
     gamma = load('reference_files', 'gamma.hdf5')
-    idx = np.abs(gamma['exptime']-30.) < 1.e-5
+    idx = np.abs(gamma['single_exptime']-30.) < 1.e-5
     selgamma = gamma[idx]
 
     # get interpolators for gamma and magflux
