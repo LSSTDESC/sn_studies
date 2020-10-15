@@ -62,7 +62,7 @@ def m5_to_flux5(bands):
     m5_dict = {}
     for band in bands:
         flux_5 = telescope.mag_to_flux_e_sec(
-            m5_range, [band]*len(m5_range), [30.]*len(m5_range))[:, 1]
+            m5_range, [band]*len(m5_range), [30.]*len(m5_range),[1]*len(m5_range))[:, 1]
         m5_dict[band] = interpolate.interp1d(
             m5_range, flux_5, bounds_error=False, fill_value=0.0)
 
@@ -147,8 +147,7 @@ def load(theDir, fname):
 
     searchname = '{}/{}'.format(theDir, fname)
     name, ext = os.path.splitext(searchname)
-
-    print(searchname)
+    
     res = loopStack([searchname], objtype='astropyTable')
-
+    
     return res
