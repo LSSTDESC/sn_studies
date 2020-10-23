@@ -1,6 +1,6 @@
 import os
 
-def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,fake_config,zmin,zmax,zstep,outDir):
+def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,zmin,zmax,zstep,outDir,bands,cadence,prodid):
     """
     Method used to simulate LC from Fakes
 
@@ -28,9 +28,27 @@ def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,fake_
       max redshift value for fake generation
     outDir: str
       output directory
+    bands: str
+      list of bands to consider
+    cadence: dict
+     cadence of observation (per band)
+    prodid: str
+      tag for the name of the template
 
     """
     fake_output = 'Fake_DESC'
+
+    fake_config = '{}.yaml'.format(fake_output)
+    # make the config file for the fakes
+
+    cmd = 'python run_scripts/make_yaml/make_yaml_fakes.py'
+    cmd += ' --fileName {}'.format(fake_config)
+    cmd += ' --bands {}'.format(bands)
+    for key,val in cadence.items():
+        cmd += ' --cadence_{} {}'.format(key,val)
+
+    os.system(cmd)
+
     
     cutoff = '{}_{}'.format(bluecutoff,redcutoff)
     if error_model:
@@ -38,9 +56,10 @@ def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,fake_
     
     #outDir_simu = 'Output_Simu_{}_ebvofMW_{}'.format(cutoff,ebv)
     outDir_simu = outDir
+    """
     prodid = '{}_Fake_{}_seas_-1_{}_{}_{}_ebvofMW_{}'.format(
     simulator, fake_output, x1, color, cutoff, ebvofMW,error_model)
-
+    """
     # first step: create fake data from yaml configuration file
     cmd = 'python run_scripts/fakes/make_fake.py --config {} --output {}'.format(
         fake_config, fake_output)
