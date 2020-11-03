@@ -863,13 +863,18 @@ class SNR_z:
 
         if self.verbose:
             print('sigmaC_cut', len(df_tot[idx]))
-            
+
+        """
         if len(df_tot[idx]) < 1:
             # check whether you have enough SNR
             idx = df_tot['sigmaC'] < 0.04
             if len(df_tot[idx]) < 1:
                 return None
-
+        """
+        if len(df_tot[idx]) < 1:
+            return None
+        
+        
         # complete with the number of visits
         if self.verbose:
             print('completing the number of visits')
