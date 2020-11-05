@@ -7,7 +7,7 @@ import pandas as pd
 
 
 def anafich(tab):
-    idx = tab['Nvisits'] < 200.
+    idx = tab['Nvisits'] < 300.
     idx &= tab['sigmaC'] >= 0.0390
     sel = pd.DataFrame(tab[idx].copy())
     if len(sel) <= 0:
@@ -81,7 +81,7 @@ def multiAna(thedir, nproc=8):
     return restot
 
 
-z = 0.8
+z = 0.9
 tag = 'z_{}'.format(z)
 thedir = 'SNR_combi/{}'.format(tag)
 
@@ -89,7 +89,6 @@ sumname = 'summary_{}.npy'.format(tag)
 
 if not os.path.isfile(sumname):
     snr = multiAna(thedir)
-    print('type', type(snr))
     np.save(sumname, snr.to_records(index=False))
 
 snr = pd.DataFrame(np.load(sumname, allow_pickle=True))
@@ -129,8 +128,9 @@ snr['chisq'] = np.sqrt(snr['chisq'])
 
 snr = snr.sort_values(by=['chisq'])
 
+print(snr[['Nvisits_g','Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y']])
 #ij = snr['chisq'] <= 0.5
-ij = snr['Nvisits_y'] <= 25.
+ij = snr['Nvisits_y'] <= 50.
 ij &= snr['Nvisits_i'] >= snr['Nvisits_r']
 ij &= snr['Nvisits_z'] >= snr['Nvisits_i']
 snr = snr[ij]

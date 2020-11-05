@@ -601,7 +601,7 @@ class SNR_z:
 
         dictband, SNR = self.get_SNR(grp)
 
-        SNR_split = self.splitSNR(SNR, nbands=5, nsplit=3)
+        SNR_split = self.splitSNR(SNR, nbands=5, nsplit=4)
         #SNR_split = self.splitSNR(SNR, nbands=-1, nsplit=3)
         if self.verbose:
             print('SNR_split', grp.name, SNR_split.keys())
@@ -863,7 +863,7 @@ class SNR_z:
 
         # select only combi with less than 200 visits per night
 
-        idx = dfres['Nvisits'] <= 200
+        idx = dfres['Nvisits'] <= 300
         df_tot = dfres[idx]
 
         idx = df_tot['sigmaC'] >= 0.039
