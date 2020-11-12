@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+def pixels(grp):
+
+    return pd.DataFrame({'npixels':[len(np.unique(grp['healpixID']))]})
+
 def finalNums(grp,normfact=10.):
 
     return pd.DataFrame({'nsn_zlim': [grp['nsn_zlim'].sum()/normfact],
@@ -54,7 +58,7 @@ fitDir = '{}/Fit'.format(mainDir)
 simuDir = '{}/Simu'.format(mainDir)
 
 dbName = 'descddf_v1.5_10yrs'
-fieldNames = ['COSMOS','CDFS','ELAIS','XMM-LSS','ADFS1','ADFS2']
+fieldNames = ['COSMOS','CDFS','ELAIS']
 
 allSN = pd.DataFrame()
 zlimit = None
@@ -64,6 +68,8 @@ zlimit = None
 faintSN = SN(fitDir,dbName,fieldNames,'faintSN')
 allSN = SN(fitDir,dbName,fieldNames,'allSN')
 
+print(allSN.groupby(['fieldName','season']).apply(lambda x : pixels(x)))
+
 zlimit = faintSN.groupby(['healpixID','fieldName','season']).apply(lambda x:zlim(x))
 
 print(zlimit)
@@ -71,7 +77,7 @@ allSN=allSN.merge(zlimit,left_on=['fieldName', 'season'],right_on=['fieldName','
 
 sumSN = allSN.groupby(['healpixID','fieldName','season']).apply(lambda x: nSN(x)).reset_index()
 
-print(sumSN.groupby(['fieldName']).apply(lambda x: finalNums(x)).reset_index())
+print(sumSN.groupby(['fieldName','season']).apply(lambda x: finalNums(x)).reset_index())
 
 print(allSN.columns)
 
