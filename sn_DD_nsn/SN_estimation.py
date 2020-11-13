@@ -6,78 +6,89 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+
 def pixels(grp):
 
-    return pd.DataFrame({'npixels':[len(np.unique(grp['healpixID']))]})
+    return pd.DataFrame({'npixels': [len(np.unique(grp['healpixID']))]})
 
-def finalNums(grp,normfact=10.):
+
+def finalNums(grp, normfact=10.):
 
     return pd.DataFrame({'nsn_zlim': [grp['nsn_zlim'].sum()/normfact],
                          'nsn_tot': [grp['nsn_tot'].sum()/normfact],
                          'zlim': [grp['zlim'].median()]})
 
-def nSN(grp,sigmaC=0.04):
-    
-    idx = grp['Cov_colorcolor']<=sigmaC**2
+
+def nSN(grp, sigmaC=0.04):
+
+    idx = grp['Cov_colorcolor'] <= sigmaC**2
     sela = grp[idx]
-    idx &= grp['z']<= grp['zlim']
+    idx &= grp['z'] <= grp['zlim']
     sel = grp[idx]
 
-    return pd.DataFrame({'nsn_zlim':[len(sel)],
-                         'nsn_tot':[len(sela)],
+    return pd.DataFrame({'nsn_zlim': [len(sel)],
+                         'nsn_tot': [len(sela)],
                          'zlim': [grp['zlim'].median()]})
 
-def SN(fitDir,dbName,fieldNames,SNtype):
+
+def SN(fitDir, dbName, fieldNames, SNtype):
 
     dfSN = pd.DataFrame()
     for field in fieldNames:
-        fis = glob.glob('{}/{}/*{}*{}*.hdf5'.format(fitDir,dbName,field,SNtype))
-        
-        out = loopStack(fis,objtype='astropyTable').to_pandas()
+        fis = glob.glob(
+            '{}/{}/*{}*{}*.hdf5'.format(fitDir, dbName, field, SNtype))
+
+        out = loopStack(fis, objtype='astropyTable').to_pandas()
         out['fieldName'] = field
-        idx = out['Cov_colorcolor']>=1.e-5
+        idx = out['Cov_colorcolor'] >= 1.e-5
         dfSN = pd.concat((dfSN, out[idx]))
 
     return dfSN
 
-def zlim(grp,sigmaC=0.04):
-    
-    ic = grp['Cov_colorcolor']<=sigmaC**2
+
+def zlim(grp, sigmaC=0.04):
+
+    ic = grp['Cov_colorcolor'] <= sigmaC**2
     selb = grp[ic]
 
-    if len(selb)==0:
+    if len(selb) == 0:
         zl = 0.
     else:
         zl = np.max(selb['z'])
 
-    return pd.DataFrame({'zlim':[zl]})
+    return pd.DataFrame({'zlim': [zl]})
 
 
-mainDir = '/sps/lsst/users/gris/DD'
+mainDir = '/media/philippe/LSSTStorage/DD_new'
 fitDir = '{}/Fit'.format(mainDir)
+fitDir = 'OutputFit'
 simuDir = '{}/Simu'.format(mainDir)
 
 dbName = 'descddf_v1.5_10yrs'
-fieldNames = ['COSMOS','CDFS','ELAIS']
+fieldNames = ['ELAIS']
 
 allSN = pd.DataFrame()
 zlimit = None
 
-#get faintSN
-                        
-faintSN = SN(fitDir,dbName,fieldNames,'faintSN')
-allSN = SN(fitDir,dbName,fieldNames,'allSN')
+# get faintSN
 
-print(allSN.groupby(['fieldName','season']).apply(lambda x : pixels(x)))
+faintSN = SN(fitDir, dbName, fieldNames, 'faintSN')
+allSN = SN(fitDir, dbName, fieldNames, 'allSN')
 
-zlimit = faintSN.groupby(['healpixID','fieldName','season']).apply(lambda x:zlim(x))
+print(allSN.groupby(['fieldName', 'season']).apply(lambda x: pixels(x)))
+
+zlimit = faintSN.groupby(
+    ['healpixID', 'fieldName', 'season']).apply(lambda x: zlim(x))
 
 print(zlimit)
-allSN=allSN.merge(zlimit,left_on=['fieldName', 'season'],right_on=['fieldName','season'])
+allSN = allSN.merge(zlimit, left_on=['fieldName', 'season'], right_on=[
+                    'fieldName', 'season'])
 
-sumSN = allSN.groupby(['healpixID','fieldName','season']).apply(lambda x: nSN(x)).reset_index()
+sumSN = allSN.groupby(['healpixID', 'fieldName', 'season']
+                      ).apply(lambda x: nSN(x)).reset_index()
 
-print(sumSN.groupby(['fieldName','season']).apply(lambda x: finalNums(x)).reset_index())
+print(sumSN.groupby(['fieldName', 'season']).apply(
+    lambda x: finalNums(x)).reset_index())
 
 print(allSN.columns)
 
