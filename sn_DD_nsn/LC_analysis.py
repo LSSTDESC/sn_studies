@@ -4,10 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import healpy as hp
 import pandas as pd
-from astropy.table import Table
+from astropy.table import Table,vstack
 import sncosmo
 from sn_tools.sn_telescope import Telescope
 import astropy.units as u
+import multiprocessing
 
 
 def plotLC(table, time_display=10):
@@ -107,15 +108,69 @@ def plotMollview(data, varName='nSN', leg='Number of SN', op=sum, xmin=0., xmax=
     hp.graticule()
 
 
-def load(dbDir, dbName, fieldName, runType, inum, prefix):
+def load_deprecated(dbDir, dbName, fieldName, runType, inum, prefix):
 
     fis = get_files(dbDir, dbName, fieldName, runType, inum, prefix)
     res = loopStack(fis, objtype='astropyTable')
 
     return res.to_pandas()
 
+def load(dbDir,dbName,prefix,prodid,inum,nproc=8):
 
-def get_files(dbDir, dbName, fieldName, runType, inum, prefix):
+    fis = get_files(dbDir,dbName,prefix,prodid,inum)
+    print('number of files',len(fis))
+
+    nz = len(fis)
+    t = np.linspace(0, nz,nproc+1, dtype='int')
+    print('multi', nz, t)
+    result_queue = multiprocessing.Queue()
+
+    procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=loopRead,
+                                         args=(fis[t[j]:t[j+1]],j, result_queue))
+                 for j in range(nproc)]
+
+    for p in procs:
+            p.start()
+
+    resultdict = {}
+    # get the results in a dict
+    
+    for i in range(nproc):
+        resultdict.update(result_queue.get())
+
+    for p in multiprocessing.active_children():
+        p.join()
+
+    restot = Table()
+
+    # gather the results
+    for key, vals in resultdict.items():
+        restot = vstack([restot, vals])
+    
+    print('stacked')
+
+    return restot.to_pandas()
+
+def loopRead(filist,j=0, output_q=None):
+
+    res = loopStack(filist, objtype='astropyTable')
+    
+    if output_q is not None:
+        return output_q.put({j: res})
+    else:
+        return res
+    
+
+
+def get_files(dbDir,dbName,prefix,prodid,inum):
+    
+    path = '{}/{}/{}_{}_{}.hdf5'.format(dbDir,
+                                            dbName, prefix,prodid,inum)
+
+    fis = glob.glob(path)
+    return fis
+
+def get_files_deprecated(dbDir, dbName, fieldName, runType, inum, prefix):
 
     path = '{}/{}/{}*{}*{}*{}*.hdf5'.format(dbDir,
                                             dbName, prefix, fieldName, runType, inum)
@@ -135,7 +190,7 @@ def nSN_pixels(res):
         for season in np.unique(sela['season']):
             io = sela['season'] == season
             selb = sela[io]
-            print(healpixID, season, len(selb))
+            #print(healpixID, season, len(selb))
             r.append((healpixID, season, len(selb)))
 
     # res = np.rec.fromrecords(r, names=['healpixID', 'season', 'nSN'])
@@ -149,12 +204,13 @@ def plot_nSN(respix):
     xmax = np.max(respix['nSN'])
     plotMollview(respix, xmin=xmin, xmax=xmax)
 
+    """
     fig, ax = plt.subplots()
     for healpixID in np.unique(respix['healpixID']):
         idx = respix['healpixID'] == healpixID
         sela = respix[idx]
         ax.plot(sela['season'], sela['nSN'])
-
+    """
 
 def plotHist(tab, var):
 
@@ -197,45 +253,52 @@ def select(lc, daymax, snrmin=1.):
     """
 
 
-dbDir = '/media/philippe/LSSTStorage/DD'
+dbDir = '/sps/lsst/users/gris/DD'
+dbDir = '/sps/lsst/users/gris/Simulations_for_proposal_new_sncosmo_IIP'
 dirSimu = '{}/Simu'.format(dbDir)
-dirFit = '{}_new/Fit'.format(dbDir)
+dirSimu=dbDir
+#dirFit = '{}_new/Fit'.format(dbDir)
 #dirFit = 'OutputFit'
 dbName = 'descddf_v1.5_10yrs'
-fieldName = 'COSMOS'
+dbName = 'baseline_v1.4_10yrs'
+fieldName = 'ELAIS'
 runType = 'allSN'
 
+
+prodid = 'simulation_baseline_v1.4_10yrs_64_WFD_simulation_0_*_*_-1.0_-1.0_frompixels_-1_-1'
+
+"""
+prodid = 'DD_{}_{}_error_model_{}'.format(dbName,fieldName,runType)
 """
 
-
-res = load(dbDir, dbName, fieldName, runType, '*', 'Simu')
-print(len(np.unique(res['healpixID'])))
+res = load(dirSimu, dbName, 'Simu',prodid,'*')
+print(len(np.unique(res['healpixID'])),res[['sn_type', 'sn_model']])
 
 plotHist(res, var='z')
-plotHist(res, var='x1')
-plotHist(res, var='color')
 
-plt.show()
-"""
-"""
+#plotHist(res, var='x1')
+#plotHist(res, var='color')
+
+
 print(res.columns)
 
 respix = nSN_pixels(res)
 plot_nSN(respix)
+
 plt.show()
-"""
+
 n_SN = 0
 
 for io in range(1, 8):
-    res = load(dirSimu, dbName, fieldName, runType, io, 'Simu')
-    # print(res.columns)
-    lcName = get_files(dirSimu, dbName, fieldName, runType, io, 'LC')[0]
-    fitName = get_files(dirFit, dbName, fieldName, runType, io, 'Fit')
-    #print('oo', lcName, len(res))
+    res = load(dirSimu, dbName, 'Simu',prodid,io) 
     res['index_hdf5'] = res['index_hdf5'].str.decode('utf-8')
-    fitlc = loopStack(fitName, objtype='astropyTable')
+    # print(res.columns)
+    lcName = get_files(dirSimu, dbName, 'LC',prodid,io)[0]
+    #fitName = get_files(dirFit, dbName, fieldName, runType, io, 'Fit')
+    #print('oo', lcName, len(res))
+    #fitlc = loopStack(fitName, objtype='astropyTable')
     # print(len(fitlc))
-    assert(len(fitlc) == len(res))
+    #assert(len(fitlc) == len(res))
     for ib, row in res.iterrows():
         key = row['index_hdf5']
         lc = Table.read(lcName, path='lc_{}'.format(key))
@@ -249,5 +312,5 @@ for io in range(1, 8):
             n_SN += 1
         # plotLC(lc)
         # break
-    break
+    #break
 print('number of SN', n_SN)

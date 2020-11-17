@@ -35,9 +35,9 @@ def SN(fitDir, dbName, fieldNames, SNtype):
 
     dfSN = pd.DataFrame()
     for field in fieldNames:
-        fis = glob.glob(
-            '{}/{}/*{}*{}*.hdf5'.format(fitDir, dbName, field, SNtype))
-
+        search_path = '{}/{}/*{}*{}*.hdf5'.format(fitDir, dbName, field, SNtype)
+        fis = glob.glob(search_path)
+        print('aooou',fis,search_path)
         out = loopStack(fis, objtype='astropyTable').to_pandas()
         out['fieldName'] = field
         idx = out['Cov_colorcolor'] >= 1.e-5
@@ -60,12 +60,14 @@ def zlim(grp, sigmaC=0.04):
 
 
 mainDir = '/media/philippe/LSSTStorage/DD_new'
+mainDir='/sps/lsst/users/gris/DD'
 fitDir = '{}/Fit'.format(mainDir)
-fitDir = 'OutputFit'
+#fitDir = 'OutputFit'
 simuDir = '{}/Simu'.format(mainDir)
 
 dbName = 'descddf_v1.5_10yrs'
-fieldNames = ['ELAIS']
+fieldNames = ['COSMOS','CDFS','XMM-LSS','ELAIS','ADFS1','ADFS2']
+fieldNames = ['COSMOS']
 
 allSN = pd.DataFrame()
 zlimit = None
@@ -90,8 +92,10 @@ sumSN = allSN.groupby(['healpixID', 'fieldName', 'season']
 print(sumSN.groupby(['fieldName', 'season']).apply(
     lambda x: finalNums(x)).reset_index())
 
-print(allSN.columns)
+print(sumSN.groupby(['fieldName']).apply(
+    lambda x: finalNums(x)).reset_index())
 
+print('Total number of SN',finalNums(sumSN))
 
 """
 tab = out['fullSN']
