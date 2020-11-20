@@ -40,7 +40,7 @@ class OS_Summary:
         # SN rate here
         self.rateSN = SN_Rate(min_rf_phase=-15., max_rf_phase=45.)
         self.zmin = 0.01
-        self.zmax = 0.5
+        self.zmax = 1.2
         self.dz = 0.01
 
         # get the data
@@ -64,9 +64,8 @@ class OS_Summary:
         # add the estimated number of supernovae
         finalres['nSN'] = finalres['season_length'].apply(
             lambda x: self.nSN(x))
-        idf = finalres['healpixID'] == 27238
-        print(finalres[idf][['healpixID', 'season', 'season_length', 'nSN']])
-        print(finalres['nSN'].sum())
+
+        self.data = finalres
 
     def load(self):
         """
@@ -227,4 +226,7 @@ opts, args = parser.parse_args()
 fieldNames = opts.fieldNames.split(',')
 
 for fieldName in fieldNames:
-    OS_Summary(opts.dbDir, opts.dbName, fieldName, opts.prefix)
+    res = OS_Summary(opts.dbDir, opts.dbName, fieldName, opts.prefix).data
+    print(res.columns)
+    print(res[['healpixID', 'season_length', 'nSN']])
+    print(fieldName, res['nSN'].sum())
