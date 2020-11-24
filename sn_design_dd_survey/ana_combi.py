@@ -7,7 +7,7 @@ import pandas as pd
 
 
 def anafich(tab):
-    idx = tab['Nvisits'] < 300.
+    idx = tab['Nvisits'] < 100000000.
     idx &= tab['sigmaC'] >= 0.0390
     sel = pd.DataFrame(tab[idx].copy())
     if len(sel) <= 0:
@@ -27,6 +27,7 @@ def loopAna(fis, j=0, output_q=None):
 
     snr = None
     for fi in fis:
+        print('loading',fi)
         tab = np.load(fi, allow_pickle=True)
         sel = anafich(tab)
         if sel is not None:
@@ -81,23 +82,27 @@ def multiAna(thedir, nproc=8):
     return restot
 
 
-z = 0.9
+z = 0.55
 tag = 'z_{}'.format(z)
 thedir = 'SNR_combi/{}'.format(tag)
 
 sumname = 'summary_{}.npy'.format(tag)
 
-if not os.path.isfile(sumname):
-    snr = multiAna(thedir)
-    np.save(sumname, snr.to_records(index=False))
+#if not os.path.isfile(sumname):
+snr = multiAna(thedir)
+np.save(sumname, snr.to_records(index=False))
 
 snr = pd.DataFrame(np.load(sumname, allow_pickle=True))
 
 print(snr.columns)
-"""
+
 plt.plot(snr['Nvisits'],snr['sigmaC'],'r*')
 plt.show()
-"""
+
+snr = snr.sort_values(by=['Nvisits'])
+todisp = ['SNRcalc_g','SNRcalc_r','SNRcalc_i','SNRcalc_z','SNRcalc_y','Nvisits_g','Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','Nvisits','sigmaC']
+print(snr[todisp][:10])
+
 
 fluxFrac = np.load('fracSignalBand.npy', allow_pickle=True)
 
@@ -128,11 +133,13 @@ snr['chisq'] = np.sqrt(snr['chisq'])
 
 snr = snr.sort_values(by=['chisq'])
 
-print(snr[['Nvisits_g','Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y']])
-#ij = snr['chisq'] <= 0.5
+print(snr[todisp])
+ij = snr['chisq'] <= 0.5
+"""
 ij = snr['Nvisits_y'] <= 50.
 ij &= snr['Nvisits_i'] >= snr['Nvisits_r']
 ij &= snr['Nvisits_z'] >= snr['Nvisits_i']
+"""
 snr = snr[ij]
 
 idxa = np.argmin(snr['chisq'])
