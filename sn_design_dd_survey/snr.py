@@ -536,7 +536,7 @@ class SNR_z:
                 print('go there',SNR_min)
             """
             if SNR_min >= SNR_max or (SNR_max-SNR_min) < 1.:
-                SNR[band] = [SNR_min]
+                SNR[band] = np.array([SNR_min])
             else:
                 SNR[band] = np.arange(np.round(SNR_min, 0),
                                            SNR_max, self.SNR_par['step'])
@@ -550,7 +550,7 @@ class SNR_z:
             idx  = m5>0.
             idx &= nvisits <= 110.
             #print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
-            
+            #print(band,z,SNR[band],type(SNR[band]))
             SNR[band] = SNR[band][idx].tolist()
             #SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
             #SNR[band] = [SNR_min]
