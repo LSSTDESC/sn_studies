@@ -538,8 +538,20 @@ class SNR_z:
             if SNR_min >= SNR_max or (SNR_max-SNR_min) < 1.:
                 SNR[band] = [SNR_min]
             else:
-                SNR[band] = list(np.arange(np.round(SNR_min, 0),
-                                           SNR_max, self.SNR_par['step']))
+                SNR[band] = np.arange(np.round(SNR_min, 0),
+                                           SNR_max, self.SNR_par['step'])
+
+            # need to clean SNR here : if the corresponding number of visits is zero
+
+            m5 = self.m5_from_SNR[band]((SNR[band], [z]*len(SNR[band])))
+
+            nvisits = 10**((m5-m5_single)/1.25)
+            #print(band, m5, type(m5),nvisits,m5_single)
+            idx  = m5>0.
+            idx &= nvisits <= 110.
+            #print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
+            
+            SNR[band] = SNR[band][idx].tolist()
             #SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
             #SNR[band] = [SNR_min]
             """
@@ -567,6 +579,13 @@ class SNR_z:
         SNR['i'] =  [72.0, 73.0, 74.0, 75.0, 76.0, 77.0, 78.0, 79.0, 80.0, 81.0, 82.0, 83.0, 84.0, 85.0, 86.0, 87.0, 88.0, 89.0]
         SNR['z'] = [0.0]
         SNR['y'] = [0.0]
+        """
+        """
+        SNR['g'] = [0.]
+        SNR['r'] =  [0.]
+        SNR['i'] =  [40.]
+        SNR['z'] =  [50.]
+        SNR['y'] = [20.]
         """
         if self.verbose:
             print('SNR values', SNR)
@@ -863,11 +882,13 @@ class SNR_z:
 
         # select only combi with less than 200 visits per night
 
-        idx = dfres['Nvisits'] <= 300
+    
+        idx = dfres['Nvisits'] <= 200
         df_tot = dfres[idx]
 
+        #print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
         idx = df_tot['sigmaC'] >= 0.039
-        idx &= df_tot['sigmaC'] < 0.041
+        idx = df_tot['sigmaC'] < 0.041
 
         if self.verbose:
             print('sigmaC_cut', len(df_tot[idx]))
