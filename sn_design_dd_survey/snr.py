@@ -216,6 +216,7 @@ class SNR_z:
 
         # load LC
 
+        data.lc = data.lc.round({'z': 2})
         idx = data.lc['fluxerr_model'] >= 0.
         idx &= data.lc['flux'] > 1.e-10
         idx &= data.lc['z'].isin(zref)
@@ -552,6 +553,8 @@ class SNR_z:
             #print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
             # print(band,z,SNR[band],type(SNR[band]))
             SNR[band] = SNR[band][idx].tolist()
+            if band == 'g':
+                SNR[band].append(100000.)
             #SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
             #SNR[band] = [SNR_min]
             """
