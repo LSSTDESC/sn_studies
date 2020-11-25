@@ -539,7 +539,7 @@ class SNR_z:
                 SNR[band] = np.array([SNR_min])
             else:
                 SNR[band] = np.arange(np.round(SNR_min, 0),
-                                           SNR_max, self.SNR_par['step'])
+                                      SNR_max, self.SNR_par['step'])
 
             # need to clean SNR here : if the corresponding number of visits is zero
 
@@ -547,10 +547,10 @@ class SNR_z:
 
             nvisits = 10**((m5-m5_single)/1.25)
             #print(band, m5, type(m5),nvisits,m5_single)
-            idx  = m5>0.
+            idx = m5 > 0.
             idx &= nvisits <= 110.
             #print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
-            #print(band,z,SNR[band],type(SNR[band]))
+            # print(band,z,SNR[band],type(SNR[band]))
             SNR[band] = SNR[band][idx].tolist()
             #SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
             #SNR[band] = [SNR_min]
@@ -625,8 +625,9 @@ class SNR_z:
         if self.verbose:
             print('SNR_split', grp.name, SNR_split.keys())
 
-        for key, vals in SNR_split.items():
-            print('SNR_split', key, vals)
+        # for key, vals in SNR_split.items():
+        #    print('SNR_split', key, vals)
+
         """
         dfres = pd.DataFrame()
         for key, vals in SNR_split.items():
@@ -689,7 +690,7 @@ class SNR_z:
 
         nb_split = 0
         for key, vals in SNR.items():
-            if len(vals) >= 2 and nb_split < nbands:
+            if len(vals) >= nsplit and nb_split < nbands:
                 rr = np.linspace(0, len(vals), nsplit+1, dtype='int')
                 for io in range(len(rr)-1):
                     SNR_band[key][io] = vals[rr[io]: rr[io+1]]
@@ -882,11 +883,10 @@ class SNR_z:
 
         # select only combi with less than 200 visits per night
 
-    
         idx = dfres['Nvisits'] <= 200
         df_tot = dfres[idx]
 
-        #print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
+        # print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
         idx = df_tot['sigmaC'] >= 0.039
         idx = df_tot['sigmaC'] < 0.041
 
