@@ -221,7 +221,7 @@ class SNR_z:
         idx &= data.lc['flux'] > 1.e-10
         idx &= data.lc['z'].isin(zref)
 
-        self.lcdf = data.lc[idx]
+        self.lcdf = data.lc.loc[idx]
 
         # estimate the derivative vs Fisher parameters here
         for vv in self.listcol:
@@ -474,7 +474,7 @@ class SNR_z:
         dfsigmaCb = self.lcdf.groupby(['x1', 'color', 'z']).apply(
             lambda x: self.sigmaC_all(x)).reset_index()
 
-        #print('Done sigma', dfsigmaCb.columns)
+        print('Done sigma', dfsigmaCb.columns)
         """
         cols = ['z']
         for val in ['SNRcalc','flux_5_e_sec']:
@@ -644,13 +644,7 @@ class SNR_z:
 
         if self.verbose:
             print('final resu', dfres)
-
-        if dfres.empty:
-            return pd.DataFrame()
-
-        minPar = 'Nvisits'
-        idx = int(dfres[[minPar]].idxmin())
-
+            
         # output
 
         cols = []
@@ -659,8 +653,16 @@ class SNR_z:
                 cols.append('{}_{}'.format(colname, band))
         cols.append('Nvisits')
 
-        output = dfres.loc[idx].reindex(cols)
-        output = output.fillna(0.0)
+        if dfres.empty:
+            mychan =pd.DataFrame([[-1.]*len(cols)],columns=cols)
+            output = mychan.loc[0].reindex(cols)
+            output = output.fillna(0.0)
+        else:
+            minPar = 'Nvisits'
+            idx = int(dfres[[minPar]].idxmin())
+            output = dfres.loc[idx].reindex(cols)
+            output = output.fillna(0.0)
+    
         return output
 
     def splitSNR(self, SNR, nbands=1, nsplit=3):
@@ -786,11 +788,18 @@ class SNR_z:
                 else:
                     dfres = pd.concat((dfres, resi), ignore_index=True)
 
+        if not dfres.empty:
+            minPar = 'Nvisits'
+            dfres = dfres.sort_values(by=[minPar])
+            no = np.min([len(dfres),100])
+            res = dfres[:no]
+        else:
+            res = dfres
         print('done processing', j, time.time()-time_ref)
         if output_q is not None:
-            return output_q.put({j: dfres})
+            return output_q.put({j: res})
         else:
-            return dfres
+            return res
 
     def combiSNR(self, grp, dictband, SNR, x1, color, z, icombi):
 
@@ -975,7 +984,8 @@ class SNR_z:
         nameOut = '{}/SNR_combi_{}_{}_{}_{}.npy'.format(outdir_combi,
                                                         x1, color, np.round(z, 2), icombi)
 
-        print('Saving', x1, color, z, icombi, len(dfres))
+        if self.verbose:
+            print('Saving', x1, color, z, icombi, len(dfres))
         np.save(nameOut, dfres.to_records(index=False))
 
     def sigmaC(self, grp):
@@ -1478,8 +1488,7 @@ class SNR_plot:
 
     def __init__(self, SNRDir, x1, color,
                  SNR_step,
-                 blue_cutoff,
-                 red_cutoff,
+                 cutoff,
                  cadence,
                  theDir,
                  m5_file,
@@ -1511,8 +1520,7 @@ class SNR_plot:
         self.x1 = x1
         self.color = color
         self.SNR_step = SNR_step
-        self.blue_cutoff = blue_cutoff
-        self.red_cutoff = red_cutoff
+        self.cutoff = cutoff
         self.cadence = cadence
         self.theDir = theDir
         self.m5_file = m5_file
@@ -1524,8 +1532,7 @@ class SNR_plot:
     def nameFile(self, SNRDir,
                  x1, color,
                  SNR_step,
-                 blue_cutoff,
-                 red_cutoff,
+                 cutoff,
                  bands,
                  SNR_choice):
         """
@@ -1562,11 +1569,10 @@ class SNR_plot:
 
         """
 
-        name = '{}/SNR_{}_{}_{}_{}_{}_{}_{}.npy'.format(SNRDir,
+        name = '{}/SNR_{}_{}_{}_{}_{}_{}.npy'.format(SNRDir,
                                                         x1, color,
                                                         SNR_step,
-                                                        blue_cutoff,
-                                                        red_cutoff,
+                                                        cutoff,
                                                         bands,
                                                         SNR_choice)
 
@@ -1588,15 +1594,17 @@ class SNR_plot:
         """
 
         dictplot = {}
-        for SNR_choice in [('fracflux', 'rizy'),
+        """
+       for SNR_choice in [('fracflux', 'rizy'),
                            ('Nvisits', 'rizy'),
                            ('Nvisits_y', 'rizy')]:
-            # ('Nvisits','riz')]:
+        """
+        # ('Nvisits','riz')]:
+        for SNR_choice in [('Nvisits', 'grizy')]: 
             SNRNameb = self.nameFile(self.SNRDir,
                                      self.x1, self.color,
                                      self.SNR_step,
-                                     self.blue_cutoff,
-                                     self.red_cutoff,
+                                     self.cutoff,
                                      SNR_choice[1],
                                      SNR_choice[0])
 
@@ -1608,7 +1616,7 @@ class SNR_plot:
 
             myvisits = Nvisits_cadence(
                 SNRb, self.cadence, self.theDir, self.m5_file, self.m5_type, SNR_choice[0], SNR_choice[1]).nvisits_cadence
-            print(myvisits)
+            print('visits',myvisits)
             dictplot['_'.join([SNR_choice[0], SNR_choice[1]])] = myvisits
         return dictplot
 
