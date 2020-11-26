@@ -5,133 +5,197 @@ import multiprocessing
 import os
 import pandas as pd
 
+class CombiChoice:
+    """
+    class to choose SNR combination
+    """
+    def __init__(self):
 
-def anafich(tab):
-    idx = tab['Nvisits'] < 100000000.
-    idx &= tab['sigmaC'] >= 0.0390
-    sel = pd.DataFrame(tab[idx].copy())
-    if len(sel) <= 0:
-        return None
+        # get the flux fraction per band
+        self.fluxFrac = np.load('fracSignalBand.npy', allow_pickle=True)
 
-    # print(sel.columns)
+    def __call__(self,z):
+        """
+        Method to choose a SNR combi 
 
-    lliss = ['sigmaC', 'SNRcalc_tot', 'Nvisits']
-    for b in 'grizy':
-        lliss += ['Nvisits_{}'.format(b)]
-        lliss += ['SNRcalc_{}'.format(b)]
+        Parameters
+        --------------
+        z: float
+          redshift
 
-    return sel[lliss]
+        """
+        # getting flux frac
+        idb = np.abs(self.fluxFrac['z']-z) < 1.e-8
+        self.fluxFrac_z = self.fluxFrac[idb]
+        
+        # getting the data
+        tag = 'z_{}'.format(z)
+        thedir = 'SNR_combi/{}'.format(tag)
+        
+        self.snr = self.multiAna(thedir)
 
+        if self.snr is not None:
+            self.chisq()
 
-def loopAna(fis, j=0, output_q=None):
+            print(self.snr)
+            self.snr['z'] = z
+            return pd.DataFrame(self.snr[:1])
+        return self.snr
+        
+    def multiAna(self,thedir, nproc=8):
+        """
+        Method to load and process data - multiprocessing
 
-    snr = None
-    for fi in fis:
-        print('loading',fi)
-        tab = np.load(fi, allow_pickle=True)
-        sel = anafich(tab)
-        if sel is not None:
-            if snr is None:
-                snr = sel
-            else:
-                # print(snr,tab)
-                #snr = np.concatenate((snr,sel))
-                snr = pd.concat((snr, sel))
+        Parameters
+        --------------
+        thedir: str
+          location directory of the files to produce
+        nproc: int, opt
+          number of procs to use (default: 8)
 
-    if output_q is not None:
-        return output_q.put({j: snr})
-    else:
-        return snr
+        """
+        fis = glob.glob('{}/*.npy'.format(thedir))
+        nz = len(fis)
+        t = np.linspace(0, nz, nproc+1, dtype='int')
+        #print('multi', nz, t)
+        result_queue = multiprocessing.Queue()
 
+        procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.loopAna,
+                                         args=(fis[t[j]:t[j+1]], j, result_queue))
+                 for j in range(nproc)]
 
-def multiAna(thedir, nproc=8):
+        for p in procs:
+            p.start()
 
-    fis = glob.glob('{}/*.npy'.format(thedir))
-    nz = len(fis)
-    t = np.linspace(0, nz, nproc+1, dtype='int')
-    #print('multi', nz, t)
-    result_queue = multiprocessing.Queue()
+        resultdict = {}
+        # get the results in a dict
 
-    procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=loopAna,
-                                     args=(fis[t[j]:t[j+1]], j, result_queue))
-             for j in range(nproc)]
+        for i in range(nproc):
+            resultdict.update(result_queue.get())
 
-    for p in procs:
-        p.start()
+        for p in multiprocessing.active_children():
+            p.join()
 
-    resultdict = {}
-    # get the results in a dict
+        restot = None
 
-    for i in range(nproc):
-        resultdict.update(result_queue.get())
+        # gather the results
+        for key, vals in resultdict.items():
+            if vals is not None:
+                print(type(vals))
+                if restot is None:
+                    restot = vals
+                else:
+                    #restot = np.concatenate((restot, vals))
+                    restot = pd.concat((restot, vals))
+        return restot
 
-    for p in multiprocessing.active_children():
-        p.join()
+    def loopAna(self,fis, j=0, output_q=None):
+        """
+        Method to load and process data
 
-    restot = None
+        Parameters
+        --------------
+        fis: list(str)
+          list of files to produce
+        j: int, opt
+           integer for multiprocessing (proc number) (default:0)
+        output_q: multiprocessing.queue
+          default: None
 
-    # gather the results
-    for key, vals in resultdict.items():
-        if vals is not None:
-            print(type(vals))
-            if restot is None:
-                restot = vals
-            else:
-                #restot = np.concatenate((restot, vals))
-                restot = pd.concat((restot, vals))
-    return restot
+        Returns
+        ----------
+        pandas df with data
 
+        """
+        
+        snr = None
+        for fi in fis:
+            print('loading',fi)
+            tab = np.load(fi, allow_pickle=True)
+            # analyzing the file here
+            sel = self.anafich(tab)
+            if sel is not None:
+                if snr is None:
+                    snr = sel
+                else:
+                    # print(snr,tab)
+                    #snr = np.concatenate((snr,sel))
+                    snr = pd.concat((snr, sel))
 
-z = 0.55
-tag = 'z_{}'.format(z)
-thedir = 'SNR_combi/{}'.format(tag)
+        if output_q is not None:
+            return output_q.put({j: snr})
+        else:
+            return snr
 
-sumname = 'summary_{}.npy'.format(tag)
+    def anafich(self,tab):
+        """
+        Method to analyze and select a data set
 
-#if not os.path.isfile(sumname):
-snr = multiAna(thedir)
-np.save(sumname, snr.to_records(index=False))
+        Parameters
+        ---------------
+        tab: pandas df
+          data to process
 
-snr = pd.DataFrame(np.load(sumname, allow_pickle=True))
+        Returns
+        ----------
+        pandas df of analyzed data
 
-print(snr.columns)
+        """
+        
+        idx = tab['Nvisits'] < 100000000.
+        idx &= tab['sigmaC'] >= 0.0390
+        sel = pd.DataFrame(tab[idx].copy())
+        if len(sel) <= 0:
+            return None
+
+        # print(sel.columns)
+
+        lliss = ['sigmaC', 'SNRcalc_tot', 'Nvisits']
+        for b in 'grizy':
+            lliss += ['Nvisits_{}'.format(b)]
+            lliss += ['SNRcalc_{}'.format(b)]
+
+        return sel[lliss]
+
+    def chisq(self):
+        """
+        Method to evaluate a 'chisq' wrt flux bands
+        """
+        
+        bbands = 'grizy'
+        for b in bbands:
+            io = self.fluxFrac_z['band'] == b
+            flux = self.fluxFrac_z[io]
+            print('flux', flux.dtype)
+            self.snr['chisq_{}'.format(b)] = self.snr['SNRcalc_{}'.format(b)] / \
+                self.snr['SNRcalc_tot']
+            self.snr['chisq_{}'.format(b)] -= flux['fracfluxband']
+
+        self.snr['chisq'] = 0.
+        for b in bbands:
+            self.snr['chisq'] += self.snr['chisq_{}'.format(b)] * self.snr['chisq_{}'.format(b)]
+
+        self.snr['chisq'] = np.sqrt(self.snr['chisq'])
+
+        self.snr = self.snr.sort_values(by=['chisq'])
+    
+combi = CombiChoice()
+
+snr_choice = pd.DataFrame()
+for z in np.round(np.arange(0.3,0.9, 0.05), 2):
+    z = np.round(z,2)
+    res = combi(z)
+    if res is not None:
+        snr_choice = pd.concat((snr_choice,res))
+
+print(snr_choice)
+np.save('snr_choice.npy',snr_choice.to_records(index=False))
+
+print(test)
+
 
 plt.plot(snr['Nvisits'],snr['sigmaC'],'r*')
 plt.show()
-
-snr = snr.sort_values(by=['Nvisits'])
-todisp = ['SNRcalc_g','SNRcalc_r','SNRcalc_i','SNRcalc_z','SNRcalc_y','Nvisits_g','Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','Nvisits','sigmaC']
-print(snr[todisp][:10])
-
-
-fluxFrac = np.load('fracSignalBand.npy', allow_pickle=True)
-
-print(fluxFrac.dtype)
-idb = np.abs(fluxFrac['z']-z) < 1.e-8
-fluxFrac = fluxFrac[idb]
-
-
-print(fluxFrac)
-
-bbands = 'grizy'
-for b in bbands:
-    io = fluxFrac['band'] == b
-    flux = fluxFrac[io]
-    print('flux', flux.dtype)
-    snr['chisq_{}'.format(b)] = snr['SNRcalc_{}'.format(b)] / \
-        snr['SNRcalc_tot']
-    snr['chisq_{}'.format(b)] -= flux['fracfluxband']
-    #plt.plot(snr['Nvisits_{}'.format(b)], snr['chiq_{}'.format(b)])
-
-# plt.show()
-
-snr['chisq'] = 0.
-for b in bbands:
-    snr['chisq'] += snr['chisq_{}'.format(b)] * snr['chisq_{}'.format(b)]
-
-snr['chisq'] = np.sqrt(snr['chisq'])
-
-snr = snr.sort_values(by=['chisq'])
 
 print(snr[todisp])
 ij = snr['chisq'] <= 0.5
