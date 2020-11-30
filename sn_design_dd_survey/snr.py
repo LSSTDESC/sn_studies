@@ -15,7 +15,7 @@ from sn_tools.sn_calcFast import CovColor
 
 
 class SNR:
-    def __init__(self, SNRDir, data,
+    def __init__(self, dirSNR, data,
                  SNR_par, SNR_m5_file, SNR_min=1.,
                  zref=[0.1],
                  error_model=1,
@@ -25,8 +25,8 @@ class SNR:
 
         Parameters
         --------------
-        SNRDir: str
-        directory where SNR files are located
+        dirSNR: str
+        directory where SNR files will be located
         data: pandas df
         data to process (LC)
         SNR_par: dict
@@ -55,54 +55,47 @@ class SNR:
         self.error_model = error_model
         self.verbose = verbose
 
-        # define the SNR file name
-        SNRName = self.name(SNRDir,
-                            SNR_par)
+        myclass = SNR_z(dirSNR, data,
+                        SNR_par=SNR_par,
+                        SNR_m5_file=SNR_m5_file,
+                        SNR_min=SNR_min,
+                        zref=zref,
+                        save_SNR_combi=save_SNR_combi,
+                        verbose=self.verbose,
+                        nproc=nproc)
 
-        print('processing', SNRName)
-        # process the data if necessary
-        if not os.path.isfile(SNRName):
+        # dfsigmaC = myclass.sigmaC_SNR()
+        SNR_dict = myclass.sigmaC_SNR()
+        # myclass.plotSigmaC_SNR(dfsigmaC) # plot the results
 
-            myclass = SNR_z(SNRDir, data,
-                            SNR_par=SNR_par,
-                            SNR_m5_file=SNR_m5_file,
-                            SNR_min=SNR_min,
-                            zref=zref,
-                            save_SNR_combi=save_SNR_combi,
-                            verbose=self.verbose,
-                            nproc=nproc)
-
-            # dfsigmaC = myclass.sigmaC_SNR()
-            SNR_dict = myclass.sigmaC_SNR()
-            # myclass.plotSigmaC_SNR(dfsigmaC) # plot the results
-
-            # plt.show()
-            # now choose SNR corresponding to sigmaC~0.04 vs z
-
-            print('resultat', SNR_dict.keys())
-            if self.verbose:
-                print('SNR class - sigma_C selection')
+        # plt.show()
+        # now choose SNR corresponding to sigmaC~0.04 vs z
+        
+        print('resultat', SNR_dict.keys())
+        if self.verbose:
+            print('SNR class - sigma_C selection')
             # SNR_dict = myclass.SNR(dfsigmaC)
 
-            if self.verbose:
-                print('SNR class - saving SNR files')
+        if self.verbose:
+            print('SNR class - saving SNR files')
 
-            # SNR_par_dict = dict(
-             #   zip(['max', 'step', 'choice'], [50., 2., 'Nvisits']))
-            thename = self.name(SNRDir, SNR_par)
-            # save the file
-            np.save(thename, np.copy(SNR_dict.to_records(index=False)))
+        # SNR_par_dict = dict(
+        #   zip(['max', 'step', 'choice'], [50., 2., 'Nvisits']))
+        #thename = self.name(SNRDir, SNR_par)
+        # save the file
+        #np.save(thename, np.copy(SNR_dict.to_records(index=False)))
 
-            """
-            for key, vals in SNR_dict.items():
-                SNR_par_dict = dict(
-                    zip(['max', 'step', 'choice'], [50., 2., key]))
-                thename = self.name(SNRDir, SNR_par_dict)
-                # save the file
-                np.save(thename, np.copy(vals.to_records(index=False)))
-           """
-        self.SNR = pd.DataFrame(np.load(SNRName, allow_pickle=True))
-        print('loading', self.SNR)
+        """
+        for key, vals in SNR_dict.items():
+        SNR_par_dict = dict(
+        zip(['max', 'step', 'choice'], [50., 2., key]))
+        thename = self.name(SNRDir, SNR_par_dict)
+        # save the file
+        np.save(thename, np.copy(vals.to_records(index=False)))
+        """
+        
+        #self.SNR = pd.DataFrame(np.load(SNRName, allow_pickle=True))
+        #print('loading', self.SNR)
 
     def plot(self):
         """
@@ -153,7 +146,7 @@ class SNR:
 
 class SNR_z:
 
-    def __init__(self, dirFile, data,
+    def __init__(self, dirSNR, data,
                  SNR_par={},
                  SNR_m5_file='',
                  SNR_min=1.,
@@ -167,8 +160,8 @@ class SNR_z:
 
         Parameters
         ---------
-        dirFile: str
-         directory where SNR files are located
+        dirSNR: str
+         directory where SNR files will be located
         data: pandas df
          data to process (LC)
         SNR_par: dict
@@ -199,6 +192,7 @@ class SNR_z:
         self.sigma_color_cut = sigma_color_cut
         self.save_SNR_combi = save_SNR_combi
         self.nproc = nproc
+        self.dirSNR = dirSNR
 
         # get SNR parameters
         self.SNR_par = SNR_par
@@ -738,7 +732,7 @@ class SNR_z:
 
         # creating outputdir if needed
         if self.save_SNR_combi:
-            outdir_combi = 'SNR_combi/z_{}'.format(z)
+            outdir_combi = '{}/z_{}'.format(self.dirSNR,z)
             if not os.path.isdir(outdir_combi):
                 os.system('mkdir -p {}'.format(outdir_combi))
 
@@ -980,7 +974,7 @@ class SNR_z:
         # grcp = grcp.sort_values(by=[minPar, 'Nvisits_y'])
         # grcp = grcp.fillna(value=0.)
 
-        outdir_combi = 'SNR_combi/z_{}'.format(z)
+        outdir_combi = '{}/z_{}'.format(self.dirSNR,z)
         nameOut = '{}/SNR_combi_{}_{}_{}_{}.npy'.format(outdir_combi,
                                                         x1, color, np.round(z, 2), icombi)
 
@@ -1407,16 +1401,13 @@ class SNR_z:
         idx = int(grp[[minPar]].idxmin())
 
         if self.save_SNR_combi:
-            outdir_combi = 'SNR_combi'
-            if not os.path.exists(outdir_combi):
-                os.system('mkdir {}'.format(outdir_combi))
 
             grcp = grp.copy()
             grcp = grcp.sort_values(by=[minPar, 'Nvisits_y'])
             grcp = grcp.fillna(value=0.)
 
             # print('sorted', grcp, grcp[:1], grp.name)
-            nameOut = '{}/SNR_combi_{}_{}_{}.npy'.format(outdir_combi,
+            nameOut = '{}/SNR_combi_{}_{}_{}.npy'.format(self.dirSNR,
                                                          grp.name[0], grp.name[1], np.round(grp.name[2], 2))
             print('SAVING DATA')
             np.save(nameOut, grcp.to_records(index=False))

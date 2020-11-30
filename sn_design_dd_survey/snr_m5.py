@@ -17,41 +17,36 @@ class SNR_m5:
     refFile: str
       name of the LC file
     outfile: str, opt
-      output file name (default: SNR_m5.py)
-    error_model: int, opt
-      if LC have been produced with an error model or not
-    x1: float
-      SN stretch
-    color: float
-      x1 color
+      output file name (default: SNR_m5)
     snrmin: float, opt
       min snr for SNR LC estimation
 
     """
 
-    def __init__(self, inputDir, refFile, outfile='SNR_m5.py',error_model=0,x1=-2.0, color=0.2,snrmin=1.):
+    def __init__(self, inputDir, refFile, outfile='SNR_m5.py',snrmin=1.):
 
         self.outfile = outfile
-        self.error_model = error_model
         self.snrmin = snrmin
         
-        if not os.path.isfile(outfile):
-            self.process_main(inputDir, refFile, x1, color)
+        self.process_main(inputDir, refFile)
 
+        """
         resdf = pd.DataFrame(np.copy(np.load(outfile, allow_pickle=True)))
         self.get_m5(resdf)
         self.plot(resdf)
-
-    def process_main(self, inputDir, refFile, x1, color):
+        """
+    def process_main(self, inputDir, refFile):
 
         # load the reference file
 
         refdata = pd.DataFrame(np.copy(load(inputDir, refFile)))
         refdata['band'] = refdata['band'].map(lambda x: x.decode()[-1])
 
+        """
         idc = (refdata['x1']-x1) < 1.e-5
         idc &= (refdata['color']-color) < 1.e-5
         refdata = refdata[idc]
+        """
         
         # load the gamma file
         #gamma = self.load('reference_files', 'gamma.hdf5')
@@ -136,8 +131,7 @@ class SNR_m5:
         datab = data.copy()
         
         idc = datab['flux']>1.e-10
-        if self.error_model:
-            idc &= datab['fluxerr_model']>0.
+        idc &= datab['fluxerr_model']>0.
     
         datab = datab[idc]
         

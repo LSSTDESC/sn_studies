@@ -50,6 +50,7 @@ class Data:
         self.bands = bands
         self.blue_cutoff = blue_cutoff
         self.red_cutoff = red_cutoff
+        self.lcName = fname
 
         # load lc
         lc = self.load_data(theDir, fname)
@@ -68,9 +69,9 @@ class Data:
         self.fracSignalBand = SignalBand(self.lc)
 
         # load median m5
-        m5_fpath = '{}/{}'.format(theDir, m5file)
+        #m5_fpath = '{}/{}'.format(theDir, m5file)
         self.m5_FieldBandSeason, self.m5_FieldBand, self.m5_Band = self.load_m5(
-            m5_fpath)
+            m5file)
 
     def load_data(self, theDir, fname):
         """
