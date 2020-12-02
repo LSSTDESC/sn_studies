@@ -70,7 +70,7 @@ class SNR:
 
         # plt.show()
         # now choose SNR corresponding to sigmaC~0.04 vs z
-        
+
         print('resultat', SNR_dict.keys())
         if self.verbose:
             print('SNR class - sigma_C selection')
@@ -81,9 +81,9 @@ class SNR:
 
         # SNR_par_dict = dict(
         #   zip(['max', 'step', 'choice'], [50., 2., 'Nvisits']))
-        #thename = self.name(SNRDir, SNR_par)
+        # thename = self.name(SNRDir, SNR_par)
         # save the file
-        #np.save(thename, np.copy(SNR_dict.to_records(index=False)))
+        # np.save(thename, np.copy(SNR_dict.to_records(index=False)))
 
         """
         for key, vals in SNR_dict.items():
@@ -93,9 +93,9 @@ class SNR:
         # save the file
         np.save(thename, np.copy(vals.to_records(index=False)))
         """
-        
-        #self.SNR = pd.DataFrame(np.load(SNRName, allow_pickle=True))
-        #print('loading', self.SNR)
+
+        # self.SNR = pd.DataFrame(np.load(SNRName, allow_pickle=True))
+        # print('loading', self.SNR)
 
     def plot(self):
         """
@@ -183,7 +183,7 @@ class SNR_z:
 
         """
         # verbose
-        #verbose = True
+        # verbose = True
         self.verbose = verbose
         # get data parameters
         self.x1 = data.x1
@@ -505,7 +505,7 @@ class SNR_z:
 
         dictband = {}
 
-        #SNR_min = 10.
+        # SNR_min = 10.
         SNR_max = self.SNR_par['max']
 
         """
@@ -523,7 +523,7 @@ class SNR_z:
             # Get SNR_min
             idxb = self.medm5['filter'] == band
             m5_single = self.medm5[idxb]['fiveSigmaDepth'].values
-            #print(band,'m5single', m5_single)
+            # print(band,'m5single', m5_single)
             SNR_min = self.SNR_from_m5[band]((m5_single, z)).item()
             """
             if SNR_min == [0.]:
@@ -541,16 +541,16 @@ class SNR_z:
             m5 = self.m5_from_SNR[band]((SNR[band], [z]*len(SNR[band])))
 
             nvisits = 10**((m5-m5_single)/1.25)
-            #print(band, m5, type(m5),nvisits,m5_single)
+            # print(band, m5, type(m5),nvisits,m5_single)
             idx = m5 > 0.
             idx &= nvisits <= 110.
-            #print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
+            # print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
             # print(band,z,SNR[band],type(SNR[band]))
             SNR[band] = SNR[band][idx].tolist()
             if band == 'g':
                 SNR[band].append(100000.)
-            #SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
-            #SNR[band] = [SNR_min]
+            # SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
+            # SNR[band] = [SNR_min]
             """
             if band == 'y':
                 SNR[band] = [0.]
@@ -573,7 +573,8 @@ class SNR_z:
         """
         SNR['g'] = [83.0, 84.0, 85.0, 86.0, 87.0, 88.0, 89.0]
         SNR['r'] =  [83.0, 84.0, 85.0, 86.0, 87.0, 88.0, 89.0]
-        SNR['i'] =  [72.0, 73.0, 74.0, 75.0, 76.0, 77.0, 78.0, 79.0, 80.0, 81.0, 82.0, 83.0, 84.0, 85.0, 86.0, 87.0, 88.0, 89.0]
+        SNR['i'] =  [72.0, 73.0, 74.0, 75.0, 76.0, 77.0, 78.0, 79.0,
+            80.0, 81.0, 82.0, 83.0, 84.0, 85.0, 86.0, 87.0, 88.0, 89.0]
         SNR['z'] = [0.0]
         SNR['y'] = [0.0]
         """
@@ -618,7 +619,7 @@ class SNR_z:
         dictband, SNR = self.get_SNR(grp)
 
         SNR_split = self.splitSNR(SNR, nbands=5, nsplit=4)
-        #SNR_split = self.splitSNR(SNR, nbands=-1, nsplit=3)
+        # SNR_split = self.splitSNR(SNR, nbands=-1, nsplit=3)
         if self.verbose:
             print('SNR_split', grp.name, SNR_split.keys())
 
@@ -638,7 +639,7 @@ class SNR_z:
 
         if self.verbose:
             print('final resu', dfres)
-            
+
         # output
 
         cols = []
@@ -648,7 +649,7 @@ class SNR_z:
         cols.append('Nvisits')
 
         if dfres.empty:
-            mychan =pd.DataFrame([[-1.]*len(cols)],columns=cols)
+            mychan = pd.DataFrame([[-1.]*len(cols)], columns=cols)
             output = mychan.loc[0].reindex(cols)
             output = output.fillna(0.0)
         else:
@@ -656,7 +657,7 @@ class SNR_z:
             idx = int(dfres[[minPar]].idxmin())
             output = dfres.loc[idx].reindex(cols)
             output = output.fillna(0.0)
-    
+
         return output
 
     def splitSNR(self, SNR, nbands=1, nsplit=3):
@@ -732,7 +733,7 @@ class SNR_z:
 
         # creating outputdir if needed
         if self.save_SNR_combi:
-            outdir_combi = '{}/z_{}'.format(self.dirSNR,z)
+            outdir_combi = '{}/z_{}'.format(self.dirSNR, z)
             if not os.path.isdir(outdir_combi):
                 os.system('mkdir -p {}'.format(outdir_combi))
 
@@ -785,7 +786,7 @@ class SNR_z:
         if not dfres.empty:
             minPar = 'Nvisits'
             dfres = dfres.sort_values(by=[minPar])
-            no = np.min([len(dfres),100])
+            no = np.min([len(dfres), 100])
             res = dfres[:no]
         else:
             res = dfres
@@ -810,7 +811,7 @@ class SNR_z:
         # make the SNR combination for this first band
         df_ref = self.addSNR_all(df_ref, SNR[bands[0]], bands[0], z)
 
-        #print('there man',bands[0],  dictband[bands[0]],z,SNR[bands[0]],df_ref)
+        # print('there man',bands[0],  dictband[bands[0]],z,SNR[bands[0]],df_ref)
         # now make all the combinations
         df_tot = pd.DataFrame()
         df_merged = df_ref.copy()
@@ -931,7 +932,7 @@ class SNR_z:
 
         for b in self.bands:
             cols.append('Nvisits_{}'.format(b))
-            #dfres.loc[:, 'fracSNR_{}'.format(b)] = dfres['SNRcalc_{}'.format(b)]/dfres['SNRcalc_tot']
+            # dfres.loc[:, 'fracSNR_{}'.format(b)] = dfres['SNRcalc_{}'.format(b)]/dfres['SNRcalc_tot']
             if self.medm5 is not None:
                 m5single = self.medm5[self.medm5['filter']
                                       == b]['fiveSigmaDepth'].values
@@ -974,7 +975,7 @@ class SNR_z:
         # grcp = grcp.sort_values(by=[minPar, 'Nvisits_y'])
         # grcp = grcp.fillna(value=0.)
 
-        outdir_combi = '{}/z_{}'.format(self.dirSNR,z)
+        outdir_combi = '{}/z_{}'.format(self.dirSNR, z)
         nameOut = '{}/SNR_combi_{}_{}_{}_{}.npy'.format(outdir_combi,
                                                         x1, color, np.round(z, 2), icombi)
 
@@ -1119,7 +1120,7 @@ class SNR_z:
         # get the total SNR
         df_tot['SNR_indiv_tot'] = self.SNR_combi(
             df_tot['SNR_indiv'], df_tot['SNR_model'])
-        #print('there man',b,len(df_tot),df_tot[['SNRcalc','m5calc','SNR_indiv_tot','SNR_model','SNR_indiv','flux_e_sec']])
+        # print('there man',b,len(df_tot),df_tot[['SNRcalc','m5calc','SNR_indiv_tot','SNR_model','SNR_indiv','flux_e_sec']])
         df_tot['fluxerr_indiv'] = df_tot['flux']/df_tot['SNR_indiv_tot']
         # update Fisher elements
 
@@ -1475,7 +1476,39 @@ class SNR_z:
         return grp.iloc[closest_index.argmin(), colindex]
 
 
-class SNR_plot:
+class Nvisits_z_plot:
+    """
+    class do display Number of visits vs redshift
+
+    """
+
+    def __init__(self, filename):
+
+        self.data = pd.DataFrame(np.load(filename, allow_pickle=True))
+
+        self.plot()
+
+    def plot(self):
+
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ls = dict(zip(range(1, 5), ['solid', 'dotted', 'dashed', 'dashdot']))
+        for cadence in np.unique(self.data['cadence']):
+            idx = np.abs(self.data['cadence']-cadence) < 1.e-8
+            sela = self.data[idx]
+            for min_par in np.unique(sela['min_par']):
+                idxa = sela['min_par'] == 'chisq'
+                selb = sela[idxa]
+                res = selb.groupby(['z']).apply(lambda x: pd.DataFrame(
+                    {'Nvisits': [x['Nvisits'].sum()]})).reset_index()
+                print(res)
+                ax.plot(res['z'], res['Nvisits'], ls=ls[int(cadence)])
+
+        ax.grid()
+        plt.show()
+
+
+class SNR_plot_deprecated:
 
     def __init__(self, SNRDir, x1, color,
                  SNR_step,
@@ -1561,11 +1594,11 @@ class SNR_plot:
         """
 
         name = '{}/SNR_{}_{}_{}_{}_{}_{}.npy'.format(SNRDir,
-                                                        x1, color,
-                                                        SNR_step,
-                                                        cutoff,
-                                                        bands,
-                                                        SNR_choice)
+                                                     x1, color,
+                                                     SNR_step,
+                                                     cutoff,
+                                                     bands,
+                                                     SNR_choice)
 
         return name
 
@@ -1591,7 +1624,7 @@ class SNR_plot:
                            ('Nvisits_y', 'rizy')]:
         """
         # ('Nvisits','riz')]:
-        for SNR_choice in [('Nvisits', 'grizy')]: 
+        for SNR_choice in [('Nvisits', 'grizy')]:
             SNRNameb = self.nameFile(self.SNRDir,
                                      self.x1, self.color,
                                      self.SNR_step,
@@ -1607,7 +1640,7 @@ class SNR_plot:
 
             myvisits = Nvisits_cadence(
                 SNRb, self.cadence, self.theDir, self.m5_file, self.m5_type, SNR_choice[0], SNR_choice[1]).nvisits_cadence
-            print('visits',myvisits)
+            print('visits', myvisits)
             dictplot['_'.join([SNR_choice[0], SNR_choice[1]])] = myvisits
         return dictplot
 
