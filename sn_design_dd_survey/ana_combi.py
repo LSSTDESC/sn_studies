@@ -245,7 +245,7 @@ class CombiChoice:
         for b in bbands:
             io = self.fluxFrac_z['band'] == b
             flux = self.fluxFrac_z[io]
-            #print('flux', flux)
+            # print('flux', flux)
             snr['chisq_{}'.format(b)] = snr['SNRcalc_{}'.format(b)] / \
                 snr['SNRcalc_tot']
             snr['chisq_{}'.format(b)] -= flux['fracfluxband'].item()
@@ -263,6 +263,138 @@ class CombiChoice:
 
         nout = np.min([len(snr), 10])
         return snr[self.colout][:nout]
+
+
+class Visits_Cadence:
+    """
+    class to estimate the number of visits according to SNR reference values
+
+    Parameters
+    ---------------
+    snr_opti: pandas df
+      data with SNR reference values vs z, per band
+    m5_single: pandas df
+      single band m5 values
+
+    """
+
+    def __init__(self, snr_opti, m5_single):
+
+        self.snr_opti = snr_opti.round({'z': 2})
+        self.m5_single = m5_single
+
+    def __call__(self, m5_cad):
+
+        # add the number of visits corresponding to m5 values
+        m5_cad = self.add_Nvisits(m5_cad)
+
+        # get the number of visits corresponding to snr_opti
+        res = pd.DataFrame()
+        for min_par in np.unique(self.snr_opti['min_par']):
+            idx = self.snr_opti['min_par'] == min_par
+            nv_cad = self.Nvisits_cadence(m5_cad, self.snr_opti[idx])
+            nv_cad['min_par'] = min_par
+            res = pd.concat((res, nv_cad))
+
+        return res
+
+    def add_Nvisits(self, m5_cad):
+        """
+        Method to add a number or visits depending on m5 single band
+
+        Parameters
+        ---------------
+        m5_cad: pandas df
+          data to estimate the number of visits from
+
+        Returns
+        -----------
+        original pandas df with the number of visits added
+        """
+
+        # print('hhh', m5_cad.columns)
+        # print(m5_cad)
+        m5_cad = m5_cad.groupby(['band']).apply(
+            lambda x: self.add_Nvisits_band(x))
+
+        return m5_cad
+
+    def add_Nvisits_band(self, grp):
+        """
+        Method to add a number or visits depending on m5 single band
+
+        Parameters
+        ---------------
+        m5_cad: pandas df
+          data to estimate the number of visits from
+
+        Returns
+        -----------
+        pandas df with the number of visits
+
+        """
+        # get m5 single band
+
+        idx = self.m5_single['filter'] == grp.name
+        m5 = self.m5_single[idx]['fiveSigmaDepth'].values.item()
+
+        Nvisits = 10**((grp['m5']-m5)/1.25)
+
+        grp['Nvisits'] = Nvisits
+        return grp
+
+    def Nvisits_cadence(self, m5_cad, snr_opti):
+        """"
+        Method to estimate the number of visits from SNR values
+
+        Parameters
+        ---------------
+        m5_cad: pandas df
+          df with Nvisits vs m5 per band
+        snr_opti: pandas df
+          SNR optimization values
+
+        """
+
+        m5_cad = m5_cad.round({'z': 2})
+        idx = m5_cad['z'].isin(np.unique(snr_opti['z']))
+
+        m5_cad = m5_cad[idx]
+        to = m5_cad.groupby(['band', 'z']).apply(
+            lambda x: self.Nvisits_cadence_band(x, snr_opti)).reset_index()
+
+        return to
+
+    def Nvisits_cadence_band(self, grp, snr_opti):
+        """"
+        Method to estimate the number of visits from SNR values
+
+        Parameters
+        ---------------
+        grp : pandas group
+          with Nvisits vs m5 per band
+        snr_opti: pandas df
+          SNR optimization values
+
+        """
+        from scipy.interpolate import interp1d
+
+        band = grp.name[0]
+        z = float(grp.name[1])
+        z = np.round(z, 2)
+
+        idx = np.abs(snr_opti['z']-z) < 1.e-5
+
+        snr_val = snr_opti[idx]['SNRcalc_{}'.format(band)]
+        Nvisits_orig = snr_opti[idx]['Nvisits_{}'.format(band)]
+
+        fb = interp1d(
+            grp['SNR'], grp['Nvisits'], bounds_error=False, fill_value=0.)
+
+        res = pd.DataFrame({'Nvisits': fb(snr_val),
+                            'Nvisits_orig': Nvisits_orig.tolist()})
+
+        return res
 
 
 """
