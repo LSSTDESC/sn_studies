@@ -281,7 +281,8 @@ class Visits_Cadence:
     def __init__(self, snr_opti, m5_single):
 
         self.snr_opti = snr_opti.round({'z': 2})
-        self.m5_single = m5_single
+        self.m5_single = m5_single.rename(
+            columns={'filter': 'band', 'fiveSigmaDepth': 'm5_single'})
 
     def __call__(self, m5_cad):
 
@@ -312,36 +313,13 @@ class Visits_Cadence:
         original pandas df with the number of visits added
         """
 
-        # print('hhh', m5_cad.columns)
         # print(m5_cad)
-        m5_cad = m5_cad.groupby(['band']).apply(
-            lambda x: self.add_Nvisits_band(x))
+        m5_cad_new = m5_cad.merge(self.m5_single, left_on=[
+            'band'], right_on=['band'])
+        m5_cad_new['Nvisits'] = 10**((m5_cad_new['m5'] -
+                                      m5_cad_new['m5_single'])/1.25)
 
-        return m5_cad
-
-    def add_Nvisits_band(self, grp):
-        """
-        Method to add a number or visits depending on m5 single band
-
-        Parameters
-        ---------------
-        m5_cad: pandas df
-          data to estimate the number of visits from
-
-        Returns
-        -----------
-        pandas df with the number of visits
-
-        """
-        # get m5 single band
-
-        idx = self.m5_single['filter'] == grp.name
-        m5 = self.m5_single[idx]['fiveSigmaDepth'].values.item()
-
-        Nvisits = 10**((grp['m5']-m5)/1.25)
-
-        grp['Nvisits'] = Nvisits
-        return grp
+        return m5_cad_new
 
     def Nvisits_cadence(self, m5_cad, snr_opti):
         """"
