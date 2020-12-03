@@ -8,11 +8,7 @@ from sn_tools.sn_calcFast import CovColor
 from scipy.interpolate import interp1d
 
 
-class RedshiftLimit:
-    """
-    class to estimate the redshift limit for a SN
-    using LC template
-    """
+class zlim_template:
 
     def __init__(self, x1, color, cadence,  error_model=1,
                  bluecutoff=380., redcutoff=800.,
@@ -30,18 +26,7 @@ class RedshiftLimit:
         simuFullName = self.lcFullName.replace('LC', 'Simu')
         self.lc_meta = loopStack([simuFullName], objtype='astropyTable')
         self.lc_meta.convert_bytestring_to_unicode()
-        self.z = np.round(np.arange(0.1, 0.8, 0.05), 2)
-        print(self.lc_meta)
 
-        m5_file = pd.DataFrame(
-            np.load('{}/{}'.format(m5_dir, m5_file), allow_pickle=True))
-
-        m5_file = m5_file.groupby(
-            ['fieldname', 'filter']).median().reset_index()
-
-        m5_file = m5_file[['fieldname', 'filter', 'fiveSigmaDepth']]
-        self.m5_file = m5_file.rename(
-            columns={'filter': 'band', 'fiveSigmaDepth': 'm5_single'})
         self.Fisher_el = ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
                           'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor', 'F_colorcolor']
 
@@ -53,70 +38,50 @@ class RedshiftLimit:
 
         return cuto
 
-    def __call__(self, nvisits_ref):
+    def process(self, zmin, zmax, zstep, nvisits, m5_values):
 
-        for field in self.m5_file['fieldname']:
-            idx = self.m5_file['fieldname'] == field
-            print('field', field)
-            self.zlim(nvisits_ref, self.m5_file[idx])
-            break
+        r = []
+        self.lc_visits = {}
+        m5_values['band'] = 'LSST::' + m5_values['band'].astype(str)
 
-    def zlim(self, nvisits_ref, m5_single):
+        for zval in np.arange(zmin, zmax, zstep):
+            lc = self.getLC(zval)
+            lc.convert_bytestring_to_unicode()
+            lcc = self. lc_corr(lc, m5_values)
+            self.lc_visits[np.round(zval, 2)] = lcc
+            sigmaC = self.fit(lcc, m5_values[['band', 'm5_new']])
+            r.append((zval, sigmaC))
 
-        ra = []
-        for z in np.unique(nvisits_ref['z']):
-            idx = np.abs(nvisits_ref['z']-z) < 1.e-6
-            nvisits_z = nvisits_ref[idx]
-            m5_values = self.m5(nvisits_z, m5_single)
-            zmin = np.max([0.1, z-0.2])
-            zmax = np.min([0.9, z+0.3])
-            r = []
-            for zval in np.arange(zmin, zmax, 0.05):
-                lc = self.getLC(zval)
-                lc.convert_bytestring_to_unicode()
-                print('lc here', lc.meta)
-                sigmaC = self.fit(lc, m5_values[['band', 'm5_new']])
-                r.append((zval, sigmaC))
-            zlim = self.estimate_zlim(
-                np.rec.fromrecords(r, names=['z', 'sigmaC']))
-            ra.append((z, zlim))
-            # break
+        zlim = self.estimate_zlim(
+            np.rec.fromrecords(r, names=['z', 'sigmaC']))
 
-        print(ra)
-
-    def m5(self, nvisits, m5_single):
-
-        df = pd.DataFrame(nvisits)
-        df = df.merge(m5_single, left_on=['band'], right_on=['band'])
-        df['m5_new'] = df.apply(
-            lambda x: x['m5_single']+1.25*np.log10(x['Nvisits']) if x['Nvisits'] > 0 else x['m5_single'], axis=1)
-
-        return df
+        return zlim
 
     def getLC(self, z):
 
         idx = np.abs(self.lc_meta['z']-z) < 1.e-8
         sel = self.lc_meta[idx]
 
-        return Table.read(self.lcFullName, path='lc_{}'.format(sel['index_hdf5'].item()))
+        lc = Table.read(self.lcFullName, path='lc_{}'.format(
+            sel['index_hdf5'].item()))
+
+        lc['phase'] = (lc['time']-lc.meta['daymax'])/(1.+z)
+        return lc
 
     def fit(self, lc, m5_values):
 
-        # get the 'corrected' lc
-        df = self. lc_corr(lc, m5_values)
+        idx = lc['flux'] > 0.
+        idx &= lc['fluxerr'] > 0.
 
-        # few selection before fitting
-        idx = df['flux'] > 0.
-        idx &= df['fluxerr'] > 0.
-        idx &= df['fluxerr_model'] > 0.
-        idx &= df['fluxerr_model'] < 10.
+        selecta = lc.loc[idx, :]
 
-        selecta = df.loc[idx]
         # add snr
-        selecta['snr'] = selecta['flux']/selecta['fluxerr']
+        selecta.loc[:, 'snr'] = selecta['flux'].values / \
+            selecta['fluxerr'].values
+
         # select LC points according to SNRmin
         idx = selecta['snr'] >= 1.
-        selecta = selecta.loc[idx]
+        selecta = selecta.loc[idx, :]
 
         # fit here
         covcolor = CovColor(selecta[self.Fisher_el].sum()).Cov_colorcolor
@@ -132,10 +97,9 @@ class RedshiftLimit:
         return interp(sigmaC_cut).item()
 
     def lc_corr(self, lc, m5_values):
-        m5_values['band'] = 'LSST::' + m5_values['band'].astype(str)
-        #print('io', lc, m5_values)
+
+        # print('io', lc, m5_values)
         df = pd.DataFrame(np.copy(lc))
-        #print('alors', df)
         df = df.merge(m5_values, left_on=['band'], right_on=['band'])
 
         # correct LC quantities
@@ -145,14 +109,153 @@ class RedshiftLimit:
             10**(-0.4*(df['m5_new']-df['m5']))
         # second: fluxerr
         df['fluxerr'] = np.sqrt(df['fluxerr_photo']**2+df['fluxerr_model']**2)
+
         # finally: Fisher elements
         for vv in self.Fisher_el:
             df[vv] = df[vv] * (df['fluxerr_old']/df['fluxerr'])**2
 
+        idx = df['m5_new'] < 0.1
+        df.loc[idx, 'flux'] = 0.0
+        df.loc[idx, 'flux_e_sec'] = 0.0
+        df.loc[idx, 'fluxerr'] = -10.
+
         return df
 
 
-class RedshiftLimit_scripts:
+class RedshiftLimit:
+    """
+    class to estimate the redshift limit for a SN
+    using LC template
+    """
+
+    def __init__(self, x1, color, cadence,  error_model=1,
+                 bluecutoff=380., redcutoff=800.,
+                 ebvofMW=0.,
+                 sn_simulator='sn_fast',
+                 lcDir='.',
+                 m5_file='medValues_flexddf_v1.4_10yrs_DD.npy',
+                 m5_dir='dd_design/m5_files',
+                 check_fullsim=False):
+
+        m5_file = pd.DataFrame(
+            np.load('{}/{}'.format(m5_dir, m5_file), allow_pickle=True))
+
+        m5_file = m5_file.groupby(
+            ['fieldname', 'filter']).median().reset_index()
+
+        m5_file = m5_file[['fieldname', 'filter', 'fiveSigmaDepth']]
+        self.m5_file = m5_file.rename(
+            columns={'filter': 'band', 'fiveSigmaDepth': 'm5_single'})
+        self.Fisher_el = ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
+                          'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor', 'F_colorcolor']
+
+        self.check_fullsim = check_fullsim
+
+        if check_fullsim:
+            self.full_sim = zlim_sim(simulator='sn_cosmo', fitter='sn_cosmo',
+                                     error_model=error_model, bluecutoff=bluecutoff)
+        self.templ_sim = zlim_template(x1, color,
+                                       cadence,  error_model=error_model,
+                                       bluecutoff=bluecutoff, redcutoff=redcutoff,
+                                       ebvofMW=ebvofMW,
+                                       sn_simulator=sn_simulator,
+                                       lcDir=lcDir,
+                                       m5_file=m5_file,
+                                       m5_dir=m5_dir)
+
+    def __call__(self, nvisits_ref):
+
+        resdf = pd.DataFrame()
+        for field in self.m5_file['fieldname']:
+            idx = self.m5_file['fieldname'] == field
+            print('field', field)
+            resfield = self.zlim(nvisits_ref, self.m5_file.loc[idx, :])
+            resfield['field'] = field
+            resdf = pd.concat((resdf, resfield))
+
+        return resdf
+
+    def zlim(self, nvisits_ref, m5_single):
+
+        rs = []
+        resdf = pd.DataFrame()
+        for z in np.unique(nvisits_ref['z']):
+            idx = np.abs(nvisits_ref['z']-z) < 1.e-6
+            nvisits_z = pd.DataFrame(np.copy(nvisits_ref[idx]))
+            m5_values = self.m5(nvisits_z, m5_single)
+            dict_visits = dict(zip(nvisits_z['band'], nvisits_z['Nvisits']))
+            dict_m5 = dict(zip(m5_values['band'], m5_values['m5_single']))
+            dict_cadence = dict(zip(m5_values['band'], m5_values['cadence']))
+            zmin = np.max([0.1, z-0.2])
+            zmax = np.min([0.9, z+0.3])
+            zstep = 0.05
+            zlimit = self.templ_sim.process(
+                zmin, zmax, zstep, nvisits_z, m5_values)
+            print('jojo', type(nvisits_z))
+            nvisits_z['zlim'] = np.round(zlimit, 2)
+            resdf = pd.concat((resdf, nvisits_z))
+            if self.check_fullsim:
+                self.full_sim.process(dict_visits, dict_m5,
+                                      dict_cadence, zmin, zmax, zstep)
+                zlimit_sim = self.full_sim.zlim()
+                rs.append((z, zlimit, zlimit_sim))
+            """
+            lc_sim = self.full_sim.getLC(z)
+            lc_sim['snr'] = lc_sim['flux']/lc_sim['fluxerr']
+            print(z, lc_sim['band', 'flux_e_sec', 'snr', 'time'])
+            """
+
+            #lc_templ = self.templ_sim.lc_visits[np.round(z, 2)]
+
+            #self.plot(lc_templ, lc_sim)
+
+        if self.check_fullsim:
+            print(rs)
+
+        print(resdf)
+        return resdf
+
+    def m5(self, nvisits, m5_single):
+
+        df = pd.DataFrame(nvisits)
+        df = df.merge(m5_single, left_on=['band'], right_on=['band'])
+        df = df.round({'Nvisits': 0})
+        df['m5_new'] = df.apply(
+            lambda x: x['m5_single']+1.25*np.log10(x['Nvisits']) if x['Nvisits'] > 0 else 0, axis=1)
+
+        return df
+
+    def plot(self, lca, lcb):
+
+        import matplotlib.pyplot as plt
+        print(np.unique(lca['band']), np.unique(lcb['band']))
+
+        bands = 'ugrizy'
+
+        fig, ax = plt.subplots(nrows=3, ncols=2, figsize=(10, 12))
+        loc = dict(
+            zip(bands, [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]))
+
+        for band in bands:
+            iloc = loc[band][0]
+            jloc = loc[band][1]
+            idx = lca['band'] == 'LSST::'+band
+            if len(lca[idx]) > 0:
+                print(band, lca[idx]
+                      [['flux_e_sec', 'm5', 'm5_new', 'fluxerr', 'fluxerr_photo', 'fluxerr_model']])
+                ax[iloc, jloc].plot(
+                    lca[idx]['phase'], lca[idx]['flux_e_sec'], 'ko', mfc='None')
+            idx = lcb['band'] == 'LSST::'+band
+            if len(lcb[idx]) > 0:
+                print('bbb', band, lcb[idx][[
+                      'flux_e_sec', 'm5', 'fluxerr', 'fluxerr_photo', 'fluxerr_model']])
+                ax[iloc, jloc].plot(lcb[idx]['phase'],
+                                    lcb[idx]['flux_e_sec'], 'r*')
+
+        plt.show()
+
+
+class zlim_sim:
     """
     class to estimate the redshift limit for a SN
     using fast simulation and scripts
@@ -185,9 +288,6 @@ class RedshiftLimit_scripts:
     """
 
     def __init__(self, x1=-2.0, color=0.2,
-                 Nvisits=dict(zip('grizy', [10, 20, 20, 26, 20])),
-                 m5=dict(zip('grizy', [24.51, 24.06, 23.62, 23.0, 22.17])),
-                 cadence=dict(zip('grizy', [3., 3., 3., 3., 3.])),
                  error_model=1,
                  bluecutoff=380.,
                  redcutoff=800.,
@@ -197,10 +297,6 @@ class RedshiftLimit_scripts:
 
         self.x1 = x1
         self.color = color
-        self.Nvisits = Nvisits
-        self.m5 = m5
-        self.cadence = cadence
-        self.bands = self.Nvisits.keys()
         self.tag = tag
 
         # simulation parameters
@@ -253,7 +349,10 @@ class RedshiftLimit_scripts:
         if not os.path.exists(dirname):
             os.system('mkdir -p {}'.format(dirname))
 
-    def process(self):
+    def process(self, Nvisits=dict(zip('grizy', [10, 20, 20, 26, 20])),
+                m5=dict(zip('grizy', [24.51, 24.06, 23.62, 23.0, 22.17])),
+                cadence=dict(zip('grizy', [3., 3., 3., 3., 3.])),
+                zmin=0.01, zmax=0.9, zstep=0.05):
         """
         Method to process data in three steps:
         - generate fake obs
@@ -263,25 +362,27 @@ class RedshiftLimit_scripts:
         """
 
         # generate observations
-        self.generate_obs()
+        self.generate_obs(Nvisits, m5, cadence)
 
         # simulation(fast) of LCs
-        self.simulate_lc()
+        self.simulate_lc(zmin, zmax, zstep)
 
         # fit (fast) these LCs
         self.fit_lc()
 
-    def generate_obs(self):
+    def generate_obs(self, Nvisits, m5, cadence):
         """
         Method to generate fake observations
 
         """
+
+        bands = Nvisits.keys()
         # generate fake_config file
         cmd = 'python run_scripts/make_yaml/make_yaml_fakes.py'
-        for b in self.bands:
-            cmd += ' --cadence_{} {}'.format(b, self.cadence[b])
-            cmd += ' --m5_{} {}'.format(b, self.m5[b])
-            cmd += ' --Nvisits_{} {}'.format(b, self.Nvisits[b])
+        for b in bands:
+            cmd += ' --cadence_{} {}'.format(b, cadence[b])
+            cmd += ' --m5_{} {}'.format(b, m5[b])
+            cmd += ' --Nvisits_{} {}'.format(b, int(np.round(Nvisits[b], 0)))
         cmd += ' --fileName {}'.format(self.fake_config)
         os.system(cmd)
 
@@ -290,7 +391,7 @@ class RedshiftLimit_scripts:
             self.fake_config, self.fake_data)
         os.system(cmd)
 
-    def simulate_lc(self):
+    def simulate_lc(self, zmin, zmax, zstep):
         """
         Method to simulate LC
 
@@ -304,9 +405,9 @@ class RedshiftLimit_scripts:
         cmd += ' --SN_color_type unique'
         cmd += ' --SN_color_min {}'.format(self.color)
         cmd += ' --SN_z_type uniform'
-        cmd += ' --SN_z_min {}'.format(self.zmin)
-        cmd += ' --SN_z_max {}'.format(self.zmax)
-        cmd += ' --SN_z_step {}'.format(self.zstep)
+        cmd += ' --SN_z_min {}'.format(zmin)
+        cmd += ' --SN_z_max {}'.format(zmax)
+        cmd += ' --SN_z_step {}'.format(zstep)
         cmd += ' --SN_daymax_type unique'
         cmd += ' --Observations_fieldtype Fake'
         cmd += ' --Observations_coadd 0'
@@ -362,6 +463,27 @@ class RedshiftLimit_scripts:
             sn = vstack([sn, tab])
 
         return sn
+
+    def getLC(self, z=0.5):
+        """"
+        Method to load the light curve from file
+
+        Returns
+        -----------
+        the light curve (format: astropyTable)
+
+        """
+        fName = '{}/LC_{}_0.hdf5'.format(self.outDir_simu,
+                                         self.tag)
+        fFile = h5py.File(fName, 'r')
+        keys = list(fFile.keys())
+        lc = Table()
+        for key in keys:
+            tab = Table.read(fName, path=key)
+            if np.abs(tab.meta['z']-z) < 1.e-8:
+                lc = vstack([lc, tab])
+
+        return lc
 
     def zlim(self, color_cut=0.04):
         """
@@ -421,3 +543,37 @@ class RedshiftLimit_scripts:
         ax.set_ylabel('$\sigma_{color}$')
         ax.legend(loc='upper left')
         plt.show()
+
+
+def plot_sigmaC_z(sn, zlim, color_cut=0.04):
+    """
+    Method to plot sigmaC vs z
+
+    Parameters
+    ---------------
+    color_cut: float, opt
+    sigmaColor value to plot(default: 0.04)
+
+    """
+
+    import matplotlib.pyplot as plt
+    from scipy.interpolate import interp1d
+
+    fig, ax = plt.subplots()
+    ax.plot(sn['z'], np.sqrt(sn['Cov_colorcolor']),
+            label='zlim={}'.format(zlim), color='r')
+
+    ax.plot(ax.get_xlim(), [color_cut]*2,
+            linestyle='--', color='k')
+
+    zmin = 0.2
+    zmax = zlim+0.1
+    interp = interp1d(sn['z'], np.sqrt(sn['Cov_colorcolor']),
+                      bounds_error=False, fill_value=0.)
+    ax.set_xlim([zmin, zmax])
+    ax.set_ylim([interp(zmin), interp(zmax)])
+    ax.grid()
+    ax.set_xlabel('z')
+    ax.set_ylabel('$\sigma_{color}$')
+    ax.legend(loc='upper left')
+    plt.show()
