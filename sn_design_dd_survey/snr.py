@@ -1478,7 +1478,12 @@ class SNR_z:
 
 class Nvisits_z_plot:
     """
-    class do display Number of visits vs redshift
+    class to display Number of visits vs redshift
+
+    Parameters
+    ---------------
+    filename: str
+      name of the file with data
 
     """
 
@@ -1493,18 +1498,24 @@ class Nvisits_z_plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
         ls = dict(zip(range(1, 5), ['solid', 'dotted', 'dashed', 'dashdot']))
+        color = dict(zip(['visits', 'chisq'], ['r', 'b']))
         for cadence in np.unique(self.data['cadence']):
             idx = np.abs(self.data['cadence']-cadence) < 1.e-8
             sela = self.data[idx]
             for min_par in np.unique(sela['min_par']):
-                idxa = sela['min_par'] == 'chisq'
+                idxa = sela['min_par'] == min_par
                 selb = sela[idxa]
                 res = selb.groupby(['z']).apply(lambda x: pd.DataFrame(
                     {'Nvisits': [x['Nvisits'].sum()]})).reset_index()
                 print(res)
-                ax.plot(res['z'], res['Nvisits'], ls=ls[int(cadence)])
+                ax.plot(res['z'], res['Nvisits'],
+                        ls=ls[int(cadence)], color=color[min_par])
 
         ax.grid()
+        ax.set_xlabel(r'z')
+        ax.set_ylabel(r'{}'.format('Nvisits'))
+        ax.set_xlim([0.3, 0.85])
+        ax.set_ylim([0., 150.])
         plt.show()
 
 
