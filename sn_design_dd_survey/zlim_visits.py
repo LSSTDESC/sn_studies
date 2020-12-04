@@ -141,11 +141,13 @@ class RedshiftLimit:
             np.load('{}/{}'.format(m5_dir, m5_file), allow_pickle=True))
 
         m5_file = m5_file.groupby(
-            ['fieldname', 'filter']).median().reset_index()
+            ['fieldname', 'filter', 'season']).median().reset_index()
 
-        m5_file = m5_file[['fieldname', 'filter', 'fiveSigmaDepth']]
+        m5_file = m5_file[['fieldname', 'filter', 'fiveSigmaDepth', 'season']]
+
         self.m5_file = m5_file.rename(
             columns={'filter': 'band', 'fiveSigmaDepth': 'm5_single'})
+
         self.Fisher_el = ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
                           'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor', 'F_colorcolor']
 
@@ -164,7 +166,7 @@ class RedshiftLimit:
                                        m5_dir=m5_dir)
 
     def __call__(self, nvisits_ref):
-
+        """
         resdf = pd.DataFrame()
         for field in self.m5_file['fieldname']:
             idx = self.m5_file['fieldname'] == field
@@ -172,13 +174,17 @@ class RedshiftLimit:
             resfield = self.zlim(nvisits_ref, self.m5_file.loc[idx, :])
             resfield['field'] = field
             resdf = pd.concat((resdf, resfield))
-
+        """
+        resdf = self.m5_file.groupby(['fieldname', 'season']).apply(
+            lambda x: self.zlim(nvisits_ref, x)).reset_index()
         return resdf
 
     def zlim(self, nvisits_ref, m5_single):
 
         rs = []
         resdf = pd.DataFrame()
+        print('m5', m5_single)
+
         for z in np.unique(nvisits_ref['z']):
             idx = np.abs(nvisits_ref['z']-z) < 1.e-6
             nvisits_z = pd.DataFrame(np.copy(nvisits_ref[idx]))
@@ -191,7 +197,6 @@ class RedshiftLimit:
             zstep = 0.05
             zlimit = self.templ_sim.process(
                 zmin, zmax, zstep, nvisits_z, m5_values)
-            print('jojo', type(nvisits_z))
             nvisits_z['zlim'] = np.round(zlimit, 2)
             resdf = pd.concat((resdf, nvisits_z))
             if self.check_fullsim:
@@ -212,7 +217,9 @@ class RedshiftLimit:
         if self.check_fullsim:
             print(rs)
 
-        print(resdf)
+        if 'level_2' in resdf.columns:
+            resdf = resdf.drop(columns=['level_2'])
+        print(resdf.columns)
         return resdf
 
     def m5(self, nvisits, m5_single):
