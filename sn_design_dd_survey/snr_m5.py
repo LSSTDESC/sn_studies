@@ -5,6 +5,7 @@ from .utils import m5_to_flux5, srand, gamma, load
 import multiprocessing
 from scipy.interpolate import interp1d
 
+
 class SNR_m5:
     """
     Class to estimate, for each band and each considered LC
@@ -23,11 +24,11 @@ class SNR_m5:
 
     """
 
-    def __init__(self, inputDir, refFile, outfile='SNR_m5.py',snrmin=1.):
+    def __init__(self, inputDir, refFile, outfile='SNR_m5.py', snrmin=1.):
 
         self.outfile = outfile
         self.snrmin = snrmin
-        
+
         self.process_main(inputDir, refFile)
 
         """
@@ -35,6 +36,7 @@ class SNR_m5:
         self.get_m5(resdf)
         self.plot(resdf)
         """
+
     def process_main(self, inputDir, refFile):
 
         # load the reference file
@@ -42,12 +44,16 @@ class SNR_m5:
         refdata = pd.DataFrame(np.copy(load(inputDir, refFile)))
         refdata['band'] = refdata['band'].map(lambda x: x.decode()[-1])
 
+        self.error_model = 0.
+        if 'error_model' in refFile:
+            self.error_model = 1
+
         """
         idc = (refdata['x1']-x1) < 1.e-5
         idc &= (refdata['color']-color) < 1.e-5
         refdata = refdata[idc]
         """
-        
+
         # load the gamma file
         #gamma = self.load('reference_files', 'gamma.hdf5')
 
@@ -75,15 +81,15 @@ class SNR_m5:
            
         """
         # SNR vs m5 estimation
-        
+
         zref = 0.8
         result_queue = multiprocessing.Queue()
-        for j,b in enumerate(bands):
+        for j, b in enumerate(bands):
             idx = refdata['band'] == b
             #idx &= np.abs(refdata['z']-zref) < 1.e-5
             datab = refdata[idx]
             p = multiprocessing.Process(name='Subprocess-{}'.format(b), target=self.process,
-                                    args=(datab, gammadict[b], mag_to_flux[b], j, result_queue))
+                                        args=(datab, gammadict[b], mag_to_flux[b], j, result_queue))
             p.start()
             #res = self.process(datab, gammadict[b], mag_to_flux[b])
             #resdf = pd.concat((resdf, res))
@@ -101,11 +107,11 @@ class SNR_m5:
         # gather the results
         for key, vals in resultdict.items():
             resdf = pd.concat((resdf, vals), sort=False)
-            
+
         # save the result in a numpy array
         np.save(self.outfile, resdf.to_records(index=False))
 
-    def process(self, data, gamma, magtoflux,j=0, output_q=None):
+    def process(self, data, gamma, magtoflux, j=0, output_q=None):
         """
         Method to estimate SNR vs m5
 
@@ -129,43 +135,47 @@ class SNR_m5:
         """
         res = pd.DataFrame()
         datab = data.copy()
-        
-        idc = datab['flux']>1.e-10
-        idc &= datab['fluxerr_model']>0.
-    
+
+        idc = datab['flux'] > 1.e-10
+        if self.error_model:
+            idc &= datab['fluxerr_model'] > 0.
+
         datab = datab[idc]
-        
+
         # set the error model error to the one corresponding to the flux in elec/sec
         datab['SNR_model'] = datab['flux']/datab['fluxerr_model']
-        
+
         for m5 in np.arange(15., 28., 0.01):
-        #for m5 in [24]:
+            # for m5 in [24]:
             datab.loc[:, 'm5'] = m5
             datab.loc[:, 'gamma'] = gamma(m5)
             datab.loc[:, 'SNR_photo'] = 1. / \
                 srand(datab['gamma'],
                       datab['mag'], datab['m5'])
-            
-            datab.loc[:,'SNR_photo_bd'] = (5.*datab['flux_e_sec'])/magtoflux(m5)
-                
-            datab.loc[:, 'SNR'] = self.SNR(datab['SNR_model'],datab['SNR_photo'])
-            
-            datab.loc[:, 'SNR_bd'] = self.SNR(datab['SNR_model'],datab['SNR_photo_bd'])
+
+            datab.loc[:, 'SNR_photo_bd'] = (
+                5.*datab['flux_e_sec'])/magtoflux(m5)
+
+            datab.loc[:, 'SNR'] = self.SNR(
+                datab['SNR_model'], datab['SNR_photo'])
+
+            datab.loc[:, 'SNR_bd'] = self.SNR(
+                datab['SNR_model'], datab['SNR_photo_bd'])
+
             datab.loc[:, 'f5'] = magtoflux(m5)
 
-            #print(datab[['SNR','SNR_bd','SNR_model','SNR_photo','SNR_photo_bd']])
+            # print(datab[['SNR','SNR_bd','SNR_model','SNR_photo','SNR_photo_bd']])
             """
             import matplotlib.pyplot as plt
             plt.plot(datab['phase'],datab['SNR'],'ko')
             plt.show()
             """
             # select only LC points with SNR>=snrmin
-            idsnr = datab['SNR_bd']>=self.snrmin
-        
+            idsnr = datab['SNR_bd'] >= self.snrmin
+
             grp = datab[idsnr].groupby(['band', 'z']).apply(
                 lambda x: self.calc(x, m5)).reset_index()
             res = pd.concat((res, grp))
-
 
         if output_q is not None:
             return output_q.put({j: res})
@@ -193,8 +203,6 @@ class SNR_m5:
 
         return 1./np.sqrt(snr)
 
-        
-        
     def calc(self, grp, m5):
         """
         Method to estimate some quantities per group (1 group = 1LC/z/band)
@@ -282,4 +290,3 @@ class SNR_m5:
                     sel['SNR_test'], sel['m5'], bounds_error=False, fill_value=0.)
                 print(b, SNR[b], myinterpa(SNR[b]),
                       myinterpb(SNR[b]), myinterpc(SNR[b]))
-
