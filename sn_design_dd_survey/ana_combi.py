@@ -33,7 +33,7 @@ class CombiChoice:
                        'Nvisits_r', 'SNRcalc_r', 'Nvisits_i', 'SNRcalc_i', 'Nvisits_z',
                        'SNRcalc_z', 'Nvisits_y', 'SNRcalc_y', 'min_par', 'min_val']
 
-    def __call__(self, z):
+    def __call__(self, z,nproc=8):
         """
         Method to choose a SNR combi
 
@@ -41,6 +41,8 @@ class CombiChoice:
         --------------
         z: float
           redshift
+        nproc: int,opt
+          number of proc to use for multiprocessing (default: 8)
 
         """
         # getting flux frac
@@ -51,7 +53,7 @@ class CombiChoice:
         tag = 'z_{}'.format(z)
         thedir = '{}/{}'.format(self.dirFile, tag)
 
-        snr_opti = self.multiAna(thedir)
+        snr_opti = self.multiAna(thedir,nproc)
 
         if snr_opti is None:
             return None
@@ -82,7 +84,6 @@ class CombiChoice:
         fis = glob.glob('{}/*.npy'.format(thedir))
         nz = len(fis)
         t = np.linspace(0, nz, nproc+1, dtype='int')
-        # print('multi', nz, t)
         result_queue = multiprocessing.Queue()
 
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.loopAna,
@@ -242,6 +243,7 @@ class CombiChoice:
         """
 
         bbands = 'grizy'
+        bbands = np.unique(self.fluxFrac_z['band'])
         for b in bbands:
             io = self.fluxFrac_z['band'] == b
             flux = self.fluxFrac_z[io]
