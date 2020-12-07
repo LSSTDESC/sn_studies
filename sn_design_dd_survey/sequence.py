@@ -7,6 +7,9 @@ from sn_design_dd_survey.ana_combi import CombiChoice, Visits_Cadence
 from sn_design_dd_survey.zlim_visits import RedshiftLimit
 import numpy as np
 import glob
+import pandas as pd
+import time
+import multiprocessing
 
 
 def cut_off(error_model, bluecutoff, redcutoff):
@@ -182,7 +185,7 @@ class DD_SNR:
 
         self.cutoff = cut_off(error_model, bluecutoff, redcutoff)
         lcName = 'LC_{}_{}_{}_ebv_{}_{}_cad_{}_0.hdf5'.format(
-            simulator, self.x1, self.color, ebvofMW, self.cutoff, int(cadence))
+            sn_simulator, self.x1, self.color, ebvofMW, self.cutoff, int(cadence))
         m5Name = '{}/{}'.format(self.dirm5, m5_file)
         return Data(self.dirTemplates, lcName, m5Name, self.x1, self.color, bluecutoff, redcutoff, error_model, bands=self.bands)
 
@@ -198,7 +201,8 @@ class DD_SNR:
           red cutoff if error_model=0 (default: 800.)
 
         """
-
+        import matplotlib.pyplot as plt
+        
         self.data.plotzlim()
         self.data.plotFracFlux()
         self.data.plot_medm5()
@@ -250,7 +254,8 @@ class DD_SNR:
 def OptiCombi(fracSignalBand, dirStudy='dd_design',
               dirSNR_combi='SNR_combi',
               dirSNR_opti='SNR_opti',
-              snr_opti_file='opti_combi.npy'):
+              snr_opti_file='opti_combi.npy',
+              nproc=8):
     """
     Function to select optimal (wrt a certain criteria) SNR combinations
 
@@ -266,6 +271,8 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
       location dir of the opti combi output file
     snr_opti_file: str, opt
       name of the output file containing optimal combinations
+    nproc: int, opt
+      number of proc to use for multiprocessing (default: 8)
     """
 
     combi = CombiChoice(fracSignalBand, dirSNR_combi)
@@ -279,7 +286,7 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
             .split('_')[-1]
         )
         z = np.round(float(z), 2)
-        res = combi(z)
+        res = combi(z,nproc)
         if res is not None:
             resdf = pd.concat((resdf, res))
 
