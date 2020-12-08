@@ -202,7 +202,7 @@ class DD_SNR:
 
         """
         import matplotlib.pyplot as plt
-        
+
         self.data.plotzlim()
         self.data.plotFracFlux()
         self.data.plot_medm5()
@@ -286,7 +286,7 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
             .split('_')[-1]
         )
         z = np.round(float(z), 2)
-        res = combi(z,nproc)
+        res = combi(z, nproc)
         if res is not None:
             resdf = pd.concat((resdf, res))
 
@@ -356,6 +356,19 @@ def Nvisits_Cadence_z(m5_single, snr_opti_file,
         res = pd.concat((res, nv_cad))
 
     outFull = '{}/{}/{}'.format(dirStudy, dirNvisits, outName)
+
+    # final check: are all the bands present?
+    # if not: add it with one visit
+    if 'g' not in res['band'].unique():
+        idx = res['band'] == 'i'
+        sel = res.loc[idx].copy()
+        sel.loc[:, 'band'] = 'g'
+        sel.loc[:, 'Nvisits'] = 0.
+        sel.loc[:, 'Nvisits_orig'] = 0.
+        res = pd.concat((res, sel))
+
+    # replace nan with zeros
+    res = res.fillna(0.)
     np.save(outFull, res.to_records(index=False))
 
     # transform the data to have a format compatible with GUI
@@ -422,10 +435,12 @@ class Nvisits_Cadence_Fields:
 
         restot = self.multiproc()
 
+        # replace nan with zeros
+        restot = restot.fillna(0.)
         # restot = pd.DataFrame(
         #    np.load('Nvisits_z_fields.npy', allow_pickle=True))
         outFull = '{}/{}/{}'.format(dirStudy, dirNvisits, outName)
-        TransformData(restot, outFull, grlist=[
+        TransformData(restot, outFull.split('.npy')[0], grlist=[
             'z', 'cadence', 'fieldname', 'season'])
 
     def multiproc(self):
@@ -508,10 +523,10 @@ class TransformData:
 
     def __init__(self, df=None, outName='', grlist=['z', 'cadence']):
 
-        print(df.columns)
         for min_par in np.unique(df['min_par']):
             idx = df['min_par'] == min_par
-            gr = df[idx].groupby(grlist).apply(
+            sel = df[idx].copy()
+            gr = sel.groupby(grlist).apply(
                 lambda x: self.transform(x)).reset_index()
 
             if 'season' not in gr.columns:
@@ -543,10 +558,17 @@ class TransformData:
         r = []
         names = []
 
-        for b in np.unique(grp['band']):
+        for b in grp['band'].unique():
             idx = grp['band'] == b
             r.append(grp[idx]['Nvisits'].values.item())
             names.append('Nvisits_{}'.format(b))
+
+        # add the missing bands if necessary
+        for b in 'grizy':
+            nvisits = 'Nvisits_{}'.format(b)
+            if nvisits not in names:
+                r.append(0.)
+                names.append(nvisits)
 
         r.append(grp['Nvisits'].sum())
         names.append('Nvisits')
@@ -555,4 +577,6 @@ class TransformData:
             r.append(grp['zlim'].median())
             names.append('zlim')
 
-        return pd.DataFrame(np.rec.fromrecords([r], names=names))
+        resu = np.rec.fromrecords([r], names=names)
+
+        return pd.DataFrame(resu)
