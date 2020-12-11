@@ -212,21 +212,28 @@ class OS_Summary:
 
 parser = OptionParser()
 
-parser.add_option("--dbName", type="str",
-                  default='descddf_v1.5_10yrs', help="db name [%default]")
-parser.add_option("--dbDir", type="str",
-                  default='/media/philippe/LSSTStorage/ObsPixelized', help="db dir [% default]")
-parser.add_option("--fieldNames", type="str", default='COSMOS',
-                  help=" list of fieldNames  [%default]")
-parser.add_option("--prefix", type="str",
-                  default='DD_nside_64_0.0_360.0_-1.0_-1.0', help="file name prefix [%default]")
+parser.add_option('--dbName', type='str',
+                  default='descddf_v1.5_10yrs', help='db name [%default]')
+parser.add_option('--dbDir', type='str',
+                  default='/media/philippe/LSSTStorage/ObsPixelized', help='db dir [%default]')
+parser.add_option('--fieldNames', type='str', default='COSMOS',
+                  help=' list of fieldNames  [%default]')
+parser.add_option('--prefix', type='str',
+                  default='DD_nside_64_0.0_360.0_-1.0_-1.0', help='file name prefix [%default]')
 
 opts, args = parser.parse_args()
 
 fieldNames = opts.fieldNames.split(',')
 
+finaldf = pd.DataFrame()
 for fieldName in fieldNames:
     res = OS_Summary(opts.dbDir, opts.dbName, fieldName, opts.prefix).data
     print(res.columns)
     print(res[['healpixID', 'season_length', 'nSN']])
     print(fieldName, res['nSN'].sum())
+    res['fieldName'] = fieldName
+    finaldf = pd.concat((finaldf, res))
+
+fName = 'DD_Summary_{}.npy'.format(opts.dbName)
+
+np.save(fName, finaldf.to_records(index=False))
