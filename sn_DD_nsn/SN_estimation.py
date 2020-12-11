@@ -63,11 +63,10 @@ class SN_zlimit:
         self.rateSN = SN_Rate(
             min_rf_phase=min_rf_phase_qual, max_rf_phase=max_rf_phase_qual)
 
-        self.summary = np.load(summary,allow_pickle=True)
+        self.summary = np.load(summary, allow_pickle=True)
         self.sn_tot = sn_tot
-        
 
-    def __call__(self,color_cut=0.04):
+    def __call__(self, color_cut=0.04):
         """
         Method estimating efficiency vs z for a sigma_color cut
         Parameters
@@ -94,16 +93,17 @@ class SN_zlimit:
         sndf = pd.DataFrame(self.sn_tot)
 
         print(sndf.columns)
-        listNames = ['fieldName','season', 'pixRA', 'pixDec', 'healpixID', 'x1', 'color']
+        listNames = ['fieldName', 'season', 'pixRA',
+                     'pixDec', 'healpixID', 'x1', 'color']
         groups = sndf.groupby(listNames)
 
         # estimating efficiencies
-        zlimit = sndf.groupby(listNames)[['Cov_colorcolor', 'z','survey_area','fitstatus']].apply(
+        zlimit = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
             lambda x: self.zlim(x, color_cut)).reset_index(level=list(range(len(listNames))))
 
         return zlimit
 
-    def effiObsdf(self, data, color_cut=0.04,zmin=0.025, zmax=0.8,dz=0.05):
+    def effiObsdf(self, data, color_cut=0.04, zmin=0.025, zmax=0.8, dz=0.05):
         """
         Method to estimate observing efficiencies for supernovae
 
@@ -130,7 +130,7 @@ class SN_zlimit:
 
         # reference df to estimate efficiencies
         #df = data.loc[lambda dfa:  np.sqrt(dfa['Cov_colorcolor']) < 100000., :]
-        df = data.loc[lambda dfa:  dfa['fitstatus']=='fitok', :]
+        df = data.loc[lambda dfa:  dfa['fitstatus'] == 'fitok', :]
 
         # selection on sigma_c<= 0.04
         df_sel = df.loc[lambda dfa:  np.sqrt(
@@ -139,7 +139,7 @@ class SN_zlimit:
         # make ratio using histogram
         x1 = df_sel['z'].values
         x2 = df['z'].values
-        bins = np.array([0.01]+list(np.arange(zmin,zmax,dz)))
+        bins = np.array([0.01]+list(np.arange(zmin, zmax, dz)))
         val_of_bins_x1, edges_of_bins_x1, patches_x1 = plt.hist(
             x1, bins=bins, histtype='step', label="x1")
         val_of_bins_x2, edges_of_bins_x2, patches_x2 = plt.hist(
@@ -155,12 +155,12 @@ class SN_zlimit:
         effidf = pd.DataFrame({'z': bins_centered,
                                'effi': ratio,
                                'effi_err': np.sqrt(var)})
-                               #'effi_var': var})
+        # 'effi_var': var})
         effidf = effidf.fillna(0)
 
         return effidf
 
-    def getSNRate(self, data, zmin=0.01,zmax=0.6,dz=0.01):
+    def getSNRate(self, data, zmin=0.01, zmax=0.6, dz=0.01):
         """
         Method to estimate the SN rate
 
@@ -185,16 +185,15 @@ class SN_zlimit:
         """
 
         # estimate the expected rate - season length needed for that
-        idx = self.summary['fieldName']== data.name[0]
-        idx &= self.summary['healpixID']== data.name[4]
-        idx &= self.summary['season']== data.name[1]
+        idx = self.summary['fieldName'] == data.name[0]
+        idx &= self.summary['healpixID'] == data.name[4]
+        idx &= self.summary['season'] == data.name[1]
         season_length = self.summary[idx]['season_length'].item()
- 
-      
+
         # estimate the rates and nsn vs z
         zz, rate, err_rate, nsn, err_nsn = self.rateSN(zmin=zmin,
                                                        zmax=zmax,
-                                                       dz = dz,
+                                                       dz=dz,
                                                        duration=season_length,
                                                        survey_area=data['survey_area'].mean())
 
@@ -204,11 +203,10 @@ class SN_zlimit:
         rateInterp_err = interp1d(zz, err_nsn, kind='linear',
                                   bounds_error=False, fill_value=0)
 
-
-        return rateInterp,rateInterp_err
+        return rateInterp, rateInterp_err
         # now make the convolution of rate*effi to get zlim
 
-    def zlim(self,data, color_cut=0.04,zmin=0.01, zmax=0.8,dz=0.01, frac=0.95, plot=False):
+    def zlim(self, data, color_cut=0.04, zmin=0.01, zmax=0.8, dz=0.01, frac=0.95, plot=False):
         """
         Method to estimate the redshift limit
         The principle of the measurement is to convolve the observing efficiency curve
@@ -236,7 +234,6 @@ class SN_zlimit:
         # get efficiencies
         effidf = self.effiObsdf(data, color_cut=color_cut)
 
-        
         effiInterp = interp1d(effidf['z'].values, effidf['effi'].values, kind='linear',
                               bounds_error=False, fill_value=0)
         effiInterp_err = interp1d(
@@ -244,9 +241,8 @@ class SN_zlimit:
 
         # get thr rates here
 
-        rateInterp,rateInterp_err = self.getSNRate(data)
+        rateInterp, rateInterp_err = self.getSNRate(data)
 
-        
         nsn_cum = np.cumsum(effiInterp(zplot)*rateInterp(zplot))
         nsn_cum_err = []
         for i in range(len(zplot)):
@@ -272,22 +268,17 @@ class SN_zlimit:
             zlimit_plus = 0.0
             zlimit_minus = 0.0
 
+        # print('nsn_cum',nsn_cum[-1],zlimit,zlimit_plus,zlimit_minus)
 
-        
-        #print('nsn_cum',nsn_cum[-1],zlimit,zlimit_plus,zlimit_minus)
-        
-       
         if plot:
-            self.plotAll(zplot,effidf,nsn_cum,nsn_cum_norm,nsn_cum_norm_err,frac)
+            self.plotAll(zplot, effidf, nsn_cum,
+                         nsn_cum_norm, nsn_cum_norm_err, frac)
 
-        return pd.DataFrame({'zlim': [np.round(zlimit,2)],
-                             'zlim_plus': [np.round(zlimit_plus,2)],
-                             'zlim_minus': [np.round(zlimit_minus,2)]})
-        
+        return pd.DataFrame({'zlim': [np.round(zlimit, 2)],
+                             'zlim_plus': [np.round(zlimit_plus, 2)],
+                             'zlim_minus': [np.round(zlimit_minus, 2)]})
 
- 
-
-    def plotAll(self,zplot,effidf,nsn_cum,nsn_cum_norm,nsn_cum_norm_err,frac):
+    def plotAll(self, zplot, effidf, nsn_cum, nsn_cum_norm, nsn_cum_norm_err, frac):
         """
         Method to plot efficiency, nsn cum, ... vs z
 
@@ -311,16 +302,17 @@ class SN_zlimit:
         # this is to display results
         fig, ax = plt.subplots()
         # plot efficiencies
-        ax.errorbar(effidf['z'],effidf['effi'],yerr=effidf['effi_err'])
+        ax.errorbar(effidf['z'], effidf['effi'], yerr=effidf['effi_err'])
         # plot rate (cumul)
         axb = ax.twinx()
-        axb.plot(zplot,nsn_cum)
+        axb.plot(zplot, nsn_cum)
         # plot cumul of nsn*effi
-        ax.plot(zplot,nsn_cum/nsn_cum[-1])
-        ax.plot(zplot, [frac]*len(zplot),color='r') 
+        ax.plot(zplot, nsn_cum/nsn_cum[-1])
+        ax.plot(zplot, [frac]*len(zplot), color='r')
         ax.fill_between(zplot, nsn_cum_norm-nsn_cum_norm_err,
                         nsn_cum_norm+nsn_cum_norm_err, color='y')
         plt.show()
+
 
 class NSN_zlim:
     """
@@ -337,17 +329,16 @@ class NSN_zlim:
 
     def __init__(self, data, zlims):
 
-        #merge the two dfs
-        tomerge = ['fieldName','season', 'pixRA', 'pixDec', 'healpixID']
-        sn = data.merge(zlims, left_on=tomerge,right_on=tomerge)
+        # merge the two dfs
+        tomerge = ['fieldName', 'season', 'pixRA', 'pixDec', 'healpixID']
+        sn = data.merge(zlims, left_on=tomerge, right_on=tomerge)
 
         sn = sn.groupby(tomerge).apply(lambda x: nSN(x)).reset_index()
 
         N = len(data)
         p = np.sum(sn['nsn_zlim'])/N
-        
-        print(sn,np.sum(sn['nsn_zlim']),N,np.sqrt(N*p*(1.-p)))        
 
+        print(sn, np.sum(sn['nsn_zlim']), N, np.sqrt(N*p*(1.-p)))
 
 
 def pixels(grp):
@@ -365,7 +356,7 @@ def finalNums(grp, normfact=10.):
 def nSN(grp, sigmaC=0.04):
 
     idx = grp['Cov_colorcolor'] <= sigmaC**2
-    idx &= grp['fitstatus']=='fitok'
+    idx &= grp['fitstatus'] == 'fitok'
     sela = grp[idx]
     idx &= grp['z'] <= grp['zlim']
     sel = grp[idx]
@@ -373,9 +364,6 @@ def nSN(grp, sigmaC=0.04):
     return pd.DataFrame({'nsn_zlim': [len(sel)],
                          'nsn_tot': [len(sela)],
                          'zlim': [grp['zlim'].median()]})
-
-
-
 
 
 def zlim(grp, sigmaC=0.04):
@@ -393,7 +381,7 @@ def zlim(grp, sigmaC=0.04):
 
 mainDir = '/media/philippe/LSSTStorage/DD_new'
 mainDir = '/home/philippe/LSST/DD_Full_Simu_Fit'
-mainDir = '/sps/lsst/users/gris/DD'
+#mainDir = '/sps/lsst/users/gris/DD'
 fitDir = '{}/Fit'.format(mainDir)
 # fitDir = 'OutputFit'
 simuDir = '{}/Simu'.format(mainDir)
@@ -410,22 +398,22 @@ summary = 'DD_Summary_{}.npy'.format(dbName)
 
 faintSN = SN(fitDir, dbName, fieldNames, 'faintSN')
 
-#estimate the redshift limits
-SN_zlims_faint= SN_zlimit(faintSN,summary)
+# estimate the redshift limits
+SN_zlims_faint = SN_zlimit(faintSN, summary)
 
-zlims_faint=SN_zlims_faint()
+zlims_faint = SN_zlims_faint()
 
 print(zlims_faint)
 
 
-print('final resu',np.median(zlims_faint['zlim']))
+print('final resu', np.median(zlims_faint['zlim']))
 
 # load all types of SN
 allSN = SN(fitDir, dbName, fieldNames, 'allSN')
 
 # estimate the number of supernovae
-nsn = NSN_zlim(allSN,zlims_faint)
- 
+nsn = NSN_zlim(allSN, zlims_faint)
+
 
 print(test)
 
