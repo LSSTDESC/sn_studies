@@ -58,7 +58,7 @@ class SN_zlimit:
 
     """
 
-    def __init__(self, sn_tot, summary, min_rf_phase_qual=-15., max_rf_phase_qual=25.):
+    def __init__(self, sn_tot, summary, min_rf_phase_qual=-15., max_rf_phase_qual=30.):
 
         self.rateSN = SN_Rate(
             min_rf_phase=min_rf_phase_qual, max_rf_phase=max_rf_phase_qual)
@@ -105,7 +105,7 @@ class SN_zlimit:
 
         print(sndf.columns)
 
-        groups = sndf.groupby(listNames)
+        #groups = sndf.groupby(listNames)
 
         # estimating zlims
         resu = None
@@ -113,9 +113,14 @@ class SN_zlimit:
             resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
                 lambda x: self.zlim(x, color_cut)).reset_index(level=list(range(len(listNames))))
         if what == 'nsn':
+            """
             resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
                 lambda x: self.nsn(x, zlims, color_cut)).reset_index(level=list(range(len(listNames))))
-
+            """
+            print('listNames',listNames)
+            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
+                lambda x: self.nsn(x, zlims, color_cut)).reset_index()
+        
         return resu
 
     def effiObsdf(self, data, color_cut=0.04, zmin=0.025, zmax=0.8, dz=0.05):
@@ -176,7 +181,7 @@ class SN_zlimit:
 
         return effidf
 
-    def getSNRate(self, data, zmin=0.01, zmax=0.6, dz=0.01):
+    def getSNRate(self, data, zmin,zmax,dz):
         """
         Method to estimate the SN rate
 
@@ -193,10 +198,8 @@ class SN_zlimit:
 
         Returns
         -------
-        rateInterp: interp1d
-          rate interpolator
-        rateInterp_err:
-         error rate interpolator
+        nsn_rate: 
+        nsn_err_from_rate
 
         """
 
@@ -215,14 +218,14 @@ class SN_zlimit:
                                                        ),
                                                        account_for_edges=True)
 
+        """
         # rate interpolation
         rateInterp = interp1d(zz, nsn, kind='linear',
                               bounds_error=False, fill_value=0)
         rateInterp_err = interp1d(zz, err_nsn, kind='linear',
                                   bounds_error=False, fill_value=0)
-
-        return rateInterp, rateInterp_err
-        # now make the convolution of rate*effi to get zlim
+        """
+        return nsn,err_nsn, zz
 
     def zlim(self, data, color_cut=0.04, zmin=0.01, zmax=0.8, dz=0.01, frac=0.95, plot=False):
         """
@@ -257,25 +260,25 @@ class SN_zlimit:
 
         # get thr rates here
 
-        rateInterp, rateInterp_err = self.getSNRate(data)
+        nsn_from_rate, nsn_err_from_rate,zz = self.getSNRate(data,zmin,zmax,dz)
 
-        nsn_cum = np.cumsum(effiInterp(zplot)*rateInterp(zplot))
+        nsn_cum = np.cumsum(effiInterp(zz)*nsn_from_rate)
         nsn_cum_err = []
-        for i in range(len(zplot)):
-            siga = effiInterp_err(zplot[:i+1])*rateInterp(zplot[:i+1])
-            sigb = effiInterp(zplot[:i+1])*rateInterp_err(zplot[:i+1])
+        for i in range(len(zz)):
+            siga = effiInterp_err(zz[:i+1])*nsn_from_rate[:i+1]
+            sigb = effiInterp(zz[:i+1])*nsn_err_from_rate[:i+1]
             nsn_cum_err.append(np.cumsum(
                 np.sqrt(np.sum(siga**2 + sigb**2))).item())
 
         if nsn_cum[-1] >= 1.e-5:
             nsn_cum_norm = nsn_cum/nsn_cum[-1]  # normalize
             nsn_cum_norm_err = nsn_cum_err/nsn_cum[-1]  # normalize
-            zlim = interp1d(nsn_cum_norm, zplot,
+            zlim = interp1d(nsn_cum_norm, zz,
                             bounds_error=False, fill_value=-1.)
             zlim_plus = interp1d(nsn_cum_norm+nsn_cum_norm_err,
-                                 zplot, bounds_error=False, fill_value=-1.)
+                                 zz, bounds_error=False, fill_value=-1.)
             zlim_minus = interp1d(
-                nsn_cum_norm-nsn_cum_norm_err, zplot, bounds_error=False, fill_value=-1.)
+                nsn_cum_norm-nsn_cum_norm_err, zz, bounds_error=False, fill_value=-1.)
             zlimit = zlim(frac)
             zlimit_minus = zlim_plus(frac)
             zlimit_plus = zlim_minus(frac)
@@ -294,7 +297,7 @@ class SN_zlimit:
                              'zlim_plus': [np.round(zlimit_plus, 2)],
                              'zlim_minus': [np.round(zlimit_minus, 2)]})
 
-    def nsn(self, data, zlimits, color_cut=0.04, zmin=0.01, dz=0.01, plot=False):
+    def nsn(self, data, zlimits, color_cut=0.04, zmin=0.01, dz=0.005, plot=False):
         """
         Method to estimate the number of supernovae corresponding with z<= zlim
         The principle of the measurement is to convolve the observing efficiency curve
@@ -335,14 +338,13 @@ class SN_zlimit:
 
             # get the rates here
 
-            rateInterp, rateInterp_err = self.getSNRate(data)
+            nsn_from_rate, nsn_err_from_rate, zz = self.getSNRate(data,zmin,zmax,dz)
 
-            nsn_cum = np.cumsum(effiInterp(
-                zplot)*rateInterp(zplot)/np.sqrt(dz))
+            nsn_cum = np.cumsum(effiInterp(zz)*nsn_from_rate)
             nsn_cum_err = []
-            for i in range(len(zplot)):
-                siga = effiInterp_err(zplot[:i+1])*rateInterp(zplot[:i+1])
-                sigb = effiInterp(zplot[:i+1])*rateInterp_err(zplot[:i+1])
+            for i in range(len(zz)):
+                siga = effiInterp_err(zz[:i+1])*nsn_from_rate[:i+1]
+                sigb = effiInterp(zz[:i+1])*nsn_err_from_rate[:i+1]
                 nsn_cum_err.append(np.cumsum(
                     np.sqrt(np.sum(siga**2 + sigb**2))).item())
 
@@ -442,9 +444,9 @@ class NSN_zlim:
         sn = sn.groupby(tomerge).apply(lambda x: nSN(x)).reset_index()
 
         N = len(data)
-        p = np.sum(sn['nsn_zlim'])/N
+        p = np.sum(sn['nsn_zlim_noccut'])/N
 
-        print(sn, np.sum(sn['nsn_zlim']), N, np.sqrt(N*p*(1.-p)))
+        print('finally',sn, np.sum(sn['nsn_zlim_noccut']), N, np.sqrt(N*p*(1.-p)))
 
 
 def pixels(grp):
@@ -467,7 +469,10 @@ def nSN(grp, sigmaC=0.04):
     idx &= grp['z'] <= grp['zlim']
     sel = grp[idx]
 
+    ido = grp['z'] <= grp['zlim']
+    print(grp.name, len(grp[ido]))
     return pd.DataFrame({'nsn_zlim': [len(sel)],
+                         'nsn_zlim_noccut':[len(grp[ido])],
                          'nsn_tot': [len(sela)],
                          'zlim': [grp['zlim'].median()]})
 
@@ -486,7 +491,8 @@ def zlim(grp, sigmaC=0.04):
 
 
 mainDir = '/media/philippe/LSSTStorage/DD_new'
-mainDir = '/home/philippe/LSST/DD_Full_Simu_Fit'
+#mainDir = '/home/philippe/LSST/DD_Full_Simu_Fit'
+mainDir = '/home/philippe/LSST/DD'
 # mainDir = '/sps/lsst/users/gris/DD'
 fitDir = '{}/Fit'.format(mainDir)
 # fitDir = 'OutputFit'
@@ -516,7 +522,9 @@ print('final resu', np.median(zlims_faint['zlim']))
 
 # load all types of SN
 allSN = SN(fitDir, dbName, fieldNames, 'allSN')
-SN_nSN_all = SN_zlimit(faintSN, summary)
+print('eee',allSN[['x1','color']])
+
+SN_nSN_all = SN_zlimit(allSN, summary)
 # estimate the number of supernovae
 nsn = NSN_zlim(allSN, zlims_faint)
 
@@ -524,6 +532,7 @@ nsn_zlim = SN_nSN_all(listNames=['fieldName', 'season', 'pixRA',
                                  'pixDec', 'healpixID'],
                       what='nsn', zlims=zlims_faint)
 
+print('go west',nsn_zlim)
 print(nsn_zlim['nsn'].sum())
 
 print(test)
