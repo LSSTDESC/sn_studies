@@ -9,6 +9,7 @@ import sncosmo
 from sn_tools.sn_telescope import Telescope
 import astropy.units as u
 import multiprocessing
+from optparse import OptionParser
 
 
 def plotLC(table, time_display=10):
@@ -118,7 +119,7 @@ def load_deprecated(dbDir, dbName, fieldName, runType, inum, prefix):
 def load(dbDir,dbName,prefix,prodid,inum,nproc=8):
 
     fis = get_files(dbDir,dbName,prefix,prodid,inum)
-    print('number of files',len(fis))
+    print('number of files',len(fis),fis)
 
     nz = len(fis)
     t = np.linspace(0, nz,nproc+1, dtype='int')
@@ -153,8 +154,10 @@ def load(dbDir,dbName,prefix,prodid,inum,nproc=8):
 
 def loopRead(filist,j=0, output_q=None):
 
+    print('loopRead',filist)
     res = loopStack(filist, objtype='astropyTable')
     
+    print('done',j)
     if output_q is not None:
         return output_q.put({j: res})
     else:
@@ -167,6 +170,7 @@ def get_files(dbDir,dbName,prefix,prodid,inum):
     path = '{}/{}/{}_{}_{}.hdf5'.format(dbDir,
                                             dbName, prefix,prodid,inum)
 
+    print('looking for',path)
     fis = glob.glob(path)
     return fis
 
@@ -251,33 +255,30 @@ def select(lc, daymax, snrmin=1.):
     # print(len(selb),len(select),nlc_bef,nlc_aft)
     select = Table(selb)
     """
+parser = OptionParser()
+
+parser.add_option("--dbName", type="str", default='baseline_v1.5_10yrs',
+                  help="db name [%default]")
+parser.add_option("--dirSimu", type="str",
+                  default='/sps/lsst/users/gris/Simulations_sncosmo', help="simulation main dir [%default]")
+parser.add_option("--dirFit", type="str",
+                  default='/sps/lsst/users/gris/Simulations_sncosmo/Fit', help="fit main dir [%default]")
+parser.add_option("--prodid", type="str",
+                  default='simulation_SN_Ia_baseline_v1.5_10yrs_64_WFD_simulation_0_*_*_-1.0_-1.0_frompixels_*_*', help="production Id to process [%default]")
+
+opts, args = parser.parse_args()
 
 
-dbDir = '/sps/lsst/users/gris/DD'
-dbDir = '/sps/lsst/users/gris/Simulations_for_proposal_new_sncosmo_IIP'
-dirSimu = '{}/Simu'.format(dbDir)
-dirSimu=dbDir
-#dirFit = '{}_new/Fit'.format(dbDir)
-#dirFit = 'OutputFit'
-dbName = 'descddf_v1.5_10yrs'
-dbName = 'baseline_v1.4_10yrs'
-fieldName = 'ELAIS'
-runType = 'allSN'
+res = load(opts.dirSimu, opts.dbName, 'Simu',opts.prodid,'*',nproc=1)
+print(len(np.unique(res['healpixID'])),res[['sn_type', 'sn_model','sn_version']],res.columns)
 
+print(res[['sn_type','season','season_length','SNID','index_hdf5']])
 
-prodid = 'simulation_baseline_v1.4_10yrs_64_WFD_simulation_0_*_*_-1.0_-1.0_frompixels_-1_-1'
-
-"""
-prodid = 'DD_{}_{}_error_model_{}'.format(dbName,fieldName,runType)
-"""
-
-res = load(dirSimu, dbName, 'Simu',prodid,'*')
-print(len(np.unique(res['healpixID'])),res[['sn_type', 'sn_model']])
-
-plotHist(res, var='z')
+plotHist(res,var='z')
 
 #plotHist(res, var='x1')
 #plotHist(res, var='color')
+
 
 
 print(res.columns)
@@ -290,10 +291,11 @@ plt.show()
 n_SN = 0
 
 for io in range(1, 8):
-    res = load(dirSimu, dbName, 'Simu',prodid,io) 
+    res = load(opts.dirSimu, opts.dbName, 'Simu',opts.prodid,io) 
     res['index_hdf5'] = res['index_hdf5'].str.decode('utf-8')
     # print(res.columns)
     lcName = get_files(dirSimu, dbName, 'LC',prodid,io)[0]
+    print('hello',lcName)
     #fitName = get_files(dirFit, dbName, fieldName, runType, io, 'Fit')
     #print('oo', lcName, len(res))
     #fitlc = loopStack(fitName, objtype='astropyTable')
@@ -306,11 +308,12 @@ for io in range(1, 8):
         #lc['zpsys'] = lc['zpsys'].str.decode('utf-8')
         lc.convert_bytestring_to_unicode()
         #print(lc.meta, len(lc))
+        print(lc.meta)
         nlc_bef, nlc_aft, nbands = select(lc, lc.meta['daymax'], snrmin=1.)
         if passed(nlc_bef, nlc_aft, nbands, 4, 10, 3):
             # print('passed')
             n_SN += 1
         # plotLC(lc)
         # break
-    #break
+    break
 print('number of SN', n_SN)
