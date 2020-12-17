@@ -60,7 +60,7 @@ class SN_zlimit:
 
     def __init__(self, sn_tot, summary, min_rf_phase_qual=-15., max_rf_phase_qual=30.):
 
-        self.rateSN = SN_Rate(H0=70., Om0=0.25,
+        self.rateSN = SN_Rate(H0=70., Om0=0.3,
                               min_rf_phase=min_rf_phase_qual, max_rf_phase=max_rf_phase_qual)
 
         self.summary = np.load(summary, allow_pickle=True)
@@ -500,7 +500,7 @@ def zlim(grp, sigmaC=0.04):
 mainDir = '/media/philippe/LSSTStorage/DD_new'
 mainDir = '/home/philippe/LSST/DD_Full_Simu_Fit'
 #mainDir = '/home/philippe/LSST/DD'
-# mainDir = '/sps/lsst/users/gris/DD'
+mainDir = '/sps/lsst/users/gris/DD'
 fitDir = '{}/Fit'.format(mainDir)
 # fitDir = 'OutputFit'
 simuDir = '{}/Simu'.format(mainDir)
