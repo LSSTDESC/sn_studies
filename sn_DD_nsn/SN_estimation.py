@@ -8,9 +8,9 @@ import pandas as pd
 from sn_tools.sn_rate import SN_Rate
 from scipy.interpolate import interp1d
 from optparse import OptionParser
+import multiprocessing
 
-
-def SN(fitDir, dbName, fieldNames, SNtype):
+def SN(fitDir, dbName, fieldNames, SNtype,nproc=4):
     """
     Method to load files in pandas df
 
@@ -24,6 +24,8 @@ def SN(fitDir, dbName, fieldNames, SNtype):
      list of the fields to consider
     SNtype: str
      type of SN to consider
+    nproc: int
+      number of procs to use (default: 4)
 
     Returns
     -------
@@ -31,7 +33,39 @@ def SN(fitDir, dbName, fieldNames, SNtype):
 
 
     """
+    nfields = int(len(fieldNames))
+        
+    if nfields <= nproc:
+        nproc = nfields
 
+    tabpix = np.linspace(0, nfields, nproc+1, dtype='int')
+    result_queue = multiprocessing.Queue()
+    nmulti = len(tabpix)-1
+
+    print('there man',tabpix,nmulti)
+    for j in range(nmulti):
+        ida = tabpix[j]
+        idb = tabpix[j+1]
+        
+        p = multiprocessing.Process(name='Subprocess-'+str(j), target=SN_fields, args=(fitDir, dbName,fieldNames[ida:idb], SNtype, j, result_queue))
+
+        p.start()
+
+    # get the results
+    resultdict = {}
+    for i in range(nmulti):
+        resultdict.update(result_queue.get())
+
+    for p in multiprocessing.active_children():
+        p.join()
+
+    restot = pd.DataFrame()
+    # gather the results
+    for key, vals in resultdict.items():
+        restot = pd.concat((restot, vals), sort=False)
+    return restot
+
+    
     dfSN = pd.DataFrame()
     for field in fieldNames:
         search_path = '{}/{}/*{}*{}*.hdf5'.format(
@@ -45,7 +79,47 @@ def SN(fitDir, dbName, fieldNames, SNtype):
 
     return dfSN
 
+def SN_fields(fitDir, dbName, fields, SNtype,j=0, output_q=None):
+    """
+    Method to load files in pandas df
 
+    Parameters
+    ----------
+    firDir: str
+     location dir of the files to load
+    dbName: str
+      OS name to process
+    fieldNames: list(str)
+     list of the fields to consider
+    SNtype: str
+     type of SN to consider
+    j: int
+      proc number in multiproc (default: 0)
+    output_q: multiprocessing queue
+      output queue for multiprocessing (default: None)
+
+    Returns
+    -------
+    pandas df of the data
+
+
+    """
+    out_fi = pd.DataFrame()
+
+    for field in fields:
+        search_path = '{}/{}/*{}*{}*.hdf5'.format(
+            fitDir, dbName, field, SNtype)
+        fis = glob.glob(search_path)
+        print('result files', fis, search_path)
+        out = loopStack(fis, objtype='astropyTable').to_pandas()
+        out['fieldName'] = field
+        out_fi = pd.concat((out_fi,out))
+        
+    if output_q is not None:
+        output_q.put({j: out_fi})
+    else:
+        return out_fi
+     
 class SN_zlimit:
     """
     class to estimate observing efficiencies vs redshift
@@ -66,17 +140,16 @@ class SN_zlimit:
 
         self.summary = np.load(summary, allow_pickle=True)
         self.sn_tot = sn_tot
-
+        
     def __call__(self, color_cut=0.04,
                  listNames=['fieldName', 'season', 'pixRA',
                             'pixDec', 'healpixID', 'x1', 'color'],
-                 what='zlims', zlims=None):
+                 what='zlims', zlims=None, nproc=4):
         """
         Method estimating efficiency vs z for a sigma_color cut
+
         Parameters
         ---------------
-        sn_tot: pandas df
-         data used to estimate efficiencies
         color_cut: float, opt
          color selection cut (default: 0.04)
         listNames: list(str)
@@ -103,6 +176,46 @@ class SN_zlimit:
         """
 
         sndf = pd.DataFrame(self.sn_tot)
+        # use the multiprocessing depending on fieldNames
+
+        fieldNames = np.unique(self.sn_tot['fieldName'])
+        nfields = int(len(fieldNames))
+        
+        if nfields <= nproc:
+            nproc = nfields
+
+        tabpix = np.linspace(0, nfields, nproc+1, dtype='int')
+        result_queue = multiprocessing.Queue()
+        nmulti = len(tabpix)-1
+
+        print('there man',tabpix,nmulti)
+        for j in range(nmulti):
+            ida = tabpix[j]
+            idb = tabpix[j+1]
+
+            idx = sndf['fieldName'].isin(fieldNames[ida:idb])
+            p = multiprocessing.Process(name='Subprocess-'+str(j), target=self.process_fields, args=(
+                sndf[idx], color_cut,listNames,what, zlims, j, result_queue))
+
+            p.start()
+
+        # get the results
+        resultdict = {}
+        for i in range(nmulti):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        restot = pd.DataFrame()
+        # gather the results
+        for key, vals in resultdict.items():
+            restot = pd.concat((restot, vals), sort=False)
+        return restot
+        
+        
+        
+        sndf = pd.DataFrame(self.sn_tot)
 
         print(sndf.columns)
 
@@ -125,6 +238,65 @@ class SN_zlimit:
 
         return resu
 
+    def process_fields(self,sndf,color_cut=0.04,
+                      listNames=['fieldName', 'season', 'pixRA',
+                                 'pixDec', 'healpixID', 'x1', 'color'],
+                       what='zlims',zlims=None,
+                      j=0, output_q=None):
+        """
+        Method estimating efficiency vs z for a sigma_color cut
+        Parameters
+        ---------------
+        sndf: pandas df
+         data used to estimate efficiencies
+        color_cut: float, opt
+         color selection cut (default: 0.04)
+        listNames: list(str)
+          list of column to be used for the groupby apply
+          (default: ['fieldName', 'season', 'pixRA',
+                            'pixDec', 'healpixID', 'x1', 'color'])
+        what: str, opt
+           what to compute (default: zlims)
+        zlims: pandas df
+          redshift limie values (default: None)
+        j: int
+          proc number (default: 0)
+        output_q: multiprocessing_queue
+          output_queue for multiprocessing
+
+        Returns
+        ----------
+        effi: pandas df with the following cols:
+        season: season
+        pixRA: RA of the pixel
+        pixDec: Dec of the pixel
+        healpixID: pixel ID
+        x1: SN stretch
+        color: SN color
+        z: redshift
+        effi: efficiency
+        effi_err: efficiency error (binomial)
+        """
+
+        resu = None
+        if what == 'zlims':
+            print(listNames)
+            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
+                lambda x: self.zlim(x, color_cut)).reset_index(level=list(range(len(listNames))))
+        if what == 'nsn':
+            """
+            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
+                lambda x: self.nsn(x, zlims, color_cut)).reset_index(level=list(range(len(listNames))))
+            """
+            print('listNames', listNames)
+            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
+                lambda x: self.nsn(x, zlims, color_cut)).reset_index()
+            
+        if output_q is not None:
+            output_q.put({j: resu})
+        else:
+            return resu
+    
     def effiObsdf(self, data, color_cut=0.04, zmin=0.025, zmax=0.8, dz=0.05):
         """
         Method to estimate observing efficiencies for supernovae
@@ -538,12 +710,15 @@ parser.add_option("--dbName", type="str",
                   default='descddf_v1.5_10yrs', help="db name [%default]")
 parser.add_option("--fieldNames", type=str, default='COSMOS,CDFS,XMM-LSS,ELAIS,ADFS1,ADFS2',
                   help="fieldNames [%default]")
+parser.add_option("--nproc", type=int, default=8,
+                  help="number of proc to use for multiprocessing[%default]")
 
 opts, args = parser.parse_args()
 
 mainDir = opts.mainDir
 dbName = opts.dbName
 fieldNames = opts.fieldNames.split(',')
+nproc = opts.nproc
 
 fitDir = '{}/Fit'.format(mainDir)
 # fitDir = 'OutputFit'
@@ -554,9 +729,8 @@ allSN = pd.DataFrame()
 zlimit = None
 
 summary = 'DD_Summary_{}.npy'.format(dbName)
-# get faintSN
-
-faintSN = SN(fitDir, dbName, fieldNames, 'faintSN')
+# get faintSN data
+faintSN = SN(fitDir, dbName, fieldNames, 'faintSN',nproc=nproc)
 
 # estimate the redshift limits for faint SN
 SN_zlims_faint = SN_zlimit(faintSN, summary)
@@ -565,20 +739,19 @@ zlims_faint = SN_zlims_faint()
 
 print(zlims_faint)
 
-
 print('zlimit faint', zlims_faint.groupby(['fieldName'])['zlim'].median())
 
 # load all types of SN
-allSN = SN(fitDir, dbName, fieldNames, 'allSN')
+allSN = SN(fitDir, dbName, fieldNames, 'allSN',nproc=nproc)
 print('eee', allSN[['x1', 'color']])
 
 SN_nSN_all = SN_zlimit(allSN, summary)
 # estimate the number of supernovae
-nsn = NSN_zlim(allSN, zlims_faint)
+#nsn = NSN_zlim(allSN, zlims_faint)
 
 nsn_zlim = SN_nSN_all(listNames=['fieldName', 'season', 'pixRA',
                                  'pixDec', 'healpixID'],
-                      what='nsn', zlims=zlims_faint)
+                      what='nsn', zlims=zlims_faint,nproc=nproc)
 
 print('go west', nsn_zlim)
 print(nsn_zlim.groupby(['fieldName'])['nsn'].sum())
