@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from sn_tools.sn_rate import SN_Rate
 from scipy.interpolate import interp1d
+from optparse import OptionParser
 
 
 def SN(fitDir, dbName, fieldNames, SNtype):
@@ -36,7 +37,7 @@ def SN(fitDir, dbName, fieldNames, SNtype):
         search_path = '{}/{}/*{}*{}*.hdf5'.format(
             fitDir, dbName, field, SNtype)
         fis = glob.glob(search_path)
-        print('aooou', fis, search_path)
+        print('result files', fis, search_path)
         out = loopStack(fis, objtype='astropyTable').to_pandas()
         out['fieldName'] = field
         # idx = out['Cov_colorcolor'] >= 1.e-5
@@ -105,11 +106,12 @@ class SN_zlimit:
 
         print(sndf.columns)
 
-        #groups = sndf.groupby(listNames)
+        # groups = sndf.groupby(listNames)
 
         # estimating zlims
         resu = None
         if what == 'zlims':
+            print(listNames)
             resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
                 lambda x: self.zlim(x, color_cut)).reset_index(level=list(range(len(listNames))))
         if what == 'nsn':
@@ -198,7 +200,7 @@ class SN_zlimit:
 
         Returns
         -------
-        nsn_rate: 
+        nsn_rate:
         nsn_err_from_rate
 
         """
@@ -207,7 +209,10 @@ class SN_zlimit:
         idx = self.summary['fieldName'] == data.name[0]
         idx &= self.summary['healpixID'] == data.name[4]
         idx &= self.summary['season'] == data.name[1]
-        season_length = self.summary[idx]['season_length'].item()
+
+        season_length = 0.
+        if len(self.summary[idx]) > 0:
+            season_length = self.summary[idx]['season_length'].item()
 
         # estimate the rates and nsn vs z
         zz, rate, err_rate, nsn, err_nsn = self.rateSN(zmin=zmin,
@@ -326,7 +331,9 @@ class SN_zlimit:
         idx &= zlimits['season'] == data.name[1]
         idx &= zlimits['healpixID'] == data.name[4]
 
-        zmax = zlimits[idx]['zlim'].item()
+        zmax = 0.
+        if len(zlimits[idx]) > 0:
+            zmax = zlimits[idx]['zlim'].item()
 
         if zmax > 0.01:
             zplot = list(np.arange(zmin, zmax, dz))
@@ -447,13 +454,39 @@ class NSN_zlim:
         tomerge = ['fieldName', 'season', 'pixRA', 'pixDec', 'healpixID']
         sn = data.merge(zlims, left_on=tomerge, right_on=tomerge)
 
+        nsn_simu = data.groupby(
+            ['fieldName']).size().to_frame('N').reset_index()
+
+        print('allo', nsn_simu)
         sn = sn.groupby(tomerge).apply(lambda x: nSN(x)).reset_index()
 
-        N = len(data)
-        p = np.sum(sn['nsn_zlim_noccut'])/N
+        nsn_sum = sn.groupby(['fieldName']).apply(
+            lambda x: self.nsn_summary(x, nsn_simu)).reset_index()
 
-        print('finally', sn, np.sum(
-            sn['nsn_zlim_noccut']), N, np.sqrt(N*p*(1.-p)))
+        print(nsn_sum)
+
+    def nsn_summary(self, grp, nsn_simu):
+        """
+        Method to estimate the number of sn for a given group
+
+        Parameters
+        ---------------
+        grp: pandas df group
+         data to process
+
+        Returns
+        -----------
+
+
+        """
+
+        idx = nsn_simu['fieldName'] == grp.name
+        N = nsn_simu[idx]['N'].values.item()
+        p = np.sum(grp['nsn_zlim_noccut'])/N
+        print('ici', grp.name, N)
+        return pd.DataFrame({'nsn': [np.sum(grp['nsn_zlim_noccut'])],
+                             'err_nsn': [np.sqrt(N*p*(1.-p))],
+                             'nsn_simu': [N]})
 
 
 def pixels(grp):
@@ -497,17 +530,25 @@ def zlim(grp, sigmaC=0.04):
     return pd.DataFrame({'zlim': [zl]})
 
 
-mainDir = '/media/philippe/LSSTStorage/DD_new'
-mainDir = '/home/philippe/LSST/DD_Full_Simu_Fit'
-#mainDir = '/home/philippe/LSST/DD'
-mainDir = '/sps/lsst/users/gris/DD'
+parser = OptionParser()
+
+parser.add_option("--mainDir", type="str", default='/home/philippe/LSST/DD_Full_Simu_Fit',
+                  help="main loc dir of the files (mainDir/Fit) [%default]")
+parser.add_option("--dbName", type="str",
+                  default='descddf_v1.5_10yrs', help="db name [%default]")
+parser.add_option("--fieldNames", type=str, default='COSMOS,CDFS,XMM-LSS,ELAIS,ADFS1,ADFS2',
+                  help="fieldNames [%default]")
+
+opts, args = parser.parse_args()
+
+mainDir = opts.mainDir
+dbName = opts.dbName
+fieldNames = opts.fieldNames.split(',')
+
 fitDir = '{}/Fit'.format(mainDir)
 # fitDir = 'OutputFit'
 simuDir = '{}/Simu'.format(mainDir)
 
-dbName = 'descddf_v1.5_10yrs'
-fieldNames = ['COSMOS', 'CDFS', 'XMM-LSS', 'ELAIS', 'ADFS1', 'ADFS2']
-fieldNames = ['COSMOS']
 
 allSN = pd.DataFrame()
 zlimit = None
@@ -517,7 +558,7 @@ summary = 'DD_Summary_{}.npy'.format(dbName)
 
 faintSN = SN(fitDir, dbName, fieldNames, 'faintSN')
 
-# estimate the redshift limits
+# estimate the redshift limits for faint SN
 SN_zlims_faint = SN_zlimit(faintSN, summary)
 
 zlims_faint = SN_zlims_faint()
@@ -525,7 +566,7 @@ zlims_faint = SN_zlims_faint()
 print(zlims_faint)
 
 
-print('final resu', np.median(zlims_faint['zlim']))
+print('zlimit faint', zlims_faint.groupby(['fieldName'])['zlim'].median())
 
 # load all types of SN
 allSN = SN(fitDir, dbName, fieldNames, 'allSN')
@@ -540,39 +581,8 @@ nsn_zlim = SN_nSN_all(listNames=['fieldName', 'season', 'pixRA',
                       what='nsn', zlims=zlims_faint)
 
 print('go west', nsn_zlim)
-print(nsn_zlim['nsn'].sum())
+print(nsn_zlim.groupby(['fieldName'])['nsn'].sum())
 
-print(test)
+outName = 'nSN_zlim_DD_{}.npy'.format(dbName)
 
-zlimit = faintSN.groupby(
-    ['healpixID', 'fieldName', 'season']).apply(lambda x: zlim(x))
-
-print(np.median(zlimit['zlim']))
-
-print(test)
-allSN = SN(fitDir, dbName, fieldNames, 'allSN')
-print(allSN.groupby(['fieldName', 'season']).apply(lambda x: pixels(x)))
-allSN = allSN.merge(zlimit, left_on=['fieldName', 'season'], right_on=[
-    'fieldName', 'season'])
-
-sumSN = allSN.groupby(['healpixID', 'fieldName', 'season']
-                      ).apply(lambda x: nSN(x)).reset_index()
-
-print(sumSN.groupby(['fieldName', 'season']).apply(
-    lambda x: finalNums(x)).reset_index())
-
-print(sumSN.groupby(['fieldName']).apply(
-    lambda x: finalNums(x)).reset_index())
-
-print('Total number of SN', finalNums(sumSN))
-
-"""
-tab = out['fullSN']
-
-for season in np.unique(tab['season']):
-    idx = tab['season'] == season
-    sel = tab[idx]
-    ib = zlimit
-plt.plot(tab['z'],np.sqrt(tab['Cov_colorcolor']),'ko')
-plt.show()
-"""
+np.save(outName, nsn_zlim.to_records(index=False))
