@@ -383,9 +383,11 @@ class SN_zlimit:
         idx &= self.summary['season'] == data.name[1]
 
         season_length = 0.
+        cadence = 0.
         if len(self.summary[idx]) > 0:
             season_length = self.summary[idx]['season_length'].item()
-
+            cadence = self.summary[idx]['cadence'].item()
+            
         # estimate the rates and nsn vs z
         zz, rate, err_rate, nsn, err_nsn = self.rateSN(zmin=zmin,
                                                        zmax=zmax,
@@ -402,7 +404,7 @@ class SN_zlimit:
         rateInterp_err = interp1d(zz, err_nsn, kind='linear',
                                   bounds_error=False, fill_value=0)
         """
-        return nsn, err_nsn, zz, season_length
+        return nsn, err_nsn, zz, season_length,cadence
 
     def zlim(self, data, color_cut=0.04, zmin=0.01, zmax=0.8, dz=0.01, frac=0.95, plot=False):
         """
@@ -437,7 +439,7 @@ class SN_zlimit:
 
         # get thr rates here
 
-        nsn_from_rate, nsn_err_from_rate, zz, season_length = self.getSNRate(
+        nsn_from_rate, nsn_err_from_rate, zz, season_length,cadence = self.getSNRate(
             data, zmin, zmax, dz)
 
         nsn_cum = np.cumsum(effiInterp(zz)*nsn_from_rate)
@@ -474,8 +476,9 @@ class SN_zlimit:
         return pd.DataFrame({'zlim': [np.round(zlimit, 2)],
                              'zlim_plus': [np.round(zlimit_plus, 2)],
                              'zlim_minus': [np.round(zlimit_minus, 2)],
-                             'season_length': [np.round(season_length, 2)]})
-
+                             'season_length': [np.round(season_length, 2)],
+                             'cadence': [np.round(season_length, 2)]})
+    
     def nsn(self, data, zlimits, color_cut=0.04, zmin=0.01, dz=0.005, plot=False):
         """
         Method to estimate the number of supernovae corresponding with z<= zlim
@@ -519,7 +522,7 @@ class SN_zlimit:
 
             # get the rates here
 
-            nsn_from_rate, nsn_err_from_rate, zz, season_length = self.getSNRate(
+            nsn_from_rate, nsn_err_from_rate, zz, season_length,cadence = self.getSNRate(
                 data, zmin, zmax, dz)
 
             nsn_cum = np.cumsum(effiInterp(zz)*nsn_from_rate)
@@ -536,6 +539,7 @@ class SN_zlimit:
             nsn = 0.
             nsn_err = 0.
             season_length = 0.
+            cadence = 0.
 
         if plot:
             self.plotnSN(zplot, effidf, nsn_cum)
@@ -543,6 +547,7 @@ class SN_zlimit:
         return pd.DataFrame({'nsn': [np.round(nsn, 2)],
                              'nsn_err': [np.round(nsn_err, 2)],
                              'season_length': [np.round(season_length, 2)],
+                             'cadence': [np.round(cadence, 2)],
                              'zlim': [np.round(zmax, 2)]})
 
     def plotAll(self, zplot, effidf, nsn_cum, nsn_cum_norm, nsn_cum_norm_err, frac):
@@ -758,4 +763,6 @@ print(nsn_zlim.groupby(['fieldName'])['nsn'].sum())
 
 outName = 'nSN_zlim_DD_{}.npy'.format(dbName)
 
+# add db Name in output numpy array
+nsn_zlim['dbName'] = dbName
 np.save(outName, nsn_zlim.to_records(index=False))
