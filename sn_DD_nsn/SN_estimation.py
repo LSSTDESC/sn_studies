@@ -10,7 +10,8 @@ from scipy.interpolate import interp1d
 from optparse import OptionParser
 import multiprocessing
 
-def SN(fitDir, dbName, fieldNames, SNtype,nproc=4):
+
+def SN(fitDir, dbName, fieldNames, SNtype, nproc=4):
     """
     Method to load files in pandas df
 
@@ -34,7 +35,7 @@ def SN(fitDir, dbName, fieldNames, SNtype,nproc=4):
 
     """
     nfields = int(len(fieldNames))
-        
+
     if nfields <= nproc:
         nproc = nfields
 
@@ -42,12 +43,13 @@ def SN(fitDir, dbName, fieldNames, SNtype,nproc=4):
     result_queue = multiprocessing.Queue()
     nmulti = len(tabpix)-1
 
-    print('there man',tabpix,nmulti)
+    print('there man', tabpix, nmulti)
     for j in range(nmulti):
         ida = tabpix[j]
         idb = tabpix[j+1]
-        
-        p = multiprocessing.Process(name='Subprocess-'+str(j), target=SN_fields, args=(fitDir, dbName,fieldNames[ida:idb], SNtype, j, result_queue))
+
+        p = multiprocessing.Process(name='Subprocess-'+str(j), target=SN_fields, args=(
+            fitDir, dbName, fieldNames[ida:idb], SNtype, j, result_queue))
 
         p.start()
 
@@ -65,7 +67,6 @@ def SN(fitDir, dbName, fieldNames, SNtype,nproc=4):
         restot = pd.concat((restot, vals), sort=False)
     return restot
 
-    
     dfSN = pd.DataFrame()
     for field in fieldNames:
         search_path = '{}/{}/*{}*{}*.hdf5'.format(
@@ -75,11 +76,13 @@ def SN(fitDir, dbName, fieldNames, SNtype,nproc=4):
         out = loopStack(fis, objtype='astropyTable').to_pandas()
         out['fieldName'] = field
         # idx = out['Cov_colorcolor'] >= 1.e-5
+        print('eieieie', out.columns)
         dfSN = pd.concat((dfSN, out))
 
     return dfSN
 
-def SN_fields(fitDir, dbName, fields, SNtype,j=0, output_q=None):
+
+def SN_fields(fitDir, dbName, fields, SNtype, j=0, output_q=None):
     """
     Method to load files in pandas df
 
@@ -113,13 +116,15 @@ def SN_fields(fitDir, dbName, fields, SNtype,j=0, output_q=None):
         print('result files', fis, search_path)
         out = loopStack(fis, objtype='astropyTable').to_pandas()
         out['fieldName'] = field
-        out_fi = pd.concat((out_fi,out))
-        
+        print('eieieie', out.columns)
+        out_fi = pd.concat((out_fi, out))
+
     if output_q is not None:
         output_q.put({j: out_fi})
     else:
         return out_fi
-     
+
+
 class SN_zlimit:
     """
     class to estimate observing efficiencies vs redshift
@@ -140,7 +145,7 @@ class SN_zlimit:
 
         self.summary = np.load(summary, allow_pickle=True)
         self.sn_tot = sn_tot
-        
+
     def __call__(self, color_cut=0.04,
                  listNames=['fieldName', 'season', 'pixRA',
                             'pixDec', 'healpixID', 'x1', 'color'],
@@ -180,7 +185,7 @@ class SN_zlimit:
 
         fieldNames = np.unique(self.sn_tot['fieldName'])
         nfields = int(len(fieldNames))
-        
+
         if nfields <= nproc:
             nproc = nfields
 
@@ -188,14 +193,14 @@ class SN_zlimit:
         result_queue = multiprocessing.Queue()
         nmulti = len(tabpix)-1
 
-        print('there man',tabpix,nmulti)
+        print('there man', tabpix, nmulti)
         for j in range(nmulti):
             ida = tabpix[j]
             idb = tabpix[j+1]
 
             idx = sndf['fieldName'].isin(fieldNames[ida:idb])
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=self.process_fields, args=(
-                sndf[idx], color_cut,listNames,what, zlims, j, result_queue))
+                sndf[idx], color_cut, listNames, what, zlims, j, result_queue))
 
             p.start()
 
@@ -212,9 +217,7 @@ class SN_zlimit:
         for key, vals in resultdict.items():
             restot = pd.concat((restot, vals), sort=False)
         return restot
-        
-        
-        
+
         sndf = pd.DataFrame(self.sn_tot)
 
         print(sndf.columns)
@@ -225,7 +228,7 @@ class SN_zlimit:
         resu = None
         if what == 'zlims':
             print(listNames)
-            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
+            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus', 'ebvofMW']].apply(
                 lambda x: self.zlim(x, color_cut)).reset_index(level=list(range(len(listNames))))
         if what == 'nsn':
             """
@@ -233,16 +236,16 @@ class SN_zlimit:
                 lambda x: self.nsn(x, zlims, color_cut)).reset_index(level=list(range(len(listNames))))
             """
             print('listNames', listNames)
-            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
+            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus', 'ebvofMW']].apply(
                 lambda x: self.nsn(x, zlims, color_cut)).reset_index()
 
         return resu
 
-    def process_fields(self,sndf,color_cut=0.04,
-                      listNames=['fieldName', 'season', 'pixRA',
-                                 'pixDec', 'healpixID', 'x1', 'color'],
-                       what='zlims',zlims=None,
-                      j=0, output_q=None):
+    def process_fields(self, sndf, color_cut=0.04,
+                       listNames=['fieldName', 'season', 'pixRA',
+                                  'pixDec', 'healpixID', 'x1', 'color'],
+                       what='zlims', zlims=None,
+                       j=0, output_q=None):
         """
         Method estimating efficiency vs z for a sigma_color cut
         Parameters
@@ -281,7 +284,7 @@ class SN_zlimit:
         resu = None
         if what == 'zlims':
             print(listNames)
-            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
+            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus', 'ebvofMW', ]].apply(
                 lambda x: self.zlim(x, color_cut)).reset_index(level=list(range(len(listNames))))
         if what == 'nsn':
             """
@@ -289,14 +292,14 @@ class SN_zlimit:
                 lambda x: self.nsn(x, zlims, color_cut)).reset_index(level=list(range(len(listNames))))
             """
             print('listNames', listNames)
-            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus']].apply(
+            resu = sndf.groupby(listNames)[['Cov_colorcolor', 'z', 'survey_area', 'fitstatus', 'ebvofMW']].apply(
                 lambda x: self.nsn(x, zlims, color_cut)).reset_index()
-            
+
         if output_q is not None:
             output_q.put({j: resu})
         else:
             return resu
-    
+
     def effiObsdf(self, data, color_cut=0.04, zmin=0.025, zmax=0.8, dz=0.05):
         """
         Method to estimate observing efficiencies for supernovae
@@ -384,10 +387,12 @@ class SN_zlimit:
 
         season_length = 0.
         cadence = 0.
+        ebvofMW = 0.
+        print('hhhh', data.columns)
         if len(self.summary[idx]) > 0:
             season_length = self.summary[idx]['season_length'].item()
             cadence = self.summary[idx]['cadence'].item()
-            
+            ebvofMW = data['ebvofMW'].mean()
         # estimate the rates and nsn vs z
         zz, rate, err_rate, nsn, err_nsn = self.rateSN(zmin=zmin,
                                                        zmax=zmax,
@@ -404,7 +409,7 @@ class SN_zlimit:
         rateInterp_err = interp1d(zz, err_nsn, kind='linear',
                                   bounds_error=False, fill_value=0)
         """
-        return nsn, err_nsn, zz, season_length,cadence
+        return nsn, err_nsn, zz, season_length, cadence, ebvofMW
 
     def zlim(self, data, color_cut=0.04, zmin=0.01, zmax=0.8, dz=0.01, frac=0.95, plot=False):
         """
@@ -439,7 +444,7 @@ class SN_zlimit:
 
         # get thr rates here
 
-        nsn_from_rate, nsn_err_from_rate, zz, season_length,cadence = self.getSNRate(
+        nsn_from_rate, nsn_err_from_rate, zz, season_length, cadence, ebvofMW = self.getSNRate(
             data, zmin, zmax, dz)
 
         nsn_cum = np.cumsum(effiInterp(zz)*nsn_from_rate)
@@ -477,8 +482,9 @@ class SN_zlimit:
                              'zlim_plus': [np.round(zlimit_plus, 2)],
                              'zlim_minus': [np.round(zlimit_minus, 2)],
                              'season_length': [np.round(season_length, 2)],
-                             'cadence': [np.round(season_length, 2)]})
-    
+                             'cadence': [np.round(cadence, 2)],
+                             'ebvofMW': [np.round(ebvofMW, 4)]})
+
     def nsn(self, data, zlimits, color_cut=0.04, zmin=0.01, dz=0.005, plot=False):
         """
         Method to estimate the number of supernovae corresponding with z<= zlim
@@ -522,7 +528,7 @@ class SN_zlimit:
 
             # get the rates here
 
-            nsn_from_rate, nsn_err_from_rate, zz, season_length,cadence = self.getSNRate(
+            nsn_from_rate, nsn_err_from_rate, zz, season_length, cadence, ebvofMW = self.getSNRate(
                 data, zmin, zmax, dz)
 
             nsn_cum = np.cumsum(effiInterp(zz)*nsn_from_rate)
@@ -540,6 +546,7 @@ class SN_zlimit:
             nsn_err = 0.
             season_length = 0.
             cadence = 0.
+            ebvofMW = 0.
 
         if plot:
             self.plotnSN(zplot, effidf, nsn_cum)
@@ -548,6 +555,7 @@ class SN_zlimit:
                              'nsn_err': [np.round(nsn_err, 2)],
                              'season_length': [np.round(season_length, 2)],
                              'cadence': [np.round(cadence, 2)],
+                             'ebvofMW': [np.round(ebvofMW, 4)],
                              'zlim': [np.round(zmax, 2)]})
 
     def plotAll(self, zplot, effidf, nsn_cum, nsn_cum_norm, nsn_cum_norm_err, frac):
@@ -735,7 +743,7 @@ zlimit = None
 
 summary = 'DD_Summary_{}.npy'.format(dbName)
 # get faintSN data
-faintSN = SN(fitDir, dbName, fieldNames, 'faintSN',nproc=nproc)
+faintSN = SN(fitDir, dbName, fieldNames, 'faintSN', nproc=nproc)
 
 # estimate the redshift limits for faint SN
 SN_zlims_faint = SN_zlimit(faintSN, summary)
@@ -747,7 +755,7 @@ print(zlims_faint)
 print('zlimit faint', zlims_faint.groupby(['fieldName'])['zlim'].median())
 
 # load all types of SN
-allSN = SN(fitDir, dbName, fieldNames, 'allSN',nproc=nproc)
+allSN = SN(fitDir, dbName, fieldNames, 'allSN', nproc=nproc)
 print('eee', allSN[['x1', 'color']])
 
 SN_nSN_all = SN_zlimit(allSN, summary)
@@ -756,7 +764,7 @@ SN_nSN_all = SN_zlimit(allSN, summary)
 
 nsn_zlim = SN_nSN_all(listNames=['fieldName', 'season', 'pixRA',
                                  'pixDec', 'healpixID'],
-                      what='nsn', zlims=zlims_faint,nproc=nproc)
+                      what='nsn', zlims=zlims_faint, nproc=nproc)
 
 print('go west', nsn_zlim)
 print(nsn_zlim.groupby(['fieldName'])['nsn'].sum())
