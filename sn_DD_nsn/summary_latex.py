@@ -6,7 +6,7 @@ def min_med_max(val):
     return np.min(val), np.median(val), np.max(val)
 
 
-def print_resu(fia, fieldName, selb, npixa, npixb):
+def print_resu(fia, fieldName, selb, npixa, npixb, frac_DD):
 
     cadmi, cadmed, cadmax = min_med_max(selb['cadence'])
     cadence = '{}/{}/{}'.format(
@@ -32,6 +32,9 @@ def print_resu(fia, fieldName, selb, npixa, npixb):
     if fieldName == 'CDFS':
         finalres = dbName.replace('_', '\\_')
         finalresb = dbName
+        finalres += '& {}'.format(frac_DD)
+    else:
+        finalres += '& '
 
     finalres += '& {} & {} & {} & {} & {} & {} & {} & {} \\\\'.format(fieldName,
                                                                       cadence, filter_alloc, m5, nights, season_length, int(npixa), int(npixb))
@@ -39,8 +42,8 @@ def print_resu(fia, fieldName, selb, npixa, npixb):
     # finalres += '& {} & {} & {} & {} & {}  \\\\'.format(fieldName,
     #                                                    cadence, filter_alloc, m5, nights)
 
-    finalresb += '& {} & {} & {} & {} \\\\'.format(fieldName,
-                                                   season_length, int(npixa), int(npixb))
+    # finalresb += '& {} & {} & {} & {} \\\\'.format(fieldName,
+    #                                               season_length, int(npixa), int(npixb))
     fia.write('{} \n'.format(finalres))
     #fib.write('{} \n'.format(finalresb))
 
@@ -50,11 +53,11 @@ def print_bandeau(fia):
     fia.write('\\begin{center} \n')
     fia.write('\\begin{sidewaystable}[htbp] \n')
     fia.write('\\resizebox{\\textwidth}{!}{% \n')
-    fia.write('\\begin{tabular}{ccccccccc} \n ')
+    fia.write('\\begin{tabular}{c|c|c|c|c|c|c|c|c|c} \n ')
     fia.write(
-        'Observing & Field & cadence & Nvisits & m5 & Nnights & season length & total area & effective area \\\\ \n')
+        'Observing & DD frac(\%) & Field & cadence & Nvisits & m5 & Nnights & season length & total area & effective area \\\\ \n')
     fia.write(
-        ' Strategy & & min/med/max & g/r/i/z/y & g/r/i/z/y & & [days] & [deg2] & [deg2] \\\\ \n')
+        ' Strategy &  &  & min/med/max & g/r/i/z/y & g/r/i/z/y & & [days] & [deg2] & [deg2] \\\\ \n')
 
 
 def print_bandeau_old(fia, fib):
@@ -107,10 +110,17 @@ for i in range(nfiles):
     fia[i] = open('dd_summary_{}.tex'.format(i), 'w')
     print_bandeau(fia[i])
 
+DD_gen = np.load('Nvisits.npy', allow_pickle=True)
+
 #print_bandeau(fia, fib)
 idb = 0
 icount = 0
 for dbName in dbNames:
+    # get ddfrac
+    iio = DD_gen['cadence'] == dbName
+    frac_DD = 100.*DD_gen[iio]['frac_DD'].item()
+    frac_DD = np.round(frac_DD, 1)
+
     icount += 1
     if icount > 4:
         icount = 0
@@ -129,7 +139,8 @@ for dbName in dbNames:
         idxb = sel['nights'] >= 5
         selb = sel[idxb]
         npixels_eff = len(np.unique(selb['healpixID']))
-        print_resu(fia[idb], fieldName, selb, npixels_total, npixels_eff)
+        print_resu(fia[idb], fieldName, selb,
+                   npixels_total, npixels_eff, frac_DD)
 
 
 for i in range(nfiles):
