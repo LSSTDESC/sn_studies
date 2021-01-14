@@ -47,7 +47,8 @@ class OS_Summary:
         tab = pd.DataFrame(self.load())
         print(tab.columns)
         # add a new tab here: number of visits
-        tab['Nvisits'] = tab['visitExposureTime']*tab['numExposures']/30.
+        tab['Nvisits'] = tab['visitExposureTime']/30.
+        #print('hello',tab[['exptime','numExposures','Nvisits']])
 
         npixels = len(np.unique(tab['healpixID']))
         print(npixels, len(tab))
