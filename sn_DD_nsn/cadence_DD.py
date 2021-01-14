@@ -5,7 +5,7 @@ from sn_tools.sn_obs import season as seasoncalc
 from sn_tools.sn_rate import SN_Rate
 import healpy as hp
 from optparse import OptionParser
-
+import multiprocessing
 
 class OS_Summary:
     """
@@ -46,6 +46,9 @@ class OS_Summary:
         # get the data
         tab = pd.DataFrame(self.load())
         print(tab.columns)
+        # add a new tab here: number of visits
+        tab['Nvisits'] = tab['visitExposureTime']*tab['numExposures']/30.
+
         npixels = len(np.unique(tab['healpixID']))
         print(npixels, len(tab))
 
@@ -121,7 +124,7 @@ class OS_Summary:
                     'fieldRA', 'fieldDec', 'seeingFwhmEff', 'fiveSigmaDepth', 'season']
 
         # sum for these
-        var_sum = ['visitExposureTime', 'numExposures']
+        var_sum = ['visitExposureTime', 'numExposures','Nvisits']
 
         for var in var_mean:
             dictres[var] = grp[var].mean()
@@ -130,7 +133,7 @@ class OS_Summary:
             dictres[var] = grp[var].sum()
 
         # correct for 5-sigma depth
-        dictres['fiveSigmaDepth'] += 1.25*np.log10(dictres['numExposures'])
+        dictres['fiveSigmaDepth'] += 1.25*np.log10(dictres['Nvisits'])
 
         # this has to be done to be converted in pandas df
         dictb = {}
@@ -159,8 +162,9 @@ class OS_Summary:
         for ff in np.unique(grp['filter']):
             io = grp['filter'] == ff
             sel = grp[io]
-            dictres['N_{}'.format(ff)] = [int(np.median(sel['numExposures']))]
+            dictres['N_{}'.format(ff)] = [int(np.median(sel['Nvisits']))]
             dictres['m5_{}'.format(ff)] = [np.median(sel['fiveSigmaDepth'])]
+            
 
             dictres['nights'] = [len(np.unique(grp['night']))]
 
@@ -209,31 +213,66 @@ class OS_Summary:
         # return pf.DataFrame({'nSN': nsn_sum})
         return nsn_sum[-1]
 
+def process(dbDir,dbName, fieldName,prefix, j=0, output_q=None):
+
+    finaldf = OS_Summary(dbDir,dbName, fieldName,prefix).data
+    print(finaldf.columns)
+    print(finaldf[['healpixID', 'season_length', 'nSN']])
+    print(fieldName, finaldf['nSN'].sum())
+    finaldf['fieldName'] = fieldName
+   
+ 
+    if output_q is not None:
+        return output_q.put({j: finaldf})
+    else:
+        return finaldf
 
 parser = OptionParser()
 
 parser.add_option('--dbName', type='str',
                   default='descddf_v1.5_10yrs', help='db name [%default]')
 parser.add_option('--dbDir', type='str',
-                  default='/media/philippe/LSSTStorage/ObsPixelized', help='db dir [%default]')
-parser.add_option('--fieldNames', type='str', default='COSMOS',
+                  default='/sps/lsst/users/gris/ObsPixelized_128', help='db dir [%default]')
+parser.add_option('--fieldNames', type='str', default='COSMOS,CDFS,XMM-LSS,ELAIS,ADFS1,ADFS2',
                   help=' list of fieldNames  [%default]')
 parser.add_option('--prefix', type='str',
-                  default='DD_nside_64_0.0_360.0_-1.0_-1.0', help='file name prefix [%default]')
+                  default='DD_nside_128_0.0_360.0_-1.0_-1.0', help='file name prefix [%default]')
+parser.add_option('--nside', type=int,
+                  default=128, help='healpix nside parameter [%default]')
 
 opts, args = parser.parse_args()
 
 fieldNames = opts.fieldNames.split(',')
 
-finaldf = pd.DataFrame()
-for fieldName in fieldNames:
-    res = OS_Summary(opts.dbDir, opts.dbName, fieldName, opts.prefix).data
-    print(res.columns)
-    print(res[['healpixID', 'season_length', 'nSN']])
-    print(fieldName, res['nSN'].sum())
-    res['fieldName'] = fieldName
-    finaldf = pd.concat((finaldf, res))
+finaldf = pd.DataFrame() 
 
-fName = 'DD_Summary_{}.npy'.format(opts.dbName)
 
-np.save(fName, finaldf.to_records(index=False))
+result_queue = multiprocessing.Queue()
+
+nproc = len(fieldNames)
+for j,fieldName in enumerate(fieldNames):
+    p = multiprocessing.Process(name='Subprocess-'+str(j), target=process,
+                                         args=(opts.dbDir, opts.dbName, fieldName, opts.prefix, j, result_queue))
+
+    p.start()
+
+
+resultdict = {}
+# get the results in a dict
+
+for i in range(nproc):
+    resultdict.update(result_queue.get())
+
+for p in multiprocessing.active_children():
+    p.join()
+
+restot = pd.DataFrame()
+
+# gather the results
+for key, vals in resultdict.items():
+    restot = pd.concat((restot, vals), sort=False)
+    
+
+fName = 'DD_Summary_{}_{}.npy'.format(opts.dbName,opts.nside)
+
+np.save(fName, restot.to_records(index=False))
