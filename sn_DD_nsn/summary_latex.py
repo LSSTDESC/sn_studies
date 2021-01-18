@@ -1,13 +1,43 @@
 import numpy as np
+import healpy as hp
 
 
 def min_med_max(val):
+    """
+    Function to extract min, median, max of val
 
+    Parameters
+    --------------
+    val: numpy array col
+
+    Returns
+    -----------
+    min, median, max
+
+    """
     return np.min(val), np.median(val), np.max(val)
 
 
 def print_resu(fia, fieldName, selb, npixa, npixb, frac_DD):
+    """
+    Function to print in a file some cadence results related to a field
 
+    Parameters
+    --------------
+    fia: pointer
+       file where the results will be written
+    fieldName: str
+       field to consider
+    selb: numpy array
+      array containing data to process
+    npixa: int
+      number of pixels with data for this field
+    npixb: int
+      number of pixels with usefull data in this field
+    frac_DD: float
+       DD frac for this observing strategy
+
+    """
     cadmi, cadmed, cadmax = min_med_max(selb['cadence'])
     cadence = '{}/{}/{}'.format(
         int(cadmi), int(cadmed), int(cadmax))
@@ -49,7 +79,15 @@ def print_resu(fia, fieldName, selb, npixa, npixb, frac_DD):
 
 
 def print_bandeau(fia):
+    """
+    Function to write necessary latex info for tables
 
+    Parameters
+    ---------------
+    fia: pointer
+      file where infos will be written.
+
+    """
     fia.write('\\begin{center} \n')
     fia.write('\\begin{sidewaystable}[htbp] \n')
     fia.write('\\resizebox{\\textwidth}{!}{% \n')
@@ -78,7 +116,15 @@ def print_bandeau_old(fia, fib):
 
 
 def print_end(fia):
+    """
+    Function to write necessary latex info for table closing
 
+    Parameters
+    ---------------
+    fia: pointer
+      file where infos will be written.
+
+    """
     fia.write('\end{tabular}} \n')
     fia.write('\end{sidewaystable} \n')
     fia.write('\end{center}')
@@ -93,6 +139,7 @@ def print_end_old(fia, fib):
     fib.write('\end{table} \n')
 
 
+# dbNames of interest here
 dbNames = ['descddf_v1.5_10yrs', 'agnddf_v1.5_10yrs',
            'baseline_v1.5_10yrs', 'daily_ddf_v1.5_10yrs',
            'ddf_heavy_v1.6_10yrs', 'ddf_heavy_nexp2_v1.6_10yrs',
@@ -102,14 +149,12 @@ nfiles = int(np.round(len(dbNames)/4))
 
 print(nfiles)
 
-fia = open('dd_summary_1.tex', 'w')
-fib = open('dd_summary_2.tex', 'w')
-
 fia = {}
 for i in range(nfiles):
     fia[i] = open('dd_summary_{}.tex'.format(i), 'w')
     print_bandeau(fia[i])
 
+# load generic infos for DD
 DD_gen = np.load('Nvisits.npy', allow_pickle=True)
 
 #print_bandeau(fia, fib)
@@ -129,8 +174,11 @@ for dbName in dbNames:
     fia[idb].write('\hline \n')
     #fib.write('\hline \n')
 
-    fullName = 'DD_Summary_{}.npy'.format(dbName)
+    nside = 128
+    pixArea = hp.nside2pixarea(nside, degrees=True)
+    fullName = 'DD_Summary_{}_128.npy'.format(dbName)
     res = np.load(fullName, allow_pickle=True)
+    total_area = 0.
     for fieldName in np.unique(res['fieldName']):
         idx = res['fieldName'] == fieldName
         sel = res[idx]
@@ -140,8 +188,9 @@ for dbName in dbNames:
         selb = sel[idxb]
         npixels_eff = len(np.unique(selb['healpixID']))
         print_resu(fia[idb], fieldName, selb,
-                   npixels_total, npixels_eff, frac_DD)
-
+                   npixels_total*pixArea, npixels_eff*pixArea, frac_DD)
+        total_area += npixels_total*pixArea
+    print(dbName, np.round(total_area, 1))
 
 for i in range(nfiles):
     print_end(fia[i])
