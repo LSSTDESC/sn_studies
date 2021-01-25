@@ -48,7 +48,8 @@ class CombiChoice:
         # getting flux frac
         idb = np.abs(self.fluxFrac['z']-z) < 1.e-8
         self.fluxFrac_z = self.fluxFrac[idb]
-
+        self.z = z
+        
         # getting the data
         tag = 'z_{}'.format(z)
         thedir = '{}/{}'.format(self.dirFile, tag)
@@ -107,7 +108,6 @@ class CombiChoice:
         # gather the results
         for key, vals in resultdict.items():
             if vals is not None:
-                print(type(vals))
                 if restot is None:
                     restot = vals
                 else:
@@ -136,7 +136,7 @@ class CombiChoice:
 
         snr = None
         for fi in fis:
-            print('loading', fi)
+            #print('loading', fi)
             tab = np.load(fi, allow_pickle=True)
             # analyzing the file here
             sel = self.anafich(tab)
@@ -199,12 +199,12 @@ class CombiChoice:
         """
 
         snr_visits = self.min_nvisits(snr.copy())
-        snr_chisq = self.min_chisq(snr.copy())
-        res = pd.concat((snr_visits, snr_chisq))
+        #snr_chisq = self.min_chisq(snr.copy())
+        #res = pd.concat((snr_visits, snr_chisq))
         # print(snr_visits.columns)
         # print(snr_chisq.columns)
 
-        return res
+        return snr_visits
 
     def min_nvisits(self, snr):
         """
@@ -220,6 +220,18 @@ class CombiChoice:
         the ten first rows with the lower nvisits
 
         """
+
+        """
+        if self.z >= 0.6:
+            idx = snr['Nvisits_i'] >= snr['Nvisits_r']
+            snr = snr[idx]
+        """
+        if self.z >= 0.65:
+            #idx = snr['Nvisits_z'] >= snr['Nvisits_i']
+            idx = snr['Nvisits_r'] <= 5.
+            idx &= snr['Nvisits_g'] <= 5.
+            snr = snr[idx]
+            
         snr = snr.sort_values(by=['Nvisits'])
         snr['min_par'] = 'visits'
         snr['min_val'] = snr['Nvisits']
