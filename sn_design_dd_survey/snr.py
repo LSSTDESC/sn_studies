@@ -309,7 +309,6 @@ class SNR_z:
             sela = Table(snr_m5[idx])
             sela['z'] = sela['z'].data.round(decimals=2)
             sela[whatx] = sela[whatx].data.round(decimals=4)
-
             snr_min = np.round(minx, 1)
             # snr_max = np.round(np.max(sela['SNR']), 1)
             snr_max = maxx
@@ -319,14 +318,15 @@ class SNR_z:
             for vl in unique(sela, keys='z'):
                 idx = np.abs(sela['z']-vl['z']) < 1.e-5
                 val = sela[idx]
-                interp = interp1d(val[whatx], val[whatz],
-                                  bounds_error=False, fill_value=0.)
-                re = interp(snr_range)
-                tabb = Table(names=[whatz])
-                tabb[whatz] = re.tolist()
-                tabb[whatx] = snr_range.tolist()
-                tabb['z'] = [vl['z']]*len(snr_range)
-                sel = vstack([sel, tabb])
+                if len(val) >= 2:
+                    interp = interp1d(val[whatx], val[whatz],
+                                      bounds_error=False, fill_value=0.)
+                    re = interp(snr_range)
+                    tabb = Table(names=[whatz])
+                    tabb[whatz] = re.tolist()
+                    tabb[whatx] = snr_range.tolist()
+                    tabb['z'] = [vl['z']]*len(snr_range)
+                    sel = vstack([sel, tabb])
 
             """
             sel['z'] = sel['z'].data.round(decimals=2)
