@@ -890,7 +890,7 @@ class SNR_z:
 
         # select only combi with less than 200 visits per night
 
-        idx = dfres['Nvisits'] <= 200
+        idx = dfres['Nvisits'] <= 300
         df_tot = dfres[idx]
 
         # print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
