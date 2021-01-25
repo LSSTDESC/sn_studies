@@ -100,7 +100,7 @@ class TemplateData:
         templateLC(self.x1, self.color, simulator, ebvofMW, bluecutoff, redcutoff,
                    error_model, zmin, zmax, zstep, self.dirTemplates, self.bands, cadences, templid)
 
-    def snr_m5(self, snrmin=1.):
+    def snr_m5(self, snrmin=1., error_model=1, bluecutoff=380., redcutoff=800.):
         """
         Method to produce SNR vs m5 files
 
@@ -110,8 +110,10 @@ class TemplateData:
           SNR min selection
 
         """
+        cutoff = cut_off(error_model, bluecutoff, redcutoff)
+        search_path = '{}/LC*{}*.hdf5'.format(self.dirTemplates, cutoff)
+        template_list = glob.glob(search_path)
 
-        template_list = glob.glob('{}/LC*.hdf5'.format(self.dirTemplates))
         for lc in template_list:
             lcName = lc.split('/')[-1]
             outName = '{}/{}'.format(self.dirSNR_m5,
