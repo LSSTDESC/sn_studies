@@ -192,8 +192,8 @@ class RedshiftLimit:
             dict_visits = dict(zip(nvisits_z['band'], nvisits_z['Nvisits']))
             dict_m5 = dict(zip(m5_values['band'], m5_values['m5_single']))
             dict_cadence = dict(zip(m5_values['band'], m5_values['cadence']))
-            zmin = np.max([0.1, z-0.2])
-            zmax = np.min([0.9, z+0.3])
+            zmin = np.max([0.3, z-0.2])
+            zmax = np.min([1., z+0.3])
             zstep = 0.05
             zlimit = self.templ_sim.process(
                 zmin, zmax, zstep, nvisits_z, m5_values)
