@@ -543,12 +543,14 @@ class SNR_z:
             nvisits = 10**((m5-m5_single)/1.25)
             # print(band, m5, type(m5),nvisits,m5_single)
             idx = m5 > 0.
-            idx &= nvisits <= 110.
+            idx &= nvisits <= 200.
             # print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
             # print(band,z,SNR[band],type(SNR[band]))
             SNR[band] = SNR[band][idx].tolist()
             if band == 'g':
                 SNR[band].append(100000.)
+            if band == 'r':
+                SNR[band].append(100000.)    
             # SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
             # SNR[band] = [SNR_min]
             """
@@ -565,7 +567,7 @@ class SNR_z:
                 SNR['z'] = [0.0]
             if z <= 0.5:
                 SNR['y'] = [0.0]
-
+            
         """
         for b in grp['band'].unique():
             SNR[b] = [20]
