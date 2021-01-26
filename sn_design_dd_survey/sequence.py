@@ -276,11 +276,11 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
     nproc: int, opt
       number of proc to use for multiprocessing (default: 8)
     """
-
-    combi = CombiChoice(fracSignalBand, dirSNR_combi)
+    dirSNR_combi_full = '{}/{}'.format(dirStudy,dirSNR_combi)
+    combi = CombiChoice(fracSignalBand, dirSNR_combi_full)
 
     resdf = pd.DataFrame()
-    snr_dirs = glob.glob('{}/*'.format(dirSNR_combi))
+    snr_dirs = glob.glob('{}/*'.format(dirSNR_combi_full))
 
     for fi in snr_dirs:
         z = (
@@ -288,6 +288,7 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
             .split('_')[-1]
         )
         z = np.round(float(z), 2)
+        
         res = combi(z, nproc)
         if res is not None:
             resdf = pd.concat((resdf, res))
