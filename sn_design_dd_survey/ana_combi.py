@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 import os
 import pandas as pd
-
+import operator
 
 class CombiChoice:
     """
@@ -86,7 +86,6 @@ class CombiChoice:
         nz = len(fis)
         t = np.linspace(0, nz, nproc+1, dtype='int')
         result_queue = multiprocessing.Queue()
-
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.loopAna,
                                          args=(fis[t[j]:t[j+1]], j, result_queue))
                  for j in range(nproc)]
@@ -171,7 +170,6 @@ class CombiChoice:
         pandas df of analyzed data
 
         """
-
         idx = tab['Nvisits'] < 100000000.
         idx &= tab['sigmaC'] >= 0.0390
         sel = pd.DataFrame(tab[idx].copy())
@@ -197,8 +195,33 @@ class CombiChoice:
           data to process
 
         """
+        sel = snr.copy()
+        sel['Delta_iz'] = np.abs(sel['Nvisits_i']-sel['Nvisits_z'])
 
-        snr_visits = self.min_nvisits(snr.copy())
+        seldict = {}
+        seldict['zmin'] = 0.6
+        seldict['cut1'] = {}
+        seldict['cut1']['var'] = 'Nvisits_r'
+        seldict['cut1']['value'] = 2
+        seldict['cut1']['op'] = operator.le
+        seldict['cut2'] = {}
+        seldict['cut2']['var'] = 'Nvisits_g'
+        seldict['cut2']['value'] = 1
+        seldict['cut2']['op'] = operator.le
+        
+        selvar = ['Nvisits','Nvisits_y','Delta_iz']
+        minparname = ['nvisits','nvisits_y','deltav_iz']
+        combi = dict(zip(selvar, minparname))
+        snr_visits = pd.DataFrame()
+        
+        for key, val in combi.items():
+            res = self.min_nvisits(sel,key,val)
+            snr_visits = pd.concat((snr_visits, res))
+        
+        for key, val in combi.items():
+            res = self.min_nvisits(sel,key,'{}_sel'.format(val),seldict)
+            snr_visits = pd.concat((snr_visits, res))
+            
         #snr_chisq = self.min_chisq(snr.copy())
         #res = pd.concat((snr_visits, snr_chisq))
         # print(snr_visits.columns)
@@ -206,7 +229,7 @@ class CombiChoice:
 
         return snr_visits
 
-    def min_nvisits(self, snr):
+    def min_nvisits(self, snr,mincol='Nvisits', minpar='nvisits',select={}):
         """
         Method the combi with the lower number of visits
 
@@ -214,6 +237,10 @@ class CombiChoice:
         ---------------
         snr: pandas df
           data to process
+        mincol: str
+          the colname where the min has to apply (default: Nvisits)
+        select: dict
+           selection (contrain) to apply (default: {})
 
         Returns
         -----------
@@ -221,20 +248,23 @@ class CombiChoice:
 
         """
 
-        """
+        if select:
+            if self.z >= select['zmin']:
+                idx = True
+                for key, vals in select.items():
+                    if key != 'zmin':
+                        idx &= vals['op'](snr[vals['var']],vals['value'])
+                snr = snr[idx]
+        """    
         if self.z >= 0.6:
-            idx = snr['Nvisits_i'] >= snr['Nvisits_r']
+            idx = snr['Nvisits_z'] >= 10.
+            idx &= snr['Nvisits_r'] <= 2.
+            idx &= snr['Nvisits_g'] <= 1.
             snr = snr[idx]
         """
-        if self.z >= 0.65:
-            #idx = snr['Nvisits_z'] >= snr['Nvisits_i']
-            idx = snr['Nvisits_r'] <= 5.
-            idx &= snr['Nvisits_g'] <= 5.
-            snr = snr[idx]
-            
-        snr = snr.sort_values(by=['Nvisits'])
-        snr['min_par'] = 'visits'
-        snr['min_val'] = snr['Nvisits']
+        snr = snr.sort_values(by=[mincol])
+        snr['min_par'] = minpar
+        snr['min_val'] = snr[mincol]
 
         nout = np.min([len(snr), 10])
         return snr[self.colout][:nout]
