@@ -1,6 +1,6 @@
 import os
 
-def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,zmin,zmax,zstep,outDir,bands,cadence,prodid):
+def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,error_model_cut,zmin,zmax,zstep,outDir,bands,cadence,prodid):
     """
     Method used to simulate LC from Fakes
 
@@ -20,6 +20,8 @@ def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,zmin,
      red cutoff for SN
     error_model: int
       to activate error model for LC points error
+    error_model_cut: float
+     max error model flux (relative)
     fake_config: str
       reference config file to generate fakes
     zmin:float
@@ -94,6 +96,7 @@ def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,zmin,
     cmd += ' --SN_redCutoff {}'.format(redcutoff)
     cmd += ' --npixels -1'
     cmd += ' --Simulator_errorModel {}'.format(error_model)
+    cmd += ' --Simulator_errorModelCut {}'.format(error_model_cut)
     cmd += ' --SN_maxRFphase 60.'
     print(cmd)
     os.system(cmd)

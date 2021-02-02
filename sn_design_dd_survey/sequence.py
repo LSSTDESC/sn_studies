@@ -60,6 +60,7 @@ class TemplateData:
                   zmax=1.1,
                   zstep=0.01,
                   error_model=1,
+                  error_model_cut=0.1,
                   bluecutoff=380.,
                   redcutoff=800.,
                   ebvofMW=0.,
@@ -77,7 +78,9 @@ class TemplateData:
         zstep: float, opt
           step redshift value (default:0.01)
         error_model: int, opt
-           error model for the simulation (default:1)
+           error model for the simulation (default:1)   
+        error_model_cut: float
+         max error model flux (relative)(default: 0.1)
         bluecutoff: float, opt
           blue cutoff if error_model=0 (default:380)
         redcutoff: float, opt
@@ -98,7 +101,8 @@ class TemplateData:
         cadences = dict(zip(self.bands, [cadence]*len(self.bands)))
         # generate template here
         templateLC(self.x1, self.color, simulator, ebvofMW, bluecutoff, redcutoff,
-                   error_model, zmin, zmax, zstep, self.dirTemplates, self.bands, cadences, templid)
+                   error_model, error_model_cut,
+                   zmin, zmax, zstep, self.dirTemplates, self.bands, cadences, templid)
 
     def snr_m5(self, snrmin=1., error_model=1, bluecutoff=380., redcutoff=800.):
         """
