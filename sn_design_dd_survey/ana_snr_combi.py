@@ -4,9 +4,9 @@ import pandas as pd
 from matplotlib.ticker import MaxNLocator
 import glob
 from optparse import OptionParser
+import multiprocessing
 
-
-def load(thedir, snrfi):
+def load_multiple(thedir,snrfi,nproc=8):
     """
     Method to load and concatenate a set of npy files
 
@@ -14,8 +14,10 @@ def load(thedir, snrfi):
     ---------------
     thedir: str
        location directory of the file
-    snrfi: str
+    fi: str
        name of the files (without npy extension)
+    nproc: int, opt
+      number of procs to use (default: 8)
 
     Returns
     -----------
@@ -24,7 +26,51 @@ def load(thedir, snrfi):
 
     """
     fi = glob.glob('{}/{}_*.npy'.format(thedir, snrfi))
+    nfis= len(fi)
+    batch = np.linspace(0, nfis, nproc+1, dtype='int')
+    result_queue = multiprocessing.Queue()
 
+    for i in range(nproc):
+
+        ida = batch[i]
+        idb = batch[i+1]
+            
+        p = multiprocessing.Process(name='Subprocess', target=load, args=(fi[ida:idb], i, result_queue))
+        p.start()
+
+    resultdict = {}
+        
+    for j in range(nproc):
+        resultdict.update(result_queue.get())
+
+    for p in multiprocessing.active_children():
+        p.join()
+
+    df = pd.DataFrame()
+    for j in range(nproc):
+        df = pd.concat((df,resultdict[j]))
+
+    return df
+    
+def load(fi,j=0, output_q=None):
+    """
+    Method to load and concatenate a set of npy files
+
+    Parameters
+    ---------------
+    fi: list
+       list of files to process
+    j: int, opt
+       multiproc number (default: 0)
+    output_q: multiprocessing queue
+
+    Returns
+    -----------
+    tab: pandas df
+      data
+
+    """
+  
     snrtot = None
     for ff in fi:
         rr = np.load(ff, allow_pickle=True)
@@ -35,7 +81,10 @@ def load(thedir, snrfi):
 
     tab = pd.DataFrame(snrtot)
 
-    return tab
+    if output_q is not None:
+        output_q.put({j: tab})
+    else:
+        return tab
 
 
 def plotb(tab, whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$'):
@@ -145,13 +194,14 @@ parser.add_option("--color", type=float, default=0.2,
 
 opts, args = parser.parse_args()
 
-dirFiles = opts.dirFiles
 z = np.round(opts.z, 2)
+dirFiles = '{}/z_{}'.format(opts.dirFiles,z)
+
 x1 = np.round(opts.x1, 1)
 color = np.round(opts.color, 1)
 snrfi = 'SNR_combi_{}_{}_{}'.format(x1, color, z)
 
-tab = load(dirFiles, snrfi)
+tab = load_multiple(dirFiles, snrfi)
 
 
 print('hello', tab.filter(regex='sigma').columns)
