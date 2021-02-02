@@ -87,7 +87,7 @@ def load(fi,j=0, output_q=None):
         return tab
 
 
-def plotb(tab, whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$'):
+def plotb(tab, z,whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$'):
     """
     Method to plot results of SNR combis
 
@@ -109,7 +109,7 @@ def plotb(tab, whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$'):
     cadence = '1 day$^{-1}$'
     sigmaC = '$\sigma_{color} \sim 0.04\pm1\%$'
     fig.suptitle('($x_1,color$)=({},{}) - z={} \n cadence={} - {}'.format(-2.0,
-                                                                          0.2, 0.7, cadence, sigmaC), fontsize=fontsize)
+                                                                          0.2, z, cadence, sigmaC), fontsize=fontsize)
     ax.plot(tab['{}_i'.format(whata)],
             tab['{}_i'.format(whatb)], 'y.', label='$i$-band')
     ax.plot(tab['{}_z'.format(whata)],
@@ -134,7 +134,7 @@ def plotb(tab, whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$'):
     """
 
 
-def plot(tab, whata='Nvisits', whatb='Nvisits', legx='$N_{visits}$', legy='$N_{visits}^{band}$'):
+def plot(tab, z,whata='Nvisits', whatb='Nvisits', legx='$N_{visits}$', legy='$N_{visits}^{band}$'):
     """
     Method to plot results of SNR combis
 
@@ -158,7 +158,7 @@ def plot(tab, whata='Nvisits', whatb='Nvisits', legx='$N_{visits}$', legy='$N_{v
     cadence = '1 day$^{-1}$'
     sigmaC = '$\sigma_{color} \sim 0.04\pm1\%$'
     fig.suptitle('($x_1,color$)=({},{}) - z={} \n cadence={} - {}'.format(-2.0,
-                                                                          0.2, 0.7, cadence, sigmaC), fontsize=fontsize)
+                                                                          0.2, z, cadence, sigmaC), fontsize=fontsize)
     ax.plot(tab[whata], tab['{}_i'.format(whatb)], 'y.', label='$i$-band')
     ax.plot(tab[whata], tab['{}_z'.format(whatb)], 'r.', label='$z$-band')
     ax.plot(tab[whata], tab['{}_y'.format(whatb)], 'm.', label='$y$-band')
@@ -210,11 +210,11 @@ tab = tab.rename(columns={'SNRcalc_tot': 'SNRcalc'})
 print(tab.columns)
 
 
-plot(tab)
+plot(tab,z)
 
 # plot(tab, whata='Nvisits', whatb='SNRcalc', legy='$SNR_{band}$')
 
-plot(tab, whata='sigmaC', whatb='SNRcalc', legx='sigmaC', legy='$SNR_{band}$')
-plotb(tab, 'SNRcalc', 'Nvisits')
+plot(tab, z,whata='sigmaC', whatb='SNRcalc', legx='sigmaC', legy='$SNR_{band}$')
+plotb(tab,z, 'SNRcalc', 'Nvisits')
 
 plt.show()
