@@ -69,8 +69,8 @@ class AnaMedValues:
         fontsize = 12
         figres, axres = plt.subplots()
         for band in dfgrp['filter'].unique():
-            dffilt = dfgrp[dfgrp['filter'] == band]
-            dffilt_season = dfgrp_season[dfgrp_season['filter'] == band]
+            dffilt = dfgrp[dfgrp['filter'] == band].to_records(index=False)
+            dffilt_season = dfgrp_season[dfgrp_season['filter'] == band].to_records(index=False)
             """ this is to plot per band and display all seasons - check dispersion
             fig, ax = plt.subplots()
             fig.suptitle('{} band'.format(band))

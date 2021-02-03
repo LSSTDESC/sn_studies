@@ -182,9 +182,10 @@ class SignalBand:
         figtitle = '(x1,color)=({},{})'.format(x1, color)
         fig.suptitle(figtitle)
 
+        sel = sel.sort_values(by=['z'])
         for b in sel['band'].unique():
             ik = sel['band'] == b
-            selb = sel[ik]
+            selb = sel.loc[ik].to_records(index=False)
             ax.plot(selb['z'], selb['fracfluxband'],
                     color=filtercolors[b], label=b)
 
