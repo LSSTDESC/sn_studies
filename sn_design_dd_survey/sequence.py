@@ -5,12 +5,13 @@ from sn_design_dd_survey.templateLC import templateLC
 from sn_design_dd_survey.snr_m5 import SNR_m5
 from sn_design_dd_survey.ana_combi import CombiChoice, Visits_Cadence
 from sn_design_dd_survey.zlim_visits import RedshiftLimit
+from sn_tools.sn_io import loopStack
 import numpy as np
 import glob
 import pandas as pd
 import time
 import multiprocessing
-
+from astropy.table import Table, vstack
 
 def cut_off(error_model, bluecutoff, redcutoff):
 
@@ -46,7 +47,7 @@ class TemplateData:
                  bands='grizy',
                  dirStudy='dd_design',
                  dirTemplates='Templates',
-                 dirSNR_m5='SNR_m5'):
+                 dirSNR_m5='SNR_m5',):
 
         self.x1 = x1
         self.color = color
@@ -60,7 +61,6 @@ class TemplateData:
                   zmax=1.1,
                   zstep=0.01,
                   error_model=1,
-                  error_model_cut=0.1,
                   bluecutoff=380.,
                   redcutoff=800.,
                   ebvofMW=0.,
@@ -79,8 +79,6 @@ class TemplateData:
           step redshift value (default:0.01)
         error_model: int, opt
            error model for the simulation (default:1)   
-        error_model_cut: float
-         max error model flux (relative)(default: 0.1)
         bluecutoff: float, opt
           blue cutoff if error_model=0 (default:380)
         redcutoff: float, opt
@@ -99,12 +97,12 @@ class TemplateData:
             simulator, self.x1, self.color, ebvofMW, cutof, int(cadence))
         fname = 'LC_{}_0.hdf5'.format(templid)
         cadences = dict(zip(self.bands, [cadence]*len(self.bands)))
-        # generate template here
+        # generate template here - no error model cut
         templateLC(self.x1, self.color, simulator, ebvofMW, bluecutoff, redcutoff,
-                   error_model, error_model_cut,
+                   error_model, -1.0,
                    zmin, zmax, zstep, self.dirTemplates, self.bands, cadences, templid)
 
-    def snr_m5(self, snrmin=1., error_model=1, bluecutoff=380., redcutoff=800.):
+    def snr_m5(self, snrmin=1., error_model=1, error_model_cut=-1.0,bluecutoff=380., redcutoff=800.):
         """
         Method to produce SNR vs m5 files
 
@@ -112,10 +110,17 @@ class TemplateData:
         --------------
         snrmin: float, opt
           SNR min selection
-
+        error_model: int
+          to activate or not the error moedl (default: 1)
+        error_model_cut: float
+         max error model flux (relative)(default: 0.1)       
+        bluecutoff: float, opt
+          blue cutoff if error_model=0 (default:380)
+        redcutoff: float, opt
+          red cutoff if error_model=0 (default: 800.)
         """
         cutoff = cut_off(error_model, bluecutoff, redcutoff)
-        search_path = '{}/LC*{}*.hdf5'.format(self.dirTemplates, cutoff)
+        search_path = '{}/LC*{}*_{}.hdf5'.format(self.dirTemplates, cutoff,np.round(error_model_cut,2))
         template_list = glob.glob(search_path)
 
         for lc in template_list:
@@ -137,6 +142,7 @@ class DD_SNR:
                  dirSNR_opti='SNR_opti',
                  cadence=3,
                  error_model=1,
+                 error_model_cut=-1.0,
                  bluecutoff=380., redcutoff=800.,
                  ebvofMW=0.,
                  sn_simulator='sn_fast',
@@ -155,6 +161,7 @@ class DD_SNR:
         # get data
         self.data = self.grab_data(cadence,
                                    error_model,
+                                   error_model_cut,
                                    bluecutoff, redcutoff,
                                    ebvofMW,
                                    sn_simulator,
@@ -163,6 +170,7 @@ class DD_SNR:
 
     def grab_data(self, cadence,
                   error_model,
+                  error_model_cut,
                   bluecutoff, redcutoff,
                   ebvofMW,
                   sn_simulator,
@@ -176,6 +184,8 @@ class DD_SNR:
           cadence of the data to get (
         error_model: int, opt
            error model for the simulation (default:1)
+        error_model_cut: float, opt
+          selection error model cut with which templates have been generated (default: -1.)
         bluecutoff: float, opt
           blue cutoff if error_model=0 (default:380)
         redcutoff: float, opt
@@ -190,8 +200,8 @@ class DD_SNR:
         """
 
         self.cutoff = cut_off(error_model, bluecutoff, redcutoff)
-        lcName = 'LC_{}_{}_{}_ebv_{}_{}_cad_{}_0.hdf5'.format(
-            sn_simulator, self.x1, self.color, ebvofMW, self.cutoff, int(cadence))
+        lcName = 'LC_{}_{}_{}_ebv_{}_{}_cad_{}_0_{}.hdf5'.format(
+            sn_simulator, self.x1, self.color, ebvofMW, self.cutoff, int(cadence),np.round(error_model_cut,2))
         m5Name = '{}/{}'.format(self.dirm5, m5_file)
         return Data(self.dirTemplates, lcName, m5Name, self.x1, self.color, bluecutoff, redcutoff, error_model, bands=self.bands)
 
@@ -587,3 +597,103 @@ class TransformData:
         resu = np.rec.fromrecords([r], names=names)
 
         return pd.DataFrame(resu)
+
+class Select_errormodel:
+    """
+    class to filter LC points according to errormodel cut
+
+    Parameters
+    --------------
+    theDir: str
+      location dir of the files
+    simuName: str
+      name of the simu file
+    errormodelCut: float, opt
+      max value of lc[fluxerr_model]/lc[flux]
+
+    """
+    def __init__(self,theDir, simuName,errormodelCut=-1.0):
+        
+        self.errormodelCut = errormodelCut
+        lcName = simuName.replace('Simu', 'LC')
+        lcName_new = lcName.replace('.hdf5','_{}.hdf5'.format(np.round(errormodelCut,2)))
+        
+        simus = loopStack(['{}/{}'.format(theDir, simuName)], 'astropyTable')
+
+        outName = '{}/{}'.format(theDir,lcName_new)
+
+        print('new name',outName)
+        for simu in simus:
+            lc = Table.read('{}/{}'.format(theDir, lcName),
+                            path='lc_{}'.format(simu['index_hdf5']))
+            lc_sel = self.select(lc)
+            lc_sel.write(outName,'lc_{}'.format(simu['index_hdf5']),append=True,compression=True)
+            
+    def select(self,lc):
+        """
+        function to select LCs
+
+        Parameters
+        ---------------
+        lc: astropy table
+          lc to consider
+
+        Returns
+        ----------
+        lc with filtered values
+       """
+
+        if self.errormodelCut <0.:
+            return lc
+    
+        #first: select iyz bands
+    
+        bands_to_keep = []
+
+        lc_sel = Table()
+        for b in 'izy':
+            bands_to_keep.append('LSST::{}'.format(b))
+            idx = lc['band'] == 'LSST::{}'.format(b)
+            lc_sel = vstack([lc_sel, lc[idx]])
+        
+        # now apply selection on g band for z>=0.25
+        sel_g = self.sel_band(lc,'g',0.25)
+    
+        # now apply selection on r band for z>=0.6
+        sel_r = self.sel_band(lc,'r',0.6)
+
+        lc_sel = vstack([lc_sel,sel_g])
+        lc_sel = vstack([lc_sel,sel_r])
+
+        return lc_sel
+
+    def sel_band(self,tab,b,zref):
+        """
+        Method to performe selections depending on the band and z
+        
+        Parameters
+        ---------------
+        tab: astropy table
+          lc to process
+        b: str
+          band to consider
+        zref: float
+           redshift below wiwh the cut wwill be applied
+
+        Returns
+        ----------
+        selected lc
+        """
+
+        idx  = tab['band']=='LSST::{}'.format(b)
+        sel = tab[idx]
+        if len(sel) == 0:
+            return Table()
+
+        if sel.meta['z'] >= zref:
+            idb = sel['fluxerr_model']/sel['flux'] <= self.errormodelCut
+            selb = sel[idb]
+            return selb
+
+        return sel
+    
