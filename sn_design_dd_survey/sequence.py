@@ -13,6 +13,7 @@ import time
 import multiprocessing
 from astropy.table import Table, vstack
 
+
 def cut_off(error_model, bluecutoff, redcutoff):
 
     cuto = '{}_{}'.format(bluecutoff, redcutoff)
@@ -78,7 +79,7 @@ class TemplateData:
         zstep: float, opt
           step redshift value (default:0.01)
         error_model: int, opt
-           error model for the simulation (default:1)   
+           error model for the simulation (default:1)
         bluecutoff: float, opt
           blue cutoff if error_model=0 (default:380)
         redcutoff: float, opt
@@ -102,7 +103,7 @@ class TemplateData:
                    error_model, -1.0,
                    zmin, zmax, zstep, self.dirTemplates, self.bands, cadences, templid)
 
-    def snr_m5(self, snrmin=1., error_model=1, error_model_cut=-1.0,bluecutoff=380., redcutoff=800.):
+    def snr_m5(self, snrmin=1., error_model=1, error_model_cut=-1.0, bluecutoff=380., redcutoff=800.):
         """
         Method to produce SNR vs m5 files
 
@@ -113,14 +114,15 @@ class TemplateData:
         error_model: int
           to activate or not the error moedl (default: 1)
         error_model_cut: float
-         max error model flux (relative)(default: 0.1)       
+         max error model flux (relative)(default: 0.1)
         bluecutoff: float, opt
           blue cutoff if error_model=0 (default:380)
         redcutoff: float, opt
           red cutoff if error_model=0 (default: 800.)
         """
         cutoff = cut_off(error_model, bluecutoff, redcutoff)
-        search_path = '{}/LC*{}*_{}.hdf5'.format(self.dirTemplates, cutoff,np.round(error_model_cut,2))
+        search_path = '{}/LC*{}*_{}.hdf5'.format(
+            self.dirTemplates, cutoff, np.round(error_model_cut, 2))
         template_list = glob.glob(search_path)
 
         for lc in template_list:
@@ -201,7 +203,7 @@ class DD_SNR:
 
         self.cutoff = cut_off(error_model, bluecutoff, redcutoff)
         lcName = 'LC_{}_{}_{}_ebv_{}_{}_cad_{}_0_{}.hdf5'.format(
-            sn_simulator, self.x1, self.color, ebvofMW, self.cutoff, int(cadence),np.round(error_model_cut,2))
+            sn_simulator, self.x1, self.color, ebvofMW, self.cutoff, int(cadence), np.round(error_model_cut, 2))
         m5Name = '{}/{}'.format(self.dirm5, m5_file)
         return Data(self.dirTemplates, lcName, m5Name, self.x1, self.color, bluecutoff, redcutoff, error_model, bands=self.bands)
 
@@ -290,7 +292,7 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
     nproc: int, opt
       number of proc to use for multiprocessing (default: 8)
     """
-    dirSNR_combi_full = '{}/{}'.format(dirStudy,dirSNR_combi)
+    dirSNR_combi_full = '{}/{}'.format(dirStudy, dirSNR_combi)
     combi = CombiChoice(fracSignalBand, dirSNR_combi_full)
 
     resdf = pd.DataFrame()
@@ -302,7 +304,7 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
             .split('_')[-1]
         )
         z = np.round(float(z), 2)
-        
+
         res = combi(z, nproc)
         if res is not None:
             resdf = pd.concat((resdf, res))
@@ -402,6 +404,7 @@ class Nvisits_Cadence_Fields:
                  dirStudy='dd_design',
                  dirTemplates='Templates',
                  dirNvisits='Nvisits_z',
+                 dirm5='m5_files',
                  Nvisits_z_med='Nvisits_med',
                  outName='Nvisits_z_fields'):
         """
@@ -430,6 +433,8 @@ class Nvisits_Cadence_Fields:
           subdir of the templates (default: Templates)
         dirNvisits: str, opt
           subdir with the reference file to estimate the results (default: Nvisits_z)
+        dirm5: str, opt
+          subdir with reference m5 files (default: m5_files)
         Nvisits_z: str, opt
           fileName with reference number of visits vs cadence (default: Nvisits_z_med.npy)
         outName: str, opt
@@ -445,6 +450,7 @@ class Nvisits_Cadence_Fields:
         self.sn_simulator = sn_simulator
         self.dirTemplates = dirTemplates
         self.dirStudy = dirStudy
+        self.dirm5 = dirm5
 
         # load nvisits_ref
         self.nvisits_ref = np.load(
@@ -507,7 +513,9 @@ class Nvisits_Cadence_Fields:
                             bluecutoff=self.bluecutoff, redcutoff=self.redcutoff,
                             ebvofMW=self.ebvofMW,
                             sn_simulator=self.sn_simulator,
-                            lcDir='{}/{}'.format(self.dirStudy, self.dirTemplates))
+                            lcDir='{}/{}'.format(self.dirStudy,
+                                                 self.dirTemplates),
+                            m5_dir='{}/{}'.format(self.dirStudy, self.dirm5))
 
         idx = np.abs(self.nvisits_ref['cadence']-cadence) < 1.e-5
         sela = self.nvisits_ref[idx]
@@ -598,6 +606,7 @@ class TransformData:
 
         return pd.DataFrame(resu)
 
+
 class Select_errormodel:
     """
     class to filter LC points according to errormodel cut
@@ -612,24 +621,27 @@ class Select_errormodel:
       max value of lc[fluxerr_model]/lc[flux]
 
     """
-    def __init__(self,theDir, simuName,errormodelCut=-1.0):
-        
+
+    def __init__(self, theDir, simuName, errormodelCut=-1.0):
+
         self.errormodelCut = errormodelCut
         lcName = simuName.replace('Simu', 'LC')
-        lcName_new = lcName.replace('.hdf5','_{}.hdf5'.format(np.round(errormodelCut,2)))
-        
+        lcName_new = lcName.replace(
+            '.hdf5', '_{}.hdf5'.format(np.round(errormodelCut, 2)))
+
         simus = loopStack(['{}/{}'.format(theDir, simuName)], 'astropyTable')
 
-        outName = '{}/{}'.format(theDir,lcName_new)
+        outName = '{}/{}'.format(theDir, lcName_new)
 
-        print('new name',outName)
+        print('new name', outName)
         for simu in simus:
             lc = Table.read('{}/{}'.format(theDir, lcName),
                             path='lc_{}'.format(simu['index_hdf5']))
             lc_sel = self.select(lc)
-            lc_sel.write(outName,'lc_{}'.format(simu['index_hdf5']),append=True,compression=True)
-            
-    def select(self,lc):
+            lc_sel.write(outName, 'lc_{}'.format(
+                simu['index_hdf5']), append=True, compression=True)
+
+    def select(self, lc):
         """
         function to select LCs
 
@@ -643,11 +655,11 @@ class Select_errormodel:
         lc with filtered values
        """
 
-        if self.errormodelCut <0.:
+        if self.errormodelCut < 0.:
             return lc
-    
-        #first: select iyz bands
-    
+
+        # first: select iyz bands
+
         bands_to_keep = []
 
         lc_sel = Table()
@@ -655,22 +667,22 @@ class Select_errormodel:
             bands_to_keep.append('LSST::{}'.format(b))
             idx = lc['band'] == 'LSST::{}'.format(b)
             lc_sel = vstack([lc_sel, lc[idx]])
-        
-        # now apply selection on g band for z>=0.25
-        sel_g = self.sel_band(lc,'g',0.25)
-    
-        # now apply selection on r band for z>=0.6
-        sel_r = self.sel_band(lc,'r',0.6)
 
-        lc_sel = vstack([lc_sel,sel_g])
-        lc_sel = vstack([lc_sel,sel_r])
+        # now apply selection on g band for z>=0.25
+        sel_g = self.sel_band(lc, 'g', 0.25)
+
+        # now apply selection on r band for z>=0.6
+        sel_r = self.sel_band(lc, 'r', 0.6)
+
+        lc_sel = vstack([lc_sel, sel_g])
+        lc_sel = vstack([lc_sel, sel_r])
 
         return lc_sel
 
-    def sel_band(self,tab,b,zref):
+    def sel_band(self, tab, b, zref):
         """
         Method to performe selections depending on the band and z
-        
+
         Parameters
         ---------------
         tab: astropy table
@@ -685,7 +697,7 @@ class Select_errormodel:
         selected lc
         """
 
-        idx  = tab['band']=='LSST::{}'.format(b)
+        idx = tab['band'] == 'LSST::{}'.format(b)
         sel = tab[idx]
         if len(sel) == 0:
             return Table()
@@ -696,4 +708,3 @@ class Select_errormodel:
             return selb
 
         return sel
-    
