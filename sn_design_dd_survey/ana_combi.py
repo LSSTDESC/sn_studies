@@ -198,17 +198,24 @@ class CombiChoice:
         """
         sel = snr.copy()
         sel['Delta_iz'] = np.abs(sel['Nvisits_i']-sel['Nvisits_z'])
+        sel['Delta_SNR'] = sel['SNRcalc_z']-sel['SNRcalc_i']
 
         seldict = {}
         seldict['zmin'] = 0.6
         seldict['cut1'] = {}
-        seldict['cut1']['var'] = 'SNR_r'
+        seldict['cut1']['var'] = 'SNRcalc_r'
         seldict['cut1']['value'] = 5.
         seldict['cut1']['op'] = operator.le
         seldict['cut2'] = {}
-        seldict['cut2']['var'] = 'SNR_g'
+        seldict['cut2']['var'] = 'SNRcalc_g'
         seldict['cut2']['value'] = 5.
         seldict['cut2']['op'] = operator.le
+
+        seldictb = seldict.copy()
+        seldictb['cut3'] = {}
+        seldictb['cut3']['var'] = 'Delta_SNR'
+        seldictb['cut3']['value'] = 0.
+        seldictb['cut3']['op'] = operator.ge
 
         selvar = ['Nvisits', 'Nvisits_y', 'Delta_iz']
         minparname = ['nvisits', 'nvisits_y', 'deltav_iz']
@@ -216,11 +223,11 @@ class CombiChoice:
         snr_visits = pd.DataFrame()
 
         for key, val in combi.items():
-            res = self.min_nvisits(sel, key, val)
+            res = self.min_nvisits(sel, key, val, seldict)
             snr_visits = pd.concat((snr_visits, res))
 
         for key, val in combi.items():
-            res = self.min_nvisits(sel, key, '{}_sel'.format(val), seldict)
+            res = self.min_nvisits(sel, key, '{}_sel'.format(val), seldictb)
             snr_visits = pd.concat((snr_visits, res))
 
         #snr_chisq = self.min_chisq(snr.copy())
@@ -256,14 +263,18 @@ class CombiChoice:
                     if key != 'zmin':
                         idx &= vals['op'](snr[vals['var']], vals['value'])
                 snr = snr[idx]
-        """    
+        """
         if self.z >= 0.6:
             idx = snr['Nvisits_z'] >= 10.
             idx &= snr['Nvisits_r'] <= 2.
             idx &= snr['Nvisits_g'] <= 1.
             snr = snr[idx]
         """
-        snr = snr.sort_values(by=[mincol])
+
+        if mincol != 'Nvisits':
+            snr = snr.sort_values(by=['Nvisits', mincol])
+        else:
+            snr = snr.sort_values(by=[mincol])
         snr['min_par'] = minpar
         snr['min_val'] = snr[mincol]
 

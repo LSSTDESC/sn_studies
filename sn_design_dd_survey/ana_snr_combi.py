@@ -5,6 +5,44 @@ from matplotlib.ticker import MaxNLocator
 import glob
 from optparse import OptionParser
 import multiprocessing
+import operator
+
+
+def min_nvisits(z, snr, colout, mincol='Nvisits', minpar='nvisits', select={}):
+    """
+    Method the combi with the lower number of visits
+
+    Parameters
+    ---------------
+    snr: pandas df
+    data to process
+    mincol: str
+    the colname where the min has to apply (default: Nvisits)
+    select: dict
+    selection (contrain) to apply (default: {})
+
+    Returns
+    -----------
+    the ten first rows with the lower nvisits
+
+    """
+
+    if select:
+        if z >= select['zmin']:
+            idx = True
+            for key, vals in select.items():
+                if key != 'zmin':
+                    idx &= vals['op'](snr[vals['var']], vals['value'])
+                    snr = snr[idx]
+    if mincol != 'Nvisits':
+        snr = snr.sort_values(by=['Nvisits', mincol])
+    else:
+        snr = snr.sort_values(by=[mincol])
+    snr['min_par'] = minpar
+    snr['min_val'] = snr[mincol]
+
+    nout = np.min([len(snr), 10])
+    return snr[colout][:nout]
 
 
 def load_multiple(thedir, snrfi, nproc=8):
@@ -238,7 +276,7 @@ print('hello', tab.filter(regex='sigma').columns)
 tab = tab.sort_values(by=['Nvisits'])
 idx = tab['Nvisits'] < 100000000.
 #idx &= tab['sigmaC'] >= 0.0390
-sel = tab[idx]
+snr = tab[idx]
 """
 sel = sel.rename(columns={'SNRcalc_tot': 'SNRcalc'})
 print(sel.columns)
@@ -266,11 +304,34 @@ colout = ['sigmaC', 'Nvisits',
           'Nvisits_r', 'SNRcalc_r', 'Nvisits_i', 'SNRcalc_i', 'Nvisits_z',
                        'SNRcalc_z', 'Nvisits_y', 'SNRcalc_y']
 
-idx = sel['SNRcalc_z'] >= 20.
-idx &= sel['SNRcalc_i'] >= 10.
-idx &= sel['SNRcalc_r'] <= 5.
-sel = sel[idx]
-sel['min_par'] = 'Nvisits'
-sel['min_val'] = sel['Nvisits']
-nout = np.min([len(sel), 10])
-print(sel[colout][:nout])
+sel = snr.copy()
+
+sel['Delta_iz'] = np.abs(sel['Nvisits_i']-sel['Nvisits_z'])
+sel['Delta_SNR'] = sel['SNRcalc_z']-sel['SNRcalc_i']
+
+seldict = {}
+seldict['zmin'] = 0.6
+seldict['cut1'] = {}
+seldict['cut1']['var'] = 'SNRcalc_r'
+seldict['cut1']['value'] = 5.
+seldict['cut1']['op'] = operator.le
+seldict['cut2'] = {}
+seldict['cut2']['var'] = 'SNRcalc_g'
+seldict['cut2']['value'] = 5.
+seldict['cut2']['op'] = operator.le
+
+seldictb = seldict.copy()
+seldictb['cut3'] = {}
+seldictb['cut3']['var'] = 'Delta_SNR'
+seldictb['cut3']['value'] = 0.
+seldictb['cut3']['op'] = operator.ge
+
+selvar = ['Nvisits', 'Nvisits_y', 'Delta_iz']
+minparname = ['nvisits', 'nvisits_y', 'deltav_iz']
+combi = dict(zip(selvar, minparname))
+snr_visits = pd.DataFrame()
+
+for key, val in combi.items():
+    res = min_nvisits(z, sel, colout, key, val, seldict)
+    print('parameter', key)
+    print(res)
