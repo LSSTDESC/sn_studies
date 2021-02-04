@@ -30,6 +30,7 @@ class SNR:
         data: pandas df
         data to process (LC)
         SNR_par: dict
+         parameters for SNR combi
         SNR_m5_file: str
            SNR vs m5 file name
         SNR_min: float
@@ -164,8 +165,8 @@ class SNR_z:
          directory where SNR files will be located
         data: pandas df
          data to process (LC)
-        SNR_par: dict
-          SNR parameters
+        SNR_par: dict,opt
+          SNR parameters for combi (default:{})
         SNR_m5_file: str, opt
           SNR vs m5 file name
         SNR_min: float
@@ -550,7 +551,7 @@ class SNR_z:
             if band == 'g':
                 SNR[band].append(100000.)
             if band == 'r':
-                SNR[band].append(100000.)    
+                SNR[band].append(100000.)
             # SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
             # SNR[band] = [SNR_min]
             """
@@ -567,7 +568,7 @@ class SNR_z:
                 SNR['z'] = [0.0]
             if z <= 0.5:
                 SNR['y'] = [0.0]
-            
+
         """
         for b in grp['band'].unique():
             SNR[b] = [20]
@@ -892,12 +893,12 @@ class SNR_z:
 
         # select only combi with less than 200 visits per night
 
-        idx = dfres['Nvisits'] <= 300
+        idx = dfres['Nvisits'] <= 500
         df_tot = dfres[idx]
 
         # print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
         idx = df_tot['sigmaC'] >= 0.039
-        idx = df_tot['sigmaC'] < 0.041
+        idx = df_tot['sigmaC'] < 0.042
 
         if self.verbose:
             print('sigmaC_cut', len(df_tot[idx]))

@@ -6,6 +6,7 @@ import os
 import pandas as pd
 import operator
 
+
 class CombiChoice:
     """
     class to choose SNR combination
@@ -33,7 +34,7 @@ class CombiChoice:
                        'Nvisits_r', 'SNRcalc_r', 'Nvisits_i', 'SNRcalc_i', 'Nvisits_z',
                        'SNRcalc_z', 'Nvisits_y', 'SNRcalc_y', 'min_par', 'min_val']
 
-    def __call__(self, z,nproc=8):
+    def __call__(self, z, nproc=8):
         """
         Method to choose a SNR combi
 
@@ -49,12 +50,12 @@ class CombiChoice:
         idb = np.abs(self.fluxFrac['z']-z) < 1.e-8
         self.fluxFrac_z = self.fluxFrac[idb]
         self.z = z
-        
+
         # getting the data
         tag = 'z_{}'.format(z)
         thedir = '{}/{}'.format(self.dirFile, tag)
 
-        snr_opti = self.multiAna(thedir,nproc)
+        snr_opti = self.multiAna(thedir, nproc)
 
         if snr_opti is None:
             return None
@@ -171,7 +172,7 @@ class CombiChoice:
 
         """
         idx = tab['Nvisits'] < 100000000.
-        idx &= tab['sigmaC'] >= 0.0390
+        #idx &= tab['sigmaC'] >= 0.0390
         sel = pd.DataFrame(tab[idx].copy())
         if len(sel) <= 0:
             return None
@@ -201,27 +202,27 @@ class CombiChoice:
         seldict = {}
         seldict['zmin'] = 0.6
         seldict['cut1'] = {}
-        seldict['cut1']['var'] = 'Nvisits_r'
-        seldict['cut1']['value'] = 2
+        seldict['cut1']['var'] = 'SNR_r'
+        seldict['cut1']['value'] = 5.
         seldict['cut1']['op'] = operator.le
         seldict['cut2'] = {}
-        seldict['cut2']['var'] = 'Nvisits_g'
-        seldict['cut2']['value'] = 1
+        seldict['cut2']['var'] = 'SNR_g'
+        seldict['cut2']['value'] = 5.
         seldict['cut2']['op'] = operator.le
-        
-        selvar = ['Nvisits','Nvisits_y','Delta_iz']
-        minparname = ['nvisits','nvisits_y','deltav_iz']
+
+        selvar = ['Nvisits', 'Nvisits_y', 'Delta_iz']
+        minparname = ['nvisits', 'nvisits_y', 'deltav_iz']
         combi = dict(zip(selvar, minparname))
         snr_visits = pd.DataFrame()
-        
+
         for key, val in combi.items():
-            res = self.min_nvisits(sel,key,val)
+            res = self.min_nvisits(sel, key, val)
             snr_visits = pd.concat((snr_visits, res))
-        
+
         for key, val in combi.items():
-            res = self.min_nvisits(sel,key,'{}_sel'.format(val),seldict)
+            res = self.min_nvisits(sel, key, '{}_sel'.format(val), seldict)
             snr_visits = pd.concat((snr_visits, res))
-            
+
         #snr_chisq = self.min_chisq(snr.copy())
         #res = pd.concat((snr_visits, snr_chisq))
         # print(snr_visits.columns)
@@ -229,7 +230,7 @@ class CombiChoice:
 
         return snr_visits
 
-    def min_nvisits(self, snr,mincol='Nvisits', minpar='nvisits',select={}):
+    def min_nvisits(self, snr, mincol='Nvisits', minpar='nvisits', select={}):
         """
         Method the combi with the lower number of visits
 
@@ -253,7 +254,7 @@ class CombiChoice:
                 idx = True
                 for key, vals in select.items():
                     if key != 'zmin':
-                        idx &= vals['op'](snr[vals['var']],vals['value'])
+                        idx &= vals['op'](snr[vals['var']], vals['value'])
                 snr = snr[idx]
         """    
         if self.z >= 0.6:

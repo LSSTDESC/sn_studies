@@ -6,7 +6,8 @@ import glob
 from optparse import OptionParser
 import multiprocessing
 
-def load_multiple(thedir,snrfi,nproc=8):
+
+def load_multiple(thedir, snrfi, nproc=8):
     """
     Method to load and concatenate a set of npy files
 
@@ -26,7 +27,7 @@ def load_multiple(thedir,snrfi,nproc=8):
 
     """
     fi = glob.glob('{}/{}_*.npy'.format(thedir, snrfi))
-    nfis= len(fi)
+    nfis = len(fi)
     batch = np.linspace(0, nfis, nproc+1, dtype='int')
     result_queue = multiprocessing.Queue()
 
@@ -34,12 +35,13 @@ def load_multiple(thedir,snrfi,nproc=8):
 
         ida = batch[i]
         idb = batch[i+1]
-            
-        p = multiprocessing.Process(name='Subprocess', target=load, args=(fi[ida:idb], i, result_queue))
+
+        p = multiprocessing.Process(
+            name='Subprocess', target=load, args=(fi[ida:idb], i, result_queue))
         p.start()
 
     resultdict = {}
-        
+
     for j in range(nproc):
         resultdict.update(result_queue.get())
 
@@ -48,11 +50,12 @@ def load_multiple(thedir,snrfi,nproc=8):
 
     df = pd.DataFrame()
     for j in range(nproc):
-        df = pd.concat((df,resultdict[j]))
+        df = pd.concat((df, resultdict[j]))
 
     return df
-    
-def load(fi,j=0, output_q=None):
+
+
+def load(fi, j=0, output_q=None):
     """
     Method to load and concatenate a set of npy files
 
@@ -70,7 +73,7 @@ def load(fi,j=0, output_q=None):
       data
 
     """
-  
+
     snrtot = None
     for ff in fi:
         rr = np.load(ff, allow_pickle=True)
@@ -87,7 +90,8 @@ def load(fi,j=0, output_q=None):
         return tab
 
 
-def plotb(tab, z,whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$'):
+def plotb(tab, z, whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$',
+          bands='gr', colors=dict(zip('grizy', 'bgrym'))):
     """
     Method to plot results of SNR combis
 
@@ -101,7 +105,10 @@ def plotb(tab, z,whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$'):
       y axis variable to plot (default: Nvisits)
     leg: str, opt
       x axis legend (default: ='$N_{visits}$'
-
+    bands: str, opt
+      bands to display (default: gr)
+    colors: dict, opt
+      dict of the color per band (default: dict(zip('grizy', 'bgrym')))
     """
 
     fontsize = 15
@@ -110,12 +117,19 @@ def plotb(tab, z,whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$'):
     sigmaC = '$\sigma_{color} \sim 0.04\pm1\%$'
     fig.suptitle('($x_1,color$)=({},{}) - z={} \n cadence={} - {}'.format(-2.0,
                                                                           0.2, z, cadence, sigmaC), fontsize=fontsize)
-    ax.plot(tab['{}_i'.format(whata)],
-            tab['{}_i'.format(whatb)], 'y.', label='$i$-band')
-    ax.plot(tab['{}_z'.format(whata)],
-            tab['{}_z'.format(whatb)], 'r.', label='$z$-band')
-    ax.plot(tab['{}_y'.format(whata)],
-            tab['{}_y'.format(whatb)], 'm.', label='$y$-band')
+
+    for b in bands:
+        sel = tab
+        if 'SNR' in whata:
+            idx = tab[whata] < 1000.
+            sel = tab[idx]
+
+        if 'SNR' in whatb:
+            idx = tab[whatb] < 1000.
+            sel = tab[idx]
+
+        ax.plot(sel['{}_{}'.format(whata, b)],
+                sel['{}_{}'.format(whatb, b)], '{}.'.format(colors[b]), label='${}$-band'.format(b))
 
     ax.set_xlabel(whata, fontsize=fontsize)
     ax.set_ylabel(whatb, fontsize=fontsize)
@@ -134,7 +148,7 @@ def plotb(tab, z,whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$'):
     """
 
 
-def plot(tab, z,whata='Nvisits', whatb='Nvisits', legx='$N_{visits}$', legy='$N_{visits}^{band}$'):
+def plot(tab, z, whata='Nvisits', whatb='Nvisits', legx='$N_{visits}$', legy='$N_{visits}^{band}$', bands='gr', colors=dict(zip('grizy', 'bgrym'))):
     """
     Method to plot results of SNR combis
 
@@ -150,6 +164,10 @@ def plot(tab, z,whata='Nvisits', whatb='Nvisits', legx='$N_{visits}$', legy='$N_
       x axis legend (default: ='$N_{visits}$'
      legy: str, opt
       y axis legend (default: ='$N_{visits}^{bands}$'
+    bands: str, opt
+      bands to display (default: gr)
+    colors: dict, opt
+      dict of the color per band (default: dict(zip('grizy', 'bgrym')))
 
     """
 
@@ -159,9 +177,18 @@ def plot(tab, z,whata='Nvisits', whatb='Nvisits', legx='$N_{visits}$', legy='$N_
     sigmaC = '$\sigma_{color} \sim 0.04\pm1\%$'
     fig.suptitle('($x_1,color$)=({},{}) - z={} \n cadence={} - {}'.format(-2.0,
                                                                           0.2, z, cadence, sigmaC), fontsize=fontsize)
-    ax.plot(tab[whata], tab['{}_i'.format(whatb)], 'y.', label='$i$-band')
-    ax.plot(tab[whata], tab['{}_z'.format(whatb)], 'r.', label='$z$-band')
-    ax.plot(tab[whata], tab['{}_y'.format(whatb)], 'm.', label='$y$-band')
+
+    for b in bands:
+        sel = tab
+        if 'SNR' in whata:
+            idx = tab[whata] < 1000.
+            sel = tab[idx]
+
+        if 'SNR' in whatb:
+            idx = tab[whatb] < 1000.
+            sel = tab[idx]
+        ax.plot(sel[whata], sel['{}_{}'.format(whatb, b)],
+                '{}.'.format(colors[b]), label='${}$-band'.format(b))
 
     ax.set_xlabel(legx, fontsize=fontsize)
     ax.set_ylabel(legy, fontsize=fontsize)
@@ -190,31 +217,60 @@ parser.add_option("--x1", type=float, default=-2.0,
                   help="SN stretch[%default]")
 parser.add_option("--color", type=float, default=0.2,
                   help="SN color[%default]")
+parser.add_option("--nproc", type=int, default=8,
+                  help="number of procs to use[%default]")
 
 
 opts, args = parser.parse_args()
 
 z = np.round(opts.z, 2)
-dirFiles = '{}/z_{}'.format(opts.dirFiles,z)
+dirFiles = '{}/z_{}'.format(opts.dirFiles, z)
 
 x1 = np.round(opts.x1, 1)
 color = np.round(opts.color, 1)
 snrfi = 'SNR_combi_{}_{}_{}'.format(x1, color, z)
 
-tab = load_multiple(dirFiles, snrfi)
+tab = load_multiple(dirFiles, snrfi, opts.nproc)
 
 
 print('hello', tab.filter(regex='sigma').columns)
 
-tab = tab.rename(columns={'SNRcalc_tot': 'SNRcalc'})
-print(tab.columns)
+tab = tab.sort_values(by=['Nvisits'])
+idx = tab['Nvisits'] < 100000000.
+#idx &= tab['sigmaC'] >= 0.0390
+sel = tab[idx]
+"""
+sel = sel.rename(columns={'SNRcalc_tot': 'SNRcalc'})
+print(sel.columns)
+colors = dict(zip('grizy', 'bgrym'))
+bands = 'r'
+plot(sel, z, bands=bands, colors=colors)
 
+# plot(sel, whata='Nvisits', whatb='SNRcalc', legy='$SNR_{band}$')
 
-plot(tab,z)
+plot(sel, z, whata='sigmaC', whatb='SNRcalc',
+     legx='sigmaC', legy='$SNR_{band}$', bands=bands, colors=colors)
+plotb(sel, z, 'SNRcalc', 'Nvisits', bands=bands, colors=colors)
 
-# plot(tab, whata='Nvisits', whatb='SNRcalc', legy='$SNR_{band}$')
-
-plot(tab, z,whata='sigmaC', whatb='SNRcalc', legx='sigmaC', legy='$SNR_{band}$')
-plotb(tab,z, 'SNRcalc', 'Nvisits')
 
 plt.show()
+"""
+colout = ['sigmaC', 'SNRcalc_tot', 'Nvisits', 'Nvisits_g', 'SNRcalc_g',
+          'Nvisits_r', 'SNRcalc_r', 'Nvisits_i', 'SNRcalc_i', 'Nvisits_z',
+                       'SNRcalc_z', 'Nvisits_y', 'SNRcalc_y', 'min_par', 'min_val']
+
+colout = ['sigmaC', 'Nvisits', 'Nvisits_g', 'Nvisits_r', 'Nvisits_i', 'Nvisits_z',
+          'Nvisits_y', 'min_par', 'min_val']
+
+colout = ['sigmaC', 'Nvisits',
+          'Nvisits_r', 'SNRcalc_r', 'Nvisits_i', 'SNRcalc_i', 'Nvisits_z',
+                       'SNRcalc_z', 'Nvisits_y', 'SNRcalc_y']
+
+idx = sel['SNRcalc_z'] >= 20.
+idx &= sel['SNRcalc_i'] >= 10.
+idx &= sel['SNRcalc_r'] <= 5.
+sel = sel[idx]
+sel['min_par'] = 'Nvisits'
+sel['min_val'] = sel['Nvisits']
+nout = np.min([len(sel), 10])
+print(sel[colout][:nout])
