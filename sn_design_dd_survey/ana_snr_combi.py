@@ -34,6 +34,7 @@ def min_nvisits(z, snr, colout, mincol='Nvisits', minpar='nvisits', select={}):
                 if key != 'zmin':
                     idx &= vals['op'](snr[vals['var']], vals['value'])
                     snr = snr[idx]
+    print('hello', len(snr), mincol)
     if mincol != 'Nvisits':
         snr = snr.sort_values(by=['Nvisits', mincol])
     else:
@@ -275,27 +276,27 @@ print('hello', tab.filter(regex='sigma').columns)
 
 tab = tab.sort_values(by=['Nvisits'])
 idx = tab['Nvisits'] < 100000000.
-#idx &= tab['sigmaC'] >= 0.0390
+# idx &= tab['sigmaC'] >= 0.0390
 snr = tab[idx]
 """
-sel = sel.rename(columns={'SNRcalc_tot': 'SNRcalc'})
-print(sel.columns)
+snr = snr.rename(columns={'SNRcalc_tot': 'SNRcalc'})
+print(snr.columns)
 colors = dict(zip('grizy', 'bgrym'))
-bands = 'r'
-plot(sel, z, bands=bands, colors=colors)
+bands = 'rizy'
+plot(snr, z, bands=bands, colors=colors)
 
-# plot(sel, whata='Nvisits', whatb='SNRcalc', legy='$SNR_{band}$')
+# plot(snr, whata='Nvisits', whatb='SNRcalc', legy='$SNR_{band}$')
 
-plot(sel, z, whata='sigmaC', whatb='SNRcalc',
-     legx='sigmaC', legy='$SNR_{band}$', bands=bands, colors=colors)
-plotb(sel, z, 'SNRcalc', 'Nvisits', bands=bands, colors=colors)
+# plot(snr, z, whata='sigmaC', whatb='SNRcalc',
+#     legx = 'sigmaC', legy = '$SNR_{band}$', bands = bands, colors = colors)
+plotb(snr, z, 'SNRcalc', 'Nvisits', bands=bands, colors=colors)
 
 
 plt.show()
 """
 colout = ['sigmaC', 'SNRcalc_tot', 'Nvisits', 'Nvisits_g', 'SNRcalc_g',
           'Nvisits_r', 'SNRcalc_r', 'Nvisits_i', 'SNRcalc_i', 'Nvisits_z',
-                       'SNRcalc_z', 'Nvisits_y', 'SNRcalc_y', 'min_par', 'min_val']
+          'SNRcalc_z', 'Nvisits_y', 'SNRcalc_y', 'min_par', 'min_val']
 
 colout = ['sigmaC', 'Nvisits', 'Nvisits_g', 'Nvisits_r', 'Nvisits_i', 'Nvisits_z',
           'Nvisits_y', 'min_par', 'min_val']
@@ -307,17 +308,17 @@ colout = ['sigmaC', 'Nvisits',
 sel = snr.copy()
 
 sel['Delta_iz'] = np.abs(sel['Nvisits_i']-sel['Nvisits_z'])
-sel['Delta_SNR'] = sel['SNRcalc_z']-sel['SNRcalc_i']
+sel['Delta_SNR'] = sel['SNRcalc_z']-sel['SNRcalc_y']
 
 seldict = {}
 seldict['zmin'] = 0.6
 seldict['cut1'] = {}
-seldict['cut1']['var'] = 'SNRcalc_r'
-seldict['cut1']['value'] = 5.
+seldict['cut1']['var'] = 'Nvisits_r'
+seldict['cut1']['value'] = 2
 seldict['cut1']['op'] = operator.le
 seldict['cut2'] = {}
-seldict['cut2']['var'] = 'SNRcalc_g'
-seldict['cut2']['value'] = 5.
+seldict['cut2']['var'] = 'Nvisits_g'
+seldict['cut2']['value'] = 2
 seldict['cut2']['op'] = operator.le
 
 seldictb = seldict.copy()

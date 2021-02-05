@@ -553,6 +553,7 @@ class TransformData:
             sel = df[idx].copy()
             gr = sel.groupby(grlist).apply(
                 lambda x: self.transform(x)).reset_index()
+            gr['min_par'] = min_par
 
             if 'season' not in gr.columns:
                 gr['season'] = 0
@@ -602,9 +603,9 @@ class TransformData:
             r.append(grp['zlim'].median())
             names.append('zlim')
 
-        resu = np.rec.fromrecords([r], names=names)
+        res = np.rec.fromrecords([r], names=names)
 
-        return pd.DataFrame(resu)
+        return pd.DataFrame(res)
 
 
 class Select_errormodel:

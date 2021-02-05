@@ -203,12 +203,12 @@ class CombiChoice:
         seldict = {}
         seldict['zmin'] = 0.6
         seldict['cut1'] = {}
-        seldict['cut1']['var'] = 'SNRcalc_r'
-        seldict['cut1']['value'] = 5.
+        seldict['cut1']['var'] = 'Nvisits_r'
+        seldict['cut1']['value'] = 2
         seldict['cut1']['op'] = operator.le
         seldict['cut2'] = {}
-        seldict['cut2']['var'] = 'SNRcalc_g'
-        seldict['cut2']['value'] = 5.
+        seldict['cut2']['var'] = 'Nvisits_g'
+        seldict['cut2']['value'] = 2
         seldict['cut2']['op'] = operator.le
 
         seldictb = seldict.copy()
