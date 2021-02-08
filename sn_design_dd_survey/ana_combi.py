@@ -136,7 +136,7 @@ class CombiChoice:
 
         snr = None
         for fi in fis:
-            #print('loading', fi)
+            # print('loading', fi)
             tab = np.load(fi, allow_pickle=True)
             # analyzing the file here
             sel = self.anafich(tab)
@@ -172,7 +172,7 @@ class CombiChoice:
 
         """
         idx = tab['Nvisits'] < 100000000.
-        #idx &= tab['sigmaC'] >= 0.0390
+        # idx &= tab['sigmaC'] >= 0.0390
         sel = pd.DataFrame(tab[idx].copy())
         if len(sel) <= 0:
             return None
@@ -217,6 +217,12 @@ class CombiChoice:
         seldictb['cut3']['value'] = 0.
         seldictb['cut3']['op'] = operator.ge
 
+        seldictc = seldict.copy()
+        seldictc['cut3'] = {}
+        seldictc['cut3']['var'] = 'SNRcalc_z'
+        seldictc['cut3']['value'] = 30.
+        seldictc['cut3']['op'] = operator.ge
+
         selvar = ['Nvisits', 'Nvisits_y', 'Delta_iz']
         minparname = ['nvisits', 'nvisits_y', 'deltav_iz']
         combi = dict(zip(selvar, minparname))
@@ -230,8 +236,12 @@ class CombiChoice:
             res = self.min_nvisits(sel, key, '{}_sel'.format(val), seldictb)
             snr_visits = pd.concat((snr_visits, res))
 
-        #snr_chisq = self.min_chisq(snr.copy())
-        #res = pd.concat((snr_visits, snr_chisq))
+        for key, val in combi.items():
+            res = self.min_nvisits(sel, key, '{}_selb'.format(val), seldictc)
+            snr_visits = pd.concat((snr_visits, res))
+
+        # snr_chisq = self.min_chisq(snr.copy())
+        # res = pd.concat((snr_visits, snr_chisq))
         # print(snr_visits.columns)
         # print(snr_chisq.columns)
 
