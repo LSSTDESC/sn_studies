@@ -16,7 +16,7 @@ def plot_Single(dirFiles, theFile, cadence):
 
     sel.sort(order='z')
     fig, ax = plt.subplots()
-    fig.suptitle('{}'.format(sel['min_par']))
+    fig.suptitle('{}'.format(np.unique(sel['min_par']).item()))
     ax.plot(sel['z'], sel['Nvisits'], color='k')
 
     for b in bands:
