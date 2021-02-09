@@ -11,6 +11,7 @@ from scipy.interpolate import interp1d
 class zlim_template:
 
     def __init__(self, x1, color, cadence,  error_model=1,
+                 errmodrel=-1.,
                  bluecutoff=380., redcutoff=800.,
                  ebvofMW=0.,
                  sn_simulator='sn_fast',
@@ -29,7 +30,8 @@ class zlim_template:
 
         self.Fisher_el = ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
                           'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor', 'F_colorcolor']
-
+        self.errmodrel = errmodrel
+        
     def cutoff(self, error_model, bluecutoff, redcutoff):
 
         cuto = '{}_{}'.format(bluecutoff, redcutoff)
@@ -52,9 +54,19 @@ class zlim_template:
             sigmaC = self.fit(lcc, m5_values[['band', 'm5_new']])
             r.append((zval, sigmaC))
 
-        zlim = self.estimate_zlim(
-            np.rec.fromrecords(r, names=['z', 'sigmaC']))
+        res = np.rec.fromrecords(r, names=['z', 'sigmaC'])        
+            
+        zlim = self.estimate_zlim(res)
 
+        """
+        import matplotlib.pyplot as plt
+        plt.plot(res['z'],res['sigmaC'])
+        plt.show()
+        """
+        print('zlim',zlim)
+        
+        
+        
         return zlim
 
     def getLC(self, z):
@@ -73,29 +85,45 @@ class zlim_template:
         idx = lc['flux'] > 0.
         idx &= lc['fluxerr'] > 0.
 
-        selecta = lc.loc[idx, :]
-
+        #selecta = lc.loc[idx, :]
+        selecta = lc[idx]
         # add snr
+        """
         selecta.loc[:, 'snr'] = selecta['flux'].values / \
             selecta['fluxerr'].values
-
+        """
+        selecta['snr'] = selecta['flux']/selecta['fluxerr']
         # select LC points according to SNRmin
         idx = selecta['snr'] >= 1.
-        selecta = selecta.loc[idx, :]
-
+        #selecta = selecta.loc[idx, :]
+        selecta = selecta[idx]
+       
+        if self.errmodrel:
+            selecta = self.select_error_model(selecta)
+            
         # fit here
-        covcolor = CovColor(selecta[self.Fisher_el].sum()).Cov_colorcolor
+        covcolor = CovColor(selecta.to_pandas()[self.Fisher_el].sum()).Cov_colorcolor
         sigmaC = np.sqrt(covcolor)
 
         return sigmaC
 
     def estimate_zlim(self, tab, sigmaC_cut=0.04):
-
+        """
         interp = interp1d(tab['sigmaC'], tab['z'],
                           fill_value=0.0, bounds_error=False)
 
         return interp(sigmaC_cut).item()
+        """
+        tab.sort(order='z')
+        interpv = interp1d(tab['z'], tab['sigmaC'], bounds_error=False, fill_value=0.)
 
+        zvals = np.arange(0.1,1.0,0.005)
+
+        colors = interpv(zvals)
+        ii = np.argmin(np.abs(colors-sigmaC_cut))
+     
+        return np.round(zvals[ii],3)
+    
     def lc_corr(self, lc, m5_values):
 
         # print('io', lc, m5_values)
@@ -119,9 +147,78 @@ class zlim_template:
         df.loc[idx, 'flux_e_sec'] = 0.0
         df.loc[idx, 'fluxerr'] = -10.
 
-        return df
+        tab = Table.from_pandas(df)
+        tab.meta = lc.meta
+        return tab
 
+    def select_error_model(self, lc):
+        """
+        function to select LCs
 
+        Parameters
+        ---------------
+        lc: astropy table
+          lc to consider
+
+        Returns
+        ----------
+        lc with filtered values
+       """
+
+        if self.errmodrel < 0.:
+            return lc
+
+        # first: select iyz bands
+
+        bands_to_keep = []
+
+        lc_sel = Table()
+        for b in 'izy':
+            bands_to_keep.append('LSST::{}'.format(b))
+            idx = lc['band'] == 'LSST::{}'.format(b)
+            lc_sel = vstack([lc_sel, lc[idx]])
+
+        # now apply selection on g band for z>=0.25
+        sel_g = self.sel_band(lc, 'g', 0.25)
+
+        # now apply selection on r band for z>=0.6
+        sel_r = self.sel_band(lc, 'r', 0.6)
+
+        lc_sel = vstack([lc_sel, sel_g])
+        lc_sel = vstack([lc_sel, sel_r])
+
+        return lc_sel
+
+    def sel_band(self, tab, b, zref):
+        """
+        Method to performe selections depending on the band and z
+
+        Parameters
+        ---------------
+        tab: astropy table
+          lc to process
+        b: str
+          band to consider
+        zref: float
+           redshift below wiwh the cut wwill be applied
+
+        Returns
+        ----------
+        selected lc
+        """
+
+        idx = tab['band'] == 'LSST::{}'.format(b)
+        sel = tab[idx]
+        if len(sel) == 0:
+            return Table()
+
+        if sel.meta['z'] >= zref:
+            idb = sel['fluxerr_model']/sel['flux'] <= self.errmodrel
+            selb = sel[idb]
+            return selb
+
+        return sel
+    
 class RedshiftLimit:
     """
     class to estimate the redshift limit for a SN
@@ -129,6 +226,7 @@ class RedshiftLimit:
     """
 
     def __init__(self, x1, color, cadence,  error_model=1,
+                 errmodrel=-1.,
                  bluecutoff=380., redcutoff=800.,
                  ebvofMW=0.,
                  sn_simulator='sn_fast',
@@ -148,6 +246,11 @@ class RedshiftLimit:
         self.m5_file = m5_file.rename(
             columns={'filter': 'band', 'fiveSigmaDepth': 'm5_single'})
 
+        """
+        idx = self.m5_file['fieldname']=='COSMOS'
+        idx &= self.m5_file['season']==1
+        self.m5_file = self.m5_file[idx]
+        """
         self.Fisher_el = ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
                           'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor', 'F_colorcolor']
 
@@ -158,6 +261,7 @@ class RedshiftLimit:
                                      error_model=error_model, bluecutoff=bluecutoff)
         self.templ_sim = zlim_template(x1, color,
                                        cadence,  error_model=error_model,
+                                       errmodrel=errmodrel,
                                        bluecutoff=bluecutoff, redcutoff=redcutoff,
                                        ebvofMW=ebvofMW,
                                        sn_simulator=sn_simulator,
@@ -188,7 +292,9 @@ class RedshiftLimit:
         for z in np.unique(nvisits_ref['z']):
             idx = np.abs(nvisits_ref['z']-z) < 1.e-6
             nvisits_z = pd.DataFrame(np.copy(nvisits_ref[idx]))
+            
             m5_values = self.m5(nvisits_z, m5_single)
+            #print('m5_values',z,m5_values)
             dict_visits = dict(zip(nvisits_z['band'], nvisits_z['Nvisits']))
             dict_m5 = dict(zip(m5_values['band'], m5_values['m5_single']))
             dict_cadence = dict(zip(m5_values['band'], m5_values['cadence']))
@@ -296,6 +402,7 @@ class zlim_sim:
 
     def __init__(self, x1=-2.0, color=0.2,
                  error_model=1,
+                 errmodrel=-1.,
                  bluecutoff=380.,
                  redcutoff=800.,
                  simulator='sn_fast',
@@ -308,6 +415,7 @@ class zlim_sim:
 
         # simulation parameters
         self.error_model = error_model
+        self.errmodrel = errmodrel
         self.bluecutoff = bluecutoff
         self.redcutoff = redcutoff
         if self.error_model:
@@ -449,6 +557,7 @@ class zlim_sim:
         cmd += ' --LCSelection_nbands {}'.format(self.nbands)
         cmd += ' --Fitter_name sn_fitter.fit_{}'.format(self.fitter)
         cmd += ' --ProductionID {}_{}'.format(self.tag, self.fitter)
+        cmd += ' --LCSelection_errmodrel {}'.format(self.errmod)
         os.system(cmd)
 
     def getSN(self):

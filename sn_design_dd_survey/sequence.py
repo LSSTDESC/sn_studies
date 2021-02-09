@@ -398,6 +398,7 @@ class Nvisits_Cadence_Fields:
 
     def __init__(self, x1=-2.0, color=0.2,
                  error_model=1,
+                 errmodrel=-1.,
                  bluecutoff=380., redcutoff=800.,
                  ebvofMW=0.,
                  sn_simulator='sn_fast',
@@ -406,7 +407,10 @@ class Nvisits_Cadence_Fields:
                  dirNvisits='Nvisits_z',
                  dirm5='m5_files',
                  Nvisits_z_med='Nvisits_med',
-                 outName='Nvisits_z_fields'):
+                 outName='Nvisits_z_fields',
+                 cadences=[1,2,3,4],
+                 #min_par=['nvisits','nvisits_sel','nvisits_selb']):
+                 min_par=['nvisits_selb']):
         """
         class  to estimate the number of visits for DD fields depending on cadence
         from a number of visits defined with median m5 values
@@ -419,6 +423,8 @@ class Nvisits_Cadence_Fields:
           SN color (default : 0.2)
         error_model: int, opt
           error model for LC (default: 1)
+        errmodrel: float,opt
+          relative flux error model cut (default: -1.)
         bluecutoff: float,opt
           blue cutoff (if error_model=0) (default: 380.)
         redcutoff: float, opt
@@ -439,11 +445,16 @@ class Nvisits_Cadence_Fields:
           fileName with reference number of visits vs cadence (default: Nvisits_z_med.npy)
         outName: str, opt
           output file name prefix (default: Nvisits_z_fields)
+        cadences: list(int), opt
+          list of cadences to process (default: {1,2,3,4])
+        min_par: list(str), opt
+          list on minimization parameters used in SNR_combi (default: ['nvisits','nvisits_sel','nvisits_selb']
         """
 
         self.x1 = x1
         self.color = color
         self.error_model = error_model
+        self.errmodrel = errmodrel
         self.bluecutoff = bluecutoff
         self.redcutoff = redcutoff
         self.ebvofMW = ebvofMW
@@ -451,13 +462,23 @@ class Nvisits_Cadence_Fields:
         self.dirTemplates = dirTemplates
         self.dirStudy = dirStudy
         self.dirm5 = dirm5
-
-        # load nvisits_ref
-        self.nvisits_ref = np.load(
-            '{}/{}/{}'.format(dirStudy, dirNvisits, Nvisits_z_med), allow_pickle=True)
+        self.min_par = min_par
+        self.cadences = cadences
+        self.dirNvisits = dirNvisits
+        self.Nvisits_z_med = Nvisits_z_med
+       
 
         restot = self.multiproc()
 
+
+        """
+        restot = pd.DataFrame()
+        #for j, cadence in enumerate(cadences):
+        for j, cadence in enumerate([1]):
+            print('cadence',cadence)
+            rr = self.nvisits_single_cadence(cadence)
+            restot = pd.concat((restot,rr))
+        """
         # replace nan with zeros
         restot = restot.fillna(0.)
         # restot = pd.DataFrame(
@@ -473,9 +494,10 @@ class Nvisits_Cadence_Fields:
         time_ref = time.time()
         result_queue = multiprocessing.Queue()
 
-        cadences = range(2, 5)
-        nproc = len(cadences)
-        for j, cadence in enumerate(cadences):
+        #cadences = range(2, 5)
+        #cadences = np.unique(self.nvisits_ref['cadence'])
+        nproc = len(self.cadences)
+        for j, cadence in enumerate(self.cadences):
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=self.nvisits_single_cadence,
                                         args=(cadence, j, result_queue))
             p.start()
@@ -506,10 +528,17 @@ class Nvisits_Cadence_Fields:
     def nvisits_single_cadence(self, cadence,
                                j=0, output_q=None):
 
+        # load nvisits_ref
+        dirNvisits = '{}_{}'.format(self.dirNvisits,cadence)
+        refName = '{}/{}/{}'.format(self.dirStudy, dirNvisits, self.Nvisits_z_med)
+        print('loading nvisits_ref',refName)
+        nvisits_ref = np.load(refName, allow_pickle=True)
+        
         resdf = pd.DataFrame()
         red = RedshiftLimit(self.x1, self.color,
                             cadence=cadence,
                             error_model=self.error_model,
+                            errmodrel = self.errmodrel,
                             bluecutoff=self.bluecutoff, redcutoff=self.redcutoff,
                             ebvofMW=self.ebvofMW,
                             sn_simulator=self.sn_simulator,
@@ -517,9 +546,14 @@ class Nvisits_Cadence_Fields:
                                                  self.dirTemplates),
                             m5_dir='{}/{}'.format(self.dirStudy, self.dirm5))
 
-        idx = np.abs(self.nvisits_ref['cadence']-cadence) < 1.e-5
-        sela = self.nvisits_ref[idx]
-        for min_par in np.unique(sela['min_par']):
+        idx = np.abs(nvisits_ref['cadence']-cadence) < 1.e-5
+        sela = nvisits_ref[idx]
+
+        min_pars = self.min_par
+        if not self.min_par:
+            min_pars = np.unique(sela['min_par'])
+        for min_par in min_pars:
+            print('processing',min_par)
             idb = sela['min_par'] == min_par
             sel_visits = sela[idb]
             respar = red(sel_visits)
