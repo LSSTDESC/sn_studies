@@ -408,8 +408,9 @@ class Nvisits_Cadence_Fields:
                  dirm5='m5_files',
                  Nvisits_z_med='Nvisits_med',
                  outName='Nvisits_z_fields',
-                 cadences=[1,2,3,4],
-                 #min_par=['nvisits','nvisits_sel','nvisits_selb']):
+                 cadences=[1, 2, 3, 4],
+                 # min_par=['nvisits','nvisits_sel','nvisits_selb']):
+                 cadence_for_opti=0,
                  min_par=['nvisits_selb']):
         """
         class  to estimate the number of visits for DD fields depending on cadence
@@ -447,6 +448,8 @@ class Nvisits_Cadence_Fields:
           output file name prefix (default: Nvisits_z_fields)
         cadences: list(int), opt
           list of cadences to process (default: {1,2,3,4])
+        cadence_for_opti: int, opt
+          cadence used for optimisation (default: 0)
         min_par: list(str), opt
           list on minimization parameters used in SNR_combi (default: ['nvisits','nvisits_sel','nvisits_selb']
         """
@@ -466,10 +469,9 @@ class Nvisits_Cadence_Fields:
         self.cadences = cadences
         self.dirNvisits = dirNvisits
         self.Nvisits_z_med = Nvisits_z_med
-       
+        self.cadence_for_opti = cadence_for_opti
 
         restot = self.multiproc()
-
 
         """
         restot = pd.DataFrame()
@@ -497,6 +499,7 @@ class Nvisits_Cadence_Fields:
         #cadences = range(2, 5)
         #cadences = np.unique(self.nvisits_ref['cadence'])
         nproc = len(self.cadences)
+
         for j, cadence in enumerate(self.cadences):
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=self.nvisits_single_cadence,
                                         args=(cadence, j, result_queue))
@@ -529,16 +532,19 @@ class Nvisits_Cadence_Fields:
                                j=0, output_q=None):
 
         # load nvisits_ref
-        dirNvisits = '{}_{}'.format(self.dirNvisits,cadence)
-        refName = '{}/{}/{}'.format(self.dirStudy, dirNvisits, self.Nvisits_z_med)
-        print('loading nvisits_ref',refName)
+        dirNvisits = '{}_{}'.format(self.dirNvisits, cadence)
+        if self.cadence_for_opti > 0:
+            dirNvisits = '{}_{}'.format(self.dirNvisits, self.cadence_for_opti)
+        refName = '{}/{}/{}'.format(self.dirStudy,
+                                    dirNvisits, self.Nvisits_z_med)
+        print('loading nvisits_ref', refName)
         nvisits_ref = np.load(refName, allow_pickle=True)
-        
+
         resdf = pd.DataFrame()
         red = RedshiftLimit(self.x1, self.color,
                             cadence=cadence,
                             error_model=self.error_model,
-                            errmodrel = self.errmodrel,
+                            errmodrel=self.errmodrel,
                             bluecutoff=self.bluecutoff, redcutoff=self.redcutoff,
                             ebvofMW=self.ebvofMW,
                             sn_simulator=self.sn_simulator,
@@ -553,7 +559,7 @@ class Nvisits_Cadence_Fields:
         if not self.min_par:
             min_pars = np.unique(sela['min_par'])
         for min_par in min_pars:
-            print('processing',min_par)
+            print('processing', min_par)
             idb = sela['min_par'] == min_par
             sel_visits = sela[idb]
             respar = red(sel_visits)
