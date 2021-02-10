@@ -31,7 +31,7 @@ class zlim_template:
         self.Fisher_el = ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
                           'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor', 'F_colorcolor']
         self.errmodrel = errmodrel
-        
+
     def cutoff(self, error_model, bluecutoff, redcutoff):
 
         cuto = '{}_{}'.format(bluecutoff, redcutoff)
@@ -54,8 +54,8 @@ class zlim_template:
             sigmaC = self.fit(lcc, m5_values[['band', 'm5_new']])
             r.append((zval, sigmaC))
 
-        res = np.rec.fromrecords(r, names=['z', 'sigmaC'])        
-            
+        res = np.rec.fromrecords(r, names=['z', 'sigmaC'])
+
         zlim = self.estimate_zlim(res)
 
         """
@@ -63,10 +63,8 @@ class zlim_template:
         plt.plot(res['z'],res['sigmaC'])
         plt.show()
         """
-        print('zlim',zlim)
-        
-        
-        
+        # print('zlim',zlim)
+
         return zlim
 
     def getLC(self, z):
@@ -97,12 +95,13 @@ class zlim_template:
         idx = selecta['snr'] >= 1.
         #selecta = selecta.loc[idx, :]
         selecta = selecta[idx]
-       
+
         if self.errmodrel:
             selecta = self.select_error_model(selecta)
-            
+
         # fit here
-        covcolor = CovColor(selecta.to_pandas()[self.Fisher_el].sum()).Cov_colorcolor
+        covcolor = CovColor(selecta.to_pandas()[
+                            self.Fisher_el].sum()).Cov_colorcolor
         sigmaC = np.sqrt(covcolor)
 
         return sigmaC
@@ -115,15 +114,16 @@ class zlim_template:
         return interp(sigmaC_cut).item()
         """
         tab.sort(order='z')
-        interpv = interp1d(tab['z'], tab['sigmaC'], bounds_error=False, fill_value=0.)
+        interpv = interp1d(tab['z'], tab['sigmaC'],
+                           bounds_error=False, fill_value=0.)
 
-        zvals = np.arange(0.1,1.0,0.005)
+        zvals = np.arange(0.1, 1.0, 0.005)
 
         colors = interpv(zvals)
         ii = np.argmin(np.abs(colors-sigmaC_cut))
-     
-        return np.round(zvals[ii],3)
-    
+
+        return np.round(zvals[ii], 3)
+
     def lc_corr(self, lc, m5_values):
 
         # print('io', lc, m5_values)
@@ -218,7 +218,8 @@ class zlim_template:
             return selb
 
         return sel
-    
+
+
 class RedshiftLimit:
     """
     class to estimate the redshift limit for a SN
@@ -292,9 +293,9 @@ class RedshiftLimit:
         for z in np.unique(nvisits_ref['z']):
             idx = np.abs(nvisits_ref['z']-z) < 1.e-6
             nvisits_z = pd.DataFrame(np.copy(nvisits_ref[idx]))
-            
+
             m5_values = self.m5(nvisits_z, m5_single)
-            #print('m5_values',z,m5_values)
+            # print('m5_values',z,m5_values)
             dict_visits = dict(zip(nvisits_z['band'], nvisits_z['Nvisits']))
             dict_m5 = dict(zip(m5_values['band'], m5_values['m5_single']))
             dict_cadence = dict(zip(m5_values['band'], m5_values['cadence']))
