@@ -278,7 +278,7 @@ tab = tab.sort_values(by=['Nvisits'])
 idx = tab['Nvisits'] < 100000000.
 # idx &= tab['sigmaC'] >= 0.0390
 snr = tab[idx]
-"""
+
 snr = snr.rename(columns={'SNRcalc_tot': 'SNRcalc'})
 print(snr.columns)
 colors = dict(zip('grizy', 'bgrym'))
@@ -287,13 +287,13 @@ plot(snr, z, bands=bands, colors=colors)
 
 # plot(snr, whata='Nvisits', whatb='SNRcalc', legy='$SNR_{band}$')
 
-# plot(snr, z, whata='sigmaC', whatb='SNRcalc',
-#     legx = 'sigmaC', legy = '$SNR_{band}$', bands = bands, colors = colors)
+plot(snr, z, whata='sigmaC', whatb='SNRcalc',
+     legx='sigmaC', legy='$SNR_{band}$', bands=bands, colors=colors)
 plotb(snr, z, 'SNRcalc', 'Nvisits', bands=bands, colors=colors)
 
 
 plt.show()
-"""
+
 colout = ['sigmaC', 'SNRcalc_tot', 'Nvisits', 'Nvisits_g', 'SNRcalc_g',
           'Nvisits_r', 'SNRcalc_r', 'Nvisits_i', 'SNRcalc_i', 'Nvisits_z',
           'SNRcalc_z', 'Nvisits_y', 'SNRcalc_y', 'min_par', 'min_val']
