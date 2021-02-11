@@ -8,6 +8,7 @@ from sn_tools.sn_calcFast import CovColor
 from scipy.interpolate import interp1d
 import multiprocessing
 
+
 class zlim_template:
 
     def __init__(self, x1, color, cadence,  error_model=1,
@@ -40,20 +41,19 @@ class zlim_template:
 
         return cuto
 
-    def process(self, zmin, zmax, zstep, nvisits, m5_values):
+    def process(self, zmin, zmax, zstep, nvisits, m5_values, nproc):
 
         r = []
         self.lc_visits = {}
         m5_values['band'] = 'LSST::' + m5_values['band'].astype(str)
 
-        nproc =8
         zvals = list(np.arange(zmin, zmax, zstep))
         nz = len(zvals)
         t = np.linspace(0, nz, nproc+1, dtype='int')
         result_queue = multiprocessing.Queue()
 
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.process_zrange,
-                                         args=(zvals[t[j]:t[j+1]], m5_values,j, result_queue))
+                                         args=(zvals[t[j]:t[j+1]], m5_values, j, result_queue))
                  for j in range(nproc)]
 
         for p in procs:
@@ -81,9 +81,9 @@ class zlim_template:
         plt.show()
         """
         zlim = self.estimate_zlim(res)
-        
+
         return zlim
-    
+
     """
         for zval in np.arange(zmin, zmax, zstep):
             lc = self.getLC(zval)
@@ -102,7 +102,8 @@ class zlim_template:
 
         return zlim
     """
-    def process_zrange(self,zvals,m5_values,j=0, output_q=None):
+
+    def process_zrange(self, zvals, m5_values, j=0, output_q=None):
 
         r = []
         for zval in zvals:
@@ -117,7 +118,7 @@ class zlim_template:
             return output_q.put({j: r})
         else:
             return resdf
-            
+
     def getLC(self, z):
 
         idx = np.abs(self.lc_meta['z']-z) < 1.e-8
@@ -321,7 +322,7 @@ class RedshiftLimit:
                                        m5_file=m5_file,
                                        m5_dir=m5_dir)
 
-    def __call__(self, nvisits_ref):
+    def __call__(self, nvisits_ref, nproc):
         """
         resdf = pd.DataFrame()
         for field in self.m5_file['fieldname']:
@@ -332,10 +333,10 @@ class RedshiftLimit:
             resdf = pd.concat((resdf, resfield))
         """
         resdf = self.m5_file.groupby(['fieldname', 'season']).apply(
-            lambda x: self.zlim(nvisits_ref, x)).reset_index()
+            lambda x: self.zlim(nvisits_ref, x, nproc)).reset_index()
         return resdf
 
-    def zlim(self, nvisits_ref, m5_single):
+    def zlim(self, nvisits_ref, m5_single, nproc):
 
         rs = []
         resdf = pd.DataFrame()
@@ -354,7 +355,7 @@ class RedshiftLimit:
             zmax = np.min([1., z+0.3])
             zstep = 0.05
             zlimit = self.templ_sim.process(
-                zmin, zmax, zstep, nvisits_z, m5_values)
+                zmin, zmax, zstep, nvisits_z, m5_values, nproc)
             nvisits_z['zlim'] = np.round(zlimit, 2)
             resdf = pd.concat((resdf, nvisits_z))
             if self.check_fullsim:

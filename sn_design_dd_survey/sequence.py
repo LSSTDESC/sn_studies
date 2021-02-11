@@ -411,7 +411,8 @@ class Nvisits_Cadence_Fields:
                  cadences=[1, 2, 3, 4],
                  # min_par=['nvisits','nvisits_sel','nvisits_selb']):
                  cadence_for_opti=0,
-                 min_par=['nvisits_selb']):
+                 min_par=['nvisits_selb'],
+                 nproc=4):
         """
         class  to estimate the number of visits for DD fields depending on cadence
         from a number of visits defined with median m5 values
@@ -452,6 +453,8 @@ class Nvisits_Cadence_Fields:
           cadence used for optimisation (default: 0)
         min_par: list(str), opt
           list on minimization parameters used in SNR_combi (default: ['nvisits','nvisits_sel','nvisits_selb']
+        nproc: int, opt
+          number of procs for multiprocessing
         """
 
         self.x1 = x1
@@ -473,14 +476,13 @@ class Nvisits_Cadence_Fields:
 
         #restot = self.multiproc()
 
-        
         restot = pd.DataFrame()
         for j, cadence in enumerate(cadences):
-        #for j, cadence in enumerate([1]):
-            print('cadence',cadence)
-            rr = self.nvisits_single_cadence(cadence)
-            restot = pd.concat((restot,rr))
-        
+            # for j, cadence in enumerate([1]):
+            print('cadence', cadence)
+            rr = self.nvisits_single_cadence(cadence, nproc)
+            restot = pd.concat((restot, rr))
+
         # replace nan with zeros
         restot = restot.fillna(0.)
         # restot = pd.DataFrame(
@@ -530,7 +532,7 @@ class Nvisits_Cadence_Fields:
 
         return restot
 
-    def nvisits_single_cadence(self, cadence,
+    def nvisits_single_cadence(self, cadence, nproc=4,
                                j=0, output_q=None):
 
         # load nvisits_ref
@@ -564,7 +566,7 @@ class Nvisits_Cadence_Fields:
             print('processing', min_par)
             idb = sela['min_par'] == min_par
             sel_visits = sela[idb]
-            respar = red(sel_visits)
+            respar = red(sel_visits, nproc)
             respar = respar.reset_index(drop=True)
             resdf = pd.concat((resdf, respar))
 
@@ -573,7 +575,7 @@ class Nvisits_Cadence_Fields:
         else:
             return resdf
 
-    def multiproc_min_par(self,min_pars,sela,j=0, output_q=None):
+    def multiproc_min_par(self, min_pars, sela, j=0, output_q=None):
 
         for min_par in min_pars:
             print('processing', min_par)
@@ -587,8 +589,7 @@ class Nvisits_Cadence_Fields:
             return output_q.put({j: resdf})
         else:
             return resdf
-        
-        
+
 
 class TransformData:
     """
