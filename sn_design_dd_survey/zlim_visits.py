@@ -6,7 +6,7 @@ from sn_tools.sn_io import loopStack
 import pandas as pd
 from sn_tools.sn_calcFast import CovColor
 from scipy.interpolate import interp1d
-
+import multiprocessing
 
 class zlim_template:
 
@@ -46,6 +46,45 @@ class zlim_template:
         self.lc_visits = {}
         m5_values['band'] = 'LSST::' + m5_values['band'].astype(str)
 
+        nproc =8
+        zvals = list(np.arange(zmin, zmax, zstep))
+        nz = len(zvals)
+        t = np.linspace(0, nz, nproc+1, dtype='int')
+        result_queue = multiprocessing.Queue()
+
+        procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.process_zrange,
+                                         args=(zvals[t[j]:t[j+1]], m5_values,j, result_queue))
+                 for j in range(nproc)]
+
+        for p in procs:
+            p.start()
+
+        resultdict = {}
+        # get the results in a dict
+
+        for i in range(nproc):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        restot = []
+
+        # gather the results
+        for key, vals in resultdict.items():
+            restot += vals
+
+        res = np.rec.fromrecords(restot, names=['z', 'sigmaC'])
+        """
+        import matplotlib.pyplot as plt
+        plt.plot(res['z'],res['sigmaC'])
+        plt.show()
+        """
+        zlim = self.estimate_zlim(res)
+        
+        return zlim
+    
+    """
         for zval in np.arange(zmin, zmax, zstep):
             lc = self.getLC(zval)
             lc.convert_bytestring_to_unicode()
@@ -58,15 +97,27 @@ class zlim_template:
 
         zlim = self.estimate_zlim(res)
 
-        """
-        import matplotlib.pyplot as plt
-        plt.plot(res['z'],res['sigmaC'])
-        plt.show()
-        """
+   
         # print('zlim',zlim)
 
         return zlim
+    """
+    def process_zrange(self,zvals,m5_values,j=0, output_q=None):
 
+        r = []
+        for zval in zvals:
+            lc = self.getLC(zval)
+            lc.convert_bytestring_to_unicode()
+            lcc = self. lc_corr(lc, m5_values)
+            self.lc_visits[np.round(zval, 2)] = lcc
+            sigmaC = self.fit(lcc, m5_values[['band', 'm5_new']])
+            r.append((zval, sigmaC))
+
+        if output_q is not None:
+            return output_q.put({j: r})
+        else:
+            return resdf
+            
     def getLC(self, z):
 
         idx = np.abs(self.lc_meta['z']-z) < 1.e-8

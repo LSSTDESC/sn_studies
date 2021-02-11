@@ -471,20 +471,22 @@ class Nvisits_Cadence_Fields:
         self.Nvisits_z_med = Nvisits_z_med
         self.cadence_for_opti = cadence_for_opti
 
-        restot = self.multiproc()
+        #restot = self.multiproc()
 
-        """
+        
         restot = pd.DataFrame()
-        #for j, cadence in enumerate(cadences):
-        for j, cadence in enumerate([1]):
+        for j, cadence in enumerate(cadences):
+        #for j, cadence in enumerate([1]):
             print('cadence',cadence)
             rr = self.nvisits_single_cadence(cadence)
             restot = pd.concat((restot,rr))
-        """
+        
         # replace nan with zeros
         restot = restot.fillna(0.)
         # restot = pd.DataFrame(
         #    np.load('Nvisits_z_fields.npy', allow_pickle=True))
+        if self.cadence_for_opti > 0:
+            dirNvisits += '_{}'.format(int(self.cadence_for_opti))
         outFull = '{}/{}/{}'.format(dirStudy, dirNvisits, outName)
         TransformData(restot, outFull.split('.npy')[0], grlist=[
             'z', 'cadence', 'fieldname', 'season'])
@@ -571,6 +573,22 @@ class Nvisits_Cadence_Fields:
         else:
             return resdf
 
+    def multiproc_min_par(self,min_pars,sela,j=0, output_q=None):
+
+        for min_par in min_pars:
+            print('processing', min_par)
+            idb = sela['min_par'] == min_par
+            sel_visits = sela[idb]
+            respar = red(sel_visits)
+            respar = respar.reset_index(drop=True)
+            resdf = pd.concat((resdf, respar))
+
+        if output_q is not None:
+            return output_q.put({j: resdf})
+        else:
+            return resdf
+        
+        
 
 class TransformData:
     """
