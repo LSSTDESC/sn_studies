@@ -291,7 +291,8 @@ plot(snr, z, whata='sigmaC', whatb='SNRcalc',
      legx='sigmaC', legy='$SNR_{band}$', bands=bands, colors=colors)
 plotb(snr, z, 'SNRcalc', 'Nvisits', bands=bands, colors=colors)
 
-
+fig, ax = plt.subplots()
+ax.plot(snr['sigmaC'], snr['Nvisits'], 'ko')
 plt.show()
 
 colout = ['sigmaC', 'SNRcalc_tot', 'Nvisits', 'Nvisits_g', 'SNRcalc_g',
