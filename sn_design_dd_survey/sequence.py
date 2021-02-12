@@ -274,9 +274,7 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
               dirSNR_opti='SNR_opti',
               snr_opti_file='opti_combi.npy',
               nproc=8,
-              zmin=0.4,
-              zmax=1.0,
-              zstep=0.05):
+              zvals=list(np.arange(0.4, 1., 0.05))):
     """
     Function to select optimal (wrt a certain criteria) SNR combinations
 
@@ -294,13 +292,15 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
       name of the output file containing optimal combinations
     nproc: int, opt
       number of proc to use for multiprocessing (default: 8)
+    zvals: list, opt
+      list of redshift values to consider
     """
     dirSNR_combi_full = '{}/{}'.format(dirStudy, dirSNR_combi)
     combi = CombiChoice(fracSignalBand, dirSNR_combi_full)
 
     resdf = pd.DataFrame()
     snr_dirs = glob.glob('{}/*'.format(dirSNR_combi_full))
-    zvals = np.arange(zmin, zmax+zstep, zstep)
+    #zvals = np.arange(zmin, zmax+zstep, zstep)
     """
     for fi in snr_dirs:
         z = (
