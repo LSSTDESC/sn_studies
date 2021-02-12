@@ -273,7 +273,10 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
               dirSNR_combi='SNR_combi',
               dirSNR_opti='SNR_opti',
               snr_opti_file='opti_combi.npy',
-              nproc=8):
+              nproc=8,
+              zmin=0.4,
+              zmax=1.0,
+              zstep=0.05):
     """
     Function to select optimal (wrt a certain criteria) SNR combinations
 
@@ -297,14 +300,16 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
 
     resdf = pd.DataFrame()
     snr_dirs = glob.glob('{}/*'.format(dirSNR_combi_full))
-
+    zvals = np.arange(zmin, zmax+zstep, zstep)
+    """
     for fi in snr_dirs:
         z = (
             fi.split('/')[-1]
             .split('_')[-1]
         )
+    """
+    for z in zvals:
         z = np.round(float(z), 2)
-
         res = combi(z, nproc)
         if res is not None:
             resdf = pd.concat((resdf, res))
