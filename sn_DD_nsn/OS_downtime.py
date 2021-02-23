@@ -4,6 +4,7 @@ from optparse import OptionParser
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import ephem
+
 def unix2mjd(timestamp):
     """Convert from unix timestamp to MJD
     Parameters
@@ -119,7 +120,6 @@ def all_nights(dbDir,dbName,dbExtens):
     interp = interpol(r,meds)
 
     # now add moon values to night_df(from interp)
-    print('hhhh',nights.columns)
     for vv in r:
         nights[vv] = interp[vv](nights['night'])
 
@@ -289,7 +289,10 @@ def plot(DD_field,nights,season):
     idx = rrec['filterseq'] == 'y'
     ax.plot(rrec[idx][whatx],rrec[idx][what],'y*')
     ax.plot(rrec[whatx],rrec[what],'ko',mfc='k')
-    print(np.unique(rrec['filterseq']))
+    print(np.unique(rrec['filterseq']),rrec['night'])
+    rrec = rrec.sort_values(by=['night'])
+    print('cadence of observation',np.median(rrec['night'][1:].values-rrec['night'][:-1].values))
+
     
 parser = OptionParser()
 
@@ -320,6 +323,7 @@ for key, vals in interp.items():
     DD_field[key] = vals(DD_field['night'])
 
 season=1
+#for season in range(1,10):
 plot(DD_field,nights,season)
 
 plt.show()
