@@ -5,8 +5,9 @@ import glob
 from sn_tools.sn_telescope import Telescope
 import os
 from sn_tools.sn_obs import season
+from optparse import OptionParser
 
-def process(fileDir, dbName, fieldName,outName):
+def process(fileDir, dbName, nside,fieldName,outName):
     """
     Function to process an obspixel file and to perform coadds per night
 
@@ -22,7 +23,7 @@ def process(fileDir, dbName, fieldName,outName):
        output file name (npy type)
 
     """
-    fullName = '{}/{}/{}*{}.npy'.format(fileDir, dbName, dbName, fieldName)
+    fullName = '{}/{}/{}_DD_nside_{}*{}.npy'.format(fileDir, dbName, dbName, nside,fieldName)
     print(fullName)
     fi = glob.glob(fullName)
 
@@ -91,16 +92,28 @@ def coadd_night(grp,telescope=None):
 
     return pd.DataFrame.from_dict(dictout)
 
+parser = OptionParser()
 
-fileDir = '../ObsPixelized_128'
-dbName = 'descddf_v1.5_10yrs'
-fieldName = 'COSMOS'
+parser.add_option("--fileDir", type=str, default='../ObsPixelized_128',
+                  help="OS dir location (pixels)[%default]")
+parser.add_option("--dbName", type=str, default='descddf_v1.5_10yrs',
+                  help="OS name[%default]")
+parser.add_option("--fieldName", type=str, default='COSMOS',
+                  help="field to consider for this study  [%default]")
+parser.add_option("--nside", type=int, default=128,
+                  help="healpix nside [%default]")
 
+opts, args = parser.parse_args()
 
-outName = 'ObsPixelized_128_{}_{}_night.npy'.format(dbName,fieldName)
+fileDir = opts.fileDir
+dbName = opts.dbName
+fieldName = opts.fieldName
+nside = opts.nside
+
+outName = 'ObsPixelized_{}_{}_{}_night.npy'.format(nside,dbName,fieldName)
 
 if not os.path.isfile(outName):
-    process(fileDir, dbName, fieldName,outName)
+    process(fileDir, dbName, nside,fieldName,outName)
 
 
 print('loading',outName)
