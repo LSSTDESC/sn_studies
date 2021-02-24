@@ -1,5 +1,7 @@
 import numpy as np
 import healpy as hp
+from optparse import OptionParser, OptionGroup
+import pandas as pd
 
 
 def min_med_max(val):
@@ -139,12 +141,39 @@ def print_end_old(fia, fib):
     fib.write('\end{table} \n')
 
 
+parser = OptionParser()
+parser.add_option("--dbList", type="str", default='List.csv',
+                  help="db name [%default]")
+
+group = OptionGroup(parser, "Warning",
+                    "To run correctly this script request a file called Nvisits.npy "
+                    "This file contains general infos about DD."
+                    "It should have been produced with the script run_scripts/metrics/estimate_DDFrac.py")
+
+#group.add_option("-g", action="store_true", help="Group option.")
+
+parser.add_option_group(group)
+
+opts, args = parser.parse_args()
+
+toprocess = pd.read_csv(opts.dbList, comment='#')
+
 # dbNames of interest here
+dbNames = toprocess['dbName'].to_list()
+"""
 dbNames = ['descddf_v1.5_10yrs', 'agnddf_v1.5_10yrs',
            'baseline_v1.5_10yrs', 'daily_ddf_v1.5_10yrs',
-           'ddf_heavy_v1.6_10yrs', 'ddf_heavy_nexp2_v1.6_10yrs',
-           'dm_heavy_v1.6_10yrs', 'dm_heavy_nexp2_v1.6_10yrs']
-
+           'ddf_heavy_v1.6_10yrs',
+           'dm_heavy_v1.6_10yrs',
+           'ddf_dither0.00_v1.7_10yrs',
+           'ddf_dither0.05_v1.7_10yrs',
+           'ddf_dither0.10_v1.7_10yrs',
+           'ddf_dither0.30_v1.7_10yrs',
+           'ddf_dither0.70_v1.7_10yrs',
+           'ddf_dither1.00_v1.7_10yrs',
+           'ddf_dither1.50_v1.7_10yrs',
+           'ddf_dither2.00_v1.7_10yrs']
+"""
 nfiles = int(np.round(len(dbNames)/4))
 
 print(nfiles)
