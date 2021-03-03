@@ -8,9 +8,73 @@ import multiprocessing
 import operator
 
 
+def save_file(tab):
+    """
+    Function to save in a cvs file a list of combi infos
+
+    Parameters
+    ---------------
+    tab: pandas df
+       data to process
+
+    """
+    res = pd.DataFrame(tab)
+    print(tab.columns)
+
+    res['x1'] = -2.0
+    res['color'] = 0.2
+    res['ebvofMW'] = 0.0
+    res['snrmin'] = 1.
+    res['error_model'] = 1
+    res['errmodrel'] = 0.1
+    res['bluecutoff'] = 380.
+    res['redcutoff'] = 800.
+    res['simulator'] = 'sn_fast'
+    res['fitter'] = 'sn_cosmo'
+    res['season'] = 1
+    res['tagprod'] = np.arange(res.shape[0])
+    for b in 'grizy':
+        res['cad_{}'.format(b)] = 1
+
+    name_in = []
+    name_out = []
+    round_val = []
+    forint = []
+    for b in 'grizy':
+        name_in.append('Nvisits_{}'.format(b))
+        name_out.append('N{}'.format(b))
+        round_val.append(0)
+        res['Nvisits_{}'.format(b)] = res['Nvisits_{}'.format(b)].astype(int)
+
+    for b in 'grizy':
+        name_in.append('m5single_{}'.format(b))
+        name_out.append('m5_{}'.format(b))
+        round_val.append(2)
+
+    for b in 'grizy':
+        name_in.append('cad_{}'.format(b))
+        name_out.append('cadence_{}'.format(b))
+        round_val.append(0)
+
+    rename = dict(zip(name_in, name_out))
+    round_all = dict(zip(name_in, round_val))
+    print('hhh', rename)
+    res = res.round(round_all)
+    res = res.rename(columns=rename)
+    print(res.columns)
+    what_to_dump = ['tagprod', 'x1', 'color', 'ebvofMW', 'snrmin', 'error_model',
+                    'errmodrel', 'bluecutoff', 'redcutoff', 'simulator', 'fitter']
+
+    what_to_dump += name_out
+    what_to_dump += ['season']
+
+    outName = 'toto.csv'
+    res[what_to_dump].to_csv(outName, index=False)
+
+
 def min_nvisits(z, snr, colout, mincol='Nvisits', minpar='nvisits', select={}):
     """
-    Method the combi with the lower number of visits
+    Function  the combi with the lower number of visits
 
     Parameters
     ---------------
@@ -46,7 +110,7 @@ def min_nvisits(z, snr, colout, mincol='Nvisits', minpar='nvisits', select={}):
     return snr[colout][:nout]
 
 
-def load_multiple(thedir, snrfi, nproc=8):
+def load_multiple(thedir, snrfi, sigmaC_min, sigmaC_max, nproc=8):
     """
     Method to load and concatenate a set of npy files
 
@@ -76,7 +140,7 @@ def load_multiple(thedir, snrfi, nproc=8):
         idb = batch[i+1]
 
         p = multiprocessing.Process(
-            name='Subprocess', target=load, args=(fi[ida:idb], i, result_queue))
+            name='Subprocess', target=load, args=(fi[ida:idb], sigmaC_min, sigmaC_max, i, result_queue))
         p.start()
 
     resultdict = {}
@@ -94,7 +158,7 @@ def load_multiple(thedir, snrfi, nproc=8):
     return df
 
 
-def load(fi, j=0, output_q=None):
+def load(fi, sigmaC_min=0.99*0.04, sigmaC_max=1.01*0.04, j=0, output_q=None):
     """
     Method to load and concatenate a set of npy files
 
@@ -116,10 +180,17 @@ def load(fi, j=0, output_q=None):
     snrtot = None
     for ff in fi:
         rr = np.load(ff, allow_pickle=True)
-        if snrtot is None:
-            snrtot = rr
-        else:
-            snrtot = np.concatenate((snrtot, rr))
+        # print(rr.dtype)
+        idx = rr['sigmaC'] >= sigmaC_min
+        idx &= rr['sigmaC'] <= sigmaC_max
+
+        #idx &= rr['Nvisits'] <= 80.
+        sel = np.copy(rr[idx])
+        if len(sel) > 0:
+            if snrtot is None:
+                snrtot = sel
+            else:
+                snrtot = np.concatenate((snrtot, sel))
 
     tab = pd.DataFrame(snrtot)
 
@@ -258,6 +329,10 @@ parser.add_option("--color", type=float, default=0.2,
                   help="SN color[%default]")
 parser.add_option("--nproc", type=int, default=8,
                   help="number of procs to use[%default]")
+parser.add_option("--sigmaC_min", type=float, default=0.99*0.04,
+                  help="sigmaC min value[%default]")
+parser.add_option("--sigmaC_max", type=float, default=1.01*0.04,
+                  help="sigmaC max value[%default]")
 
 
 opts, args = parser.parse_args()
@@ -269,11 +344,15 @@ x1 = np.round(opts.x1, 1)
 color = np.round(opts.color, 1)
 snrfi = 'SNR_combi_{}_{}_{}'.format(x1, color, z)
 
-tab = load_multiple(dirFiles, snrfi, opts.nproc)
+tab = load_multiple(dirFiles, snrfi, opts.sigmaC_min,
+                    opts.sigmaC_max, opts.nproc)
 
 
-print('hello', tab.filter(regex='sigma').columns)
+print('hello', tab.filter(regex='sigma').columns, len(tab))
 
+save_file(tab)
+
+print(test)
 tab = tab.sort_values(by=['Nvisits'])
 idx = tab['Nvisits'] < 100000000.
 # idx &= tab['sigmaC'] >= 0.0390
