@@ -5,6 +5,7 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import ephem
 
+
 def unix2mjd(timestamp):
     """Convert from unix timestamp to MJD
     Parameters
@@ -20,6 +21,7 @@ def unix2mjd(timestamp):
     account leap seconds (or potentially other discrepancies I don't know about)
     """
     return timestamp / 86400 + 40587
+
 
 def mjd2unix(mjd):
     """Convert from MJD to unix timestamp
@@ -37,6 +39,7 @@ def mjd2unix(mjd):
     """
     return (mjd - 40587) * 86400
 
+
 def mjd2djd(mjd):
     """Convert from modified Julian date to Dublin Julian date
     pyephem uses Dublin Julian dates
@@ -49,8 +52,9 @@ def mjd2djd(mjd):
     The Dublin Julian date corresponding to `mjd`.
     """
     # (this function adapted from Peter Yoachim's code)
-    doff = 15019.5 # this equals ephem.Date(0)-ephem.Date('1858/11/17')
+    doff = 15019.5  # this equals ephem.Date(0)-ephem.Date('1858/11/17')
     return mjd - doff
+
 
 def djd2mjd(djd):
     """Convert from Dublin Julian date to Modified Julian date
@@ -63,10 +67,11 @@ def djd2mjd(djd):
     -------
     The modified Julian date corresponding to `djd`.
     """
-    doff = 15019.5 # this equals ephem.Date(0)-ephem.Date('1858/11/17')
+    doff = 15019.5  # this equals ephem.Date(0)-ephem.Date('1858/11/17')
     return djd + doff
 
-def all_nights(dbDir,dbName,dbExtens):
+
+def all_nights(dbDir, dbName, dbExtens):
     """
     Function to get obs for all the nights (including nights with no obs!)
 
@@ -84,7 +89,7 @@ def all_nights(dbDir,dbName,dbExtens):
     observations for all the nights
 
     """
-    fullName = '{}/{}.{}'.format(dbDir,dbName,dbExtens)
+    fullName = '{}/{}.{}'.format(dbDir, dbName, dbExtens)
 
     df = pd.DataFrame(np.load(fullName, allow_pickle=True))
 
@@ -95,7 +100,7 @@ def all_nights(dbDir,dbName,dbExtens):
             r.append(bb)
 
     rb = r+['mjd']
-    
+
     # get medians here
 
     meds = df.groupby(['night'])[rb].median().reset_index()
@@ -107,26 +112,28 @@ def all_nights(dbDir,dbName,dbExtens):
     night_max = meds['night'].max()
 
     meds = meds.sort_values(by=['night'])
-    mjd_interp = interp1d(meds['night'],meds['mjd'], bounds_error=False, fill_value=0.)
-   
-    nights_all = range(night_min,night_max+1)
+    mjd_interp = interp1d(meds['night'], meds['mjd'],
+                          bounds_error=False, fill_value=0.)
+
+    nights_all = range(night_min, night_max+1)
     mjds_all = mjd_interp(nights_all)
-    nights = pd.DataFrame(nights_all,columns=['night'])
+    nights = pd.DataFrame(nights_all, columns=['night'])
     nights['mjd'] = mjds_all
     nights['downtime'] = 0
     idx = nights['night'].isin(meds['night'])
-    nights.loc[~idx,'downtime'] = 1
+    nights.loc[~idx, 'downtime'] = 1
 
-    interp = interpol(r,meds)
+    interp = interpol(r, meds)
 
     # now add moon values to night_df(from interp)
     for vv in r:
         nights[vv] = interp[vv](nights['night'])
 
-    nights['moonPhase'] = getMoon(nights['night'],mjd_interp)
-    return nights,interp,mjd_interp
+    nights['moonPhase'] = getMoon(nights['night'], mjd_interp)
+    return nights, interp, mjd_interp
 
-def getMoon(nights,mjd_interp):
+
+def getMoon(nights, mjd_interp):
     """
     Function to estimate the moonPhase
 
@@ -156,16 +163,17 @@ def getMoon(nights,mjd_interp):
     print(nights['mjd'])
     print(nights.dtypes)
     """
-    
+
     r = []
     for night in nights:
         mjd = mjd_interp(night)
         moon = ephem.Moon(mjd2djd(mjd))
         r.append(moon.phase)
-    
+
     return r
-    
-def interpol(r,meds):
+
+
+def interpol(r, meds):
     """
     Function to make interpolations on a set of observations
 
@@ -183,11 +191,13 @@ def interpol(r,meds):
     """
     interp = {}
     for vv in r:
-        interp[vv]  = interp1d(meds['night'], meds[vv], bounds_error=False, fill_value=0.)
+        interp[vv] = interp1d(meds['night'], meds[vv],
+                              bounds_error=False, fill_value=0.)
 
     return interp
 
-def load_DD(fieldDir,nside,dbName,fieldName):
+
+def load_DD(fieldDir, nside, dbName, fieldName):
     """
     Function to load pixels corresponding to DDFs
 
@@ -207,16 +217,18 @@ def load_DD(fieldDir,nside,dbName,fieldName):
     numpy array with pixel information
 
     """
-    fullName = '{}/ObsPixelized_{}_{}_{}_night.npy'.format(fieldDir,nside,dbName,fieldName)
-    tab = np.load(fullName,allow_pickle=True)
+    fullName = '{}/ObsPixelized_{}_{}_{}_night.npy'.format(
+        fieldDir, nside, dbName, fieldName)
+    tab = np.load(fullName, allow_pickle=True)
 
     return np.copy(tab)
+
 
 def filterseq(grp):
 
     seq = ''.join(sorted(grp['filter'].tolist()))
 
-    return pd.DataFrame({'filterseq': [seq],'mjd': [np.round(grp['night'].median(),1)]})
+    return pd.DataFrame({'filterseq': [seq], 'mjd': [np.round(grp['night'].median(), 1)]})
 
 
 def selectSeason(DD_field, nights, season=1):
@@ -246,54 +258,157 @@ def selectSeason(DD_field, nights, season=1):
     ido = nights['night'] >= night_min
     ido &= nights['night'] <= night_max
     nights_sel = nights[ido]
-    
-    return nights_sel,sel_DD
 
-def plot(DD_field,nights,season):
+    return nights_sel, sel_DD
 
+
+def plot(DD_field, nights, season, whatx='night', whaty='moonPhase'):
+    """
+    Function to plot whaty vs whatx
+
+    Parameters
+    ---------------
+    DD_field: pandas df
+       df with DD infos (night of observations, ...)
+    nights: pandas df
+      df with nights infos (on/off, ...)
+    season: int
+      season number to process
+    whatx: str, opt
+      x var to plot (default: night)
+    whaty: str, opt
+      y var to plot (default: moonPhase)
+
+    """
     # now make some plots
     fig, ax = plt.subplots()
 
     # select data for season=season
-    nights_sel,DD_sel = selectSeason(DD_field,nights,season)
-
+    nights_sel, DD_sel = selectSeason(DD_field, nights, season)
 
     idx = nights_sel['downtime'] == 0
     nights_on = nights_sel[idx]
     nights_off = nights_sel[~idx]
 
-    whatx = 'night'
-    what = 'moonPhase'
+    ax.plot(nights_on[whatx], nights_on[whaty], 'ko', mfc='None')
+    ax.plot(nights_off[whatx], nights_off[whaty], 'ro', mfc='None')
 
-    ax.plot(nights_on[whatx],nights_on[what],'ko',mfc='None')
-    ax.plot(nights_off[whatx],nights_off[what],'ro',mfc='None')
+    DD_seq = DD_sel.groupby(['healpixID', 'night']).apply(
+        lambda x: filterseq(x)).reset_index()
 
-
-    DD_seq = DD_sel.groupby(['healpixID','night']).apply(lambda x: filterseq(x)).reset_index()
-    print('jjjjj',DD_seq.columns)
     rrec = DD_seq.to_records(index=False)
-    rrec = pd.DataFrame(np.unique(rrec[['night','filterseq']]))
-    rrec['moonPhase'] = getMoon(rrec['night'],mjd_interp)
-    ax.plot(rrec[whatx],rrec[what],'ko',mfc='k')
-    #plot with sequences of filter
-    idx = rrec['filterseq'] == 'gir'
-    ax.plot(rrec[idx][whatx],rrec[idx][what],'b*')
-    idx = rrec['filterseq'] == 'yz'
-    ax.plot(rrec[idx][whatx],rrec[idx][what],'m*')
-    idx = rrec['filterseq'] == 'giryz'
-    ax.plot(rrec[idx][whatx],rrec[idx][what],'m*') 
-    idx = rrec['filterseq'] == 'g'
-    ax.plot(rrec[idx][whatx],rrec[idx][what],'g*')
-    idx = rrec['filterseq'] == 'giruy'
-    ax.plot(rrec[idx][whatx],rrec[idx][what],'g*')   
-    idx = rrec['filterseq'] == 'y'
-    ax.plot(rrec[idx][whatx],rrec[idx][what],'y*')
-    ax.plot(rrec[whatx],rrec[what],'ko',mfc='k')
-    print(np.unique(rrec['filterseq']),rrec['night'])
-    rrec = rrec.sort_values(by=['night'])
-    print('cadence of observation',np.median(rrec['night'][1:].values-rrec['night'][:-1].values))
+    rrec = pd.DataFrame(np.unique(rrec[['night', 'filterseq']]))
+    rrec['moonPhase'] = getMoon(rrec['night'], mjd_interp)
+    ax.plot(rrec[whatx], rrec[whaty], 'ko', mfc='k')
+    # plot with sequences of filter
+    sequences = ['gir', 'yz', 'giryz', 'g', 'giruy', 'y']
+    mc = ['b*', 'm*', 'm*', 'g*', 'g*', 'y*']
+    hh = dict(zip(sequences, mc))
+    for key, vals in hh.items():
+        idx = rrec['filterseq'] == key
+        ax.plot(rrec[idx][whatx], rrec[idx][whaty], vals)
 
-    
+
+def statSeason(dbName, DD_field, nights, season):
+    """
+    Function to estimate stat
+
+    Parameters
+    ---------------
+    dbName: str
+      OS name of consideration
+    DD_field: pandas df
+       df with DD infos (night of observations, ...)
+    nights: pandas df
+      df with nights infos (on/off, ...)
+    season: int
+      season number to process
+
+    Returns
+    -----------
+    pandas df with stat
+
+    """
+    # put the results in a dict
+    stat = {}
+
+    # select data for season=season
+    nights_sel, DD_sel = selectSeason(DD_field, nights, season)
+
+    idx = nights_sel['downtime'] == 0
+    nights_on = nights_sel[idx]
+    nights_off = nights_sel[~idx]
+    stat['nights_on'] = [len(nights_on)]
+    stat['nights_off'] = [len(nights_off)]
+    stat['nights_all'] = [len(nights_sel)]
+
+    DD_seq = DD_sel.groupby(['healpixID', 'night']).apply(
+        lambda x: filterseq(x)).reset_index()
+    rrec = DD_seq.to_records(index=False)
+    rrec = pd.DataFrame(np.unique(rrec[['night', 'filterseq']]))
+    sequences = ['gir', 'yz', 'giryz', 'g', 'giruy', 'g', 'r', 'i', 'z', 'y']
+    nights_ddf = []
+    for key in sequences:
+        idx = rrec['filterseq'] == key
+        nights_ddf += rrec[idx]['night'].to_list()
+        stat['nights_{}'.format(key)] = [len(rrec[idx])]
+    nights_ddf.sort()
+    iddx = nights_on['night'].isin(nights_ddf)
+    stat['nights_on_noddf'] = [len(nights_on[~iddx])]
+    rrec = rrec.sort_values(by=['night'])
+    if 'descddf' in dbName:
+        io = rrec['filterseq'] == 'yz'
+        rrec = rrec[io]
+
+    cadence = np.median(
+        rrec['night'][1:].values-rrec['night'][:-1].values)
+
+    stat['cadence'] = [cadence]
+
+    return pd.DataFrame.from_dict(stat)
+
+
+def analysis(nights, fieldDir, nside, dbName, fieldName):
+    """
+    Function to analyse a field
+
+    Parameters
+    ---------------
+    nights: pandas df
+      df with night infos
+    fieldDir: str
+      location dir of the file to process
+    nside: int
+      healpix param nside
+    dbName: str
+      OS name
+    fieldName: str
+      name of the field to process
+
+    Returns
+    -----------
+    pandas df with stat infos
+
+    """
+    # get DD fields
+    DD_field = pd.DataFrame(
+        load_DD(fieldDir, nside, dbName, fieldName))
+    # add vars here
+
+    for key, vals in interp.items():
+        DD_field[key] = vals(DD_field['night'])
+
+        #season = 1
+        # for season in range(1,10):
+        #plot(DD_field, nights, season)
+        dftot = pd.DataFrame()
+        for season in range(1, 10):
+            df = statSeason(dbName, DD_field, nights, season)
+            dftot = pd.concat((dftot, df))
+
+    return dftot
+
+
 parser = OptionParser()
 
 parser.add_option("--dbDir", type=str, default='../DB_Files',
@@ -302,7 +417,7 @@ parser.add_option("--dbName", type=str, default='descddf_v1.5_10yrs',
                   help="OS name[%default]")
 parser.add_option("--dbExtens", type=str, default='npy',
                   help="OS extens (db or npy) [%default]")
-parser.add_option("--fieldName", type=str, default='COSMOS',
+parser.add_option("--fieldNames", type=str, default='COSMOS',
                   help="field to consider for this study  [%default]")
 parser.add_option("--nside", type=int, default=128,
                   help="healpix nside [%default]")
@@ -313,17 +428,21 @@ opts, args = parser.parse_args()
 
 # get infos for all the nights
 
-nights, interp,mjd_interp = all_nights(opts.dbDir,opts.dbName,opts.dbExtens)
+dbDir = opts.dbDir
+dbName = opts.dbName
+dbExtens = opts.dbExtens
+nside = opts.nside
+fieldDir = opts.fieldDir
+fieldNames = opts.fieldNames
 
-# get DD fields
-DD_field = pd.DataFrame(load_DD(opts.fieldDir,opts.nside,opts.dbName,opts.fieldName))
-#add vars here
+nights, interp, mjd_interp = all_nights(dbDir, dbName, dbExtens)
 
-for key, vals in interp.items():
-    DD_field[key] = vals(DD_field['night'])
+fieldNames = fieldNames.split(',')
 
-season=1
-#for season in range(1,10):
-plot(DD_field,nights,season)
+df = pd.DataFrame()
 
-plt.show()
+for fieldName in fieldNames:
+    res = analysis(nights, fieldDir, nside, dbName, fieldName)
+    df = pd.concat((df, res))
+
+print(df)
