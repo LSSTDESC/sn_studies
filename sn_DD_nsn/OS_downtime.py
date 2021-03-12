@@ -401,10 +401,11 @@ def analysis(nights, fieldDir, nside, dbName, fieldName):
         #season = 1
         # for season in range(1,10):
         #plot(DD_field, nights, season)
-        dftot = pd.DataFrame()
-        for season in range(1, 10):
-            df = statSeason(dbName, DD_field, nights, season)
-            dftot = pd.concat((dftot, df))
+    dftot = pd.DataFrame()
+    for season in range(1, 10):
+        print('season', season)
+        df = statSeason(dbName, DD_field, nights, season)
+        dftot = pd.concat((dftot, df))
 
     return dftot
 
@@ -442,7 +443,10 @@ fieldNames = fieldNames.split(',')
 df = pd.DataFrame()
 
 for fieldName in fieldNames:
+    print('processing', fieldName)
     res = analysis(nights, fieldDir, nside, dbName, fieldName)
     df = pd.concat((df, res))
 
 print(df)
+outName = '{}.csv'.format(dbName)
+df.to_csv(outName, index=False)
