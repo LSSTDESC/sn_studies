@@ -5,7 +5,39 @@ import glob
 from sn_tools.sn_telescope import Telescope
 import os
 from sn_tools.sn_obs import season
+from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
+
+
+def process_field(fieldNames, params, j=0, output_q=None):
+    """
+    Function to process a field
+
+    Parameters
+    ---------------
+    params: dict
+      dict of parameters
+    j: int, opt
+       multiprocess number (default: 0)
+    output_q: multiprocessing.queue, opt
+       queue for multiprocessing default: None
+    """
+    fileDir = params['fileDir']
+    dbName = params['dbName']
+    nside = params['nside']
+    outputDir = params['outputDir']
+
+    for fieldName in fieldNames:
+        outName = '{}/ObsPixelized_{}_{}_{}_night.npy'.format(
+            outputDir, nside, dbName, fieldName)
+
+        if not os.path.isfile(outName):
+            process(fileDir, dbName, nside, fieldName, outName)
+
+    if output_q is not None:
+        return output_q.put({j: 1})
+    else:
+        return 1
 
 
 def process(fileDir, dbName, nside, fieldName, outName):
@@ -77,7 +109,7 @@ def coadd_night(grp, telescope=None):
         np.log10(dictres['visitExposureTime']/30.)
 
     if telescope is not None:
-        #sigma5_all = telescope.mag_to_flux_e_sec(grp['fiveSigmaDepth'],[grp.name[1]]*len(grp),grp['visitExposureTime'],grp['numExposures'])/5.
+        # sigma5_all = telescope.mag_to_flux_e_sec(grp['fiveSigmaDepth'],[grp.name[1]]*len(grp),grp['visitExposureTime'],grp['numExposures'])/5.
         sigma5_all = []
         for vv in grp['fiveSigmaDepth']:
             sigma5_all.append(telescope.mag_to_flux(vv, grp.name[1])/5.)
@@ -101,8 +133,8 @@ parser.add_option("--fileDir", type=str, default='../ObsPixelized_128',
                   help="OS dir location (pixels)[%default]")
 parser.add_option("--dbName", type=str, default='descddf_v1.5_10yrs',
                   help="OS name[%default]")
-parser.add_option("--fieldName", type=str, default='COSMOS',
-                  help="field to consider for this study  [%default]")
+parser.add_option("--fieldNames", type=str, default='COSMOS,CDFS,ELAIS,XMM-LSS,ADFS1,ADFS2',
+                  help="fields to consider for this study  [%default]")
 parser.add_option("--nside", type=int, default=128,
                   help="healpix nside [%default]")
 parser.add_option("--outputDir", type=str, default='pixel_analysis',
@@ -112,22 +144,26 @@ opts, args = parser.parse_args()
 
 fileDir = opts.fileDir
 dbName = opts.dbName
-fieldName = opts.fieldName
+fieldNames = opts.fieldNames.split(',')
 nside = opts.nside
 outputDir = opts.outputDir
+
 
 if not os.path.exists(outputDir):
     os.mkdir(outputDir)
 
-outName = '{}/ObsPixelized_{}_{}_{}_night.npy'.format(
-    outputDir, nside, dbName, fieldName)
+params = {}
+params['fileDir'] = fileDir
+params['dbName'] = dbName
+params['nside'] = nside
+params['outputDir'] = outputDir
 
-if not os.path.isfile(outName):
-    process(fileDir, dbName, nside, fieldName, outName)
+ro = multiproc(fieldNames, params, process_field, nproc=8)
 
+print('Final result', ro)
 """
 print('loading', outName)
-#tab = pd.DataFrame(np.load(outName, allow_pickle=True))
+# tab = pd.DataFrame(np.load(outName, allow_pickle=True))
 tabo = np.load(outName, allow_pickle=True)
 print(season(tabo))
 tab = pd.DataFrame(np.copy(season(tabo)))
