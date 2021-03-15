@@ -402,9 +402,12 @@ def analysis(nights, fieldDir, nside, dbName, fieldName):
         # for season in range(1,10):
         #plot(DD_field, nights, season)
     dftot = pd.DataFrame()
-    for season in range(1, 10):
+    for season in range(1, 11):
         print('season', season)
         df = statSeason(dbName, DD_field, nights, season)
+        df['fieldName'] = fieldName
+        df['dbName'] = dbName
+        df['season'] = season
         dftot = pd.concat((dftot, df))
 
     return dftot
