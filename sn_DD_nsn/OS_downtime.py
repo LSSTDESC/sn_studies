@@ -4,7 +4,7 @@ from optparse import OptionParser
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import ephem
-
+import os
 
 def unix2mjd(timestamp):
     """Convert from unix timestamp to MJD
@@ -424,6 +424,8 @@ parser.add_option("--nside", type=int, default=128,
                   help="healpix nside [%default]")
 parser.add_option("--fieldDir", type=str, default='.',
                   help="dir where the field file is  [%default]")
+parser.add_option('--outputDir', type=str, default='/sps/lsst/users/gris/OS_downtime',
+                  help='output directory [%default]')
 
 opts, args = parser.parse_args()
 
@@ -435,6 +437,7 @@ dbExtens = opts.dbExtens
 nside = opts.nside
 fieldDir = opts.fieldDir
 fieldNames = opts.fieldNames
+outputDir = opts.outputDir
 
 nights, interp, mjd_interp = all_nights(dbDir, dbName, dbExtens)
 
@@ -448,5 +451,9 @@ for fieldName in fieldNames:
     df = pd.concat((df, res))
 
 print(df)
-outName = '{}.csv'.format(dbName)
+
+if not os.path.exists(outputDir):
+    os.mkdir(outputDir)
+
+outName = '{}/{}.csv'.format(outputDir,dbName)
 df.to_csv(outName, index=False)
