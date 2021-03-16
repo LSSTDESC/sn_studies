@@ -360,7 +360,7 @@ def statSeason(dbName, DD_field, nights, season):
         io = rrec['filterseq'] == 'yz'
         rrec = rrec[io]
     else:
-        io = rrec['filterseq'] == 'girzy'
+        io = rrec['filterseq'] == 'giryz'
         rrec = rrec[io]
 
     cadence = np.median(
