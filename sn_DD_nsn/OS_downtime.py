@@ -359,6 +359,9 @@ def statSeason(dbName, DD_field, nights, season):
     if 'descddf' in dbName:
         io = rrec['filterseq'] == 'yz'
         rrec = rrec[io]
+    else:
+        io = rrec['filterseq'] == 'girzy'
+        rrec = rrec[io]
 
     cadence = np.median(
         rrec['night'][1:].values-rrec['night'][:-1].values)
