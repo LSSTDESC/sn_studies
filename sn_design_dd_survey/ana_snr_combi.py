@@ -131,6 +131,7 @@ def load_multiple(thedir, snrfi, sigmaC_min, sigmaC_max, nproc=8):
     """
     fi = glob.glob('{}/{}_*.npy'.format(thedir, snrfi))
     nfis = len(fi)
+    print('loading', fi)
     batch = np.linspace(0, nfis, nproc+1, dtype='int')
     result_queue = multiprocessing.Queue()
 
@@ -347,12 +348,12 @@ snrfi = 'SNR_combi_{}_{}_{}'.format(x1, color, z)
 tab = load_multiple(dirFiles, snrfi, opts.sigmaC_min,
                     opts.sigmaC_max, opts.nproc)
 
-
+"""
 print('hello', tab.filter(regex='sigma').columns, len(tab))
 
 save_file(tab)
+"""
 
-print(test)
 tab = tab.sort_values(by=['Nvisits'])
 idx = tab['Nvisits'] < 100000000.
 # idx &= tab['sigmaC'] >= 0.0390
