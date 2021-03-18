@@ -370,7 +370,7 @@ plot(snr, z, bands=bands, colors=colors)
 plot(snr, z, whata='sigmaC', whatb='SNRcalc',
      legx='sigmaC', legy='$SNR_{band}$', bands=bands, colors=colors)
 plotb(snr, z, 'SNRcalc', 'Nvisits', bands=bands, colors=colors)
-
+plotb(snr, z, 'SNRcalc', 'm5calc', bands=bands, colors=colors)
 fig, ax = plt.subplots()
 ax.plot(snr['sigmaC'], snr['Nvisits'], 'ko')
 plt.show()
