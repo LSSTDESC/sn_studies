@@ -19,6 +19,8 @@ class SNR:
                  SNR_par, SNR_m5_file, SNR_min=1.,
                  zref=[0.1],
                  error_model=1,
+                 SNR_type='SNR_photo_bd',
+                 include_error_model_sigmac=False,
                  save_SNR_combi=False, verbose=False, nproc=8):
         """
         Wrapper class to estimate SNR
@@ -39,6 +41,10 @@ class SNR:
           list of redshift values to consider
         error_model: int
           to tag for error_model or not
+        SNR_type: str, opt
+          type of SNR to consider (SNR, SNR_photo_bd,...) (default: SNR_photo_bd)
+        include_error_model_sigmac: bool,opt 
+          to include or not error of the model when estimating sigmaC (default: False)
         SNR parameters
         verbose: str, opt
           verbose mode for debugging
@@ -62,6 +68,8 @@ class SNR:
                         SNR_min=SNR_min,
                         zref=zref,
                         save_SNR_combi=save_SNR_combi,
+                        SNR_type=SNR_type,
+                        include_error_model_sigmac=include_error_model_sigmac,
                         verbose=self.verbose,
                         nproc=nproc)
 
@@ -154,6 +162,8 @@ class SNR_z:
                  zref=[0.1],
                  sigma_color_cut=0.04,
                  save_SNR_combi=False,
+                 SNR_type='SNR_photo_bd',
+                 include_error_model_sigmac=False,
                  verbose=False,
                  nproc=8):
         """
@@ -176,7 +186,11 @@ class SNR_z:
         sigma_color_cut: float, opt
           selection on sigma_color (default: 0.04)
         save_SNR_combi: bool, opt
-          to save SNR combination for sigmaC estimation
+          to save SNR combination for sigmaC estimation        
+        SNR_type: str, opt
+          type of SNR to consider (SNR, SNR_photo_bd,...)  (default: SNR_photo)
+        include_error_model_sigmac: bool,opt 
+          to include or not error of the model when estimating sigmaC (default: False)
         verbose: str, opt
           verbose mode for debugging
         nproc: int
@@ -194,6 +208,7 @@ class SNR_z:
         self.save_SNR_combi = save_SNR_combi
         self.nproc = nproc
         self.dirSNR = dirSNR
+        self.include_error_model_sigmac = include_error_model_sigmac
 
         # get SNR parameters
         self.SNR_par = SNR_par
@@ -296,10 +311,10 @@ class SNR_z:
         print('test extrapo', self.m5_from_SNR['z'](([30.], [0.7])))
         """
         self.m5_from_SNR, self.snrdict = self.grid_z(
-            snr_m5, minx=0., whatx='SNR_photo_bd', whatz='m5')
+            snr_m5, minx=0., whatx=SNR_type, whatz='m5')
 
         self.SNR_from_m5, self.snrdictb = self.grid_z(
-            snr_m5, whatx='m5', minx=20., maxx=30., whatstep=0.1, whatz='SNR_photo_bd')
+            snr_m5, whatx='m5', minx=20., maxx=30., whatstep=0.1, whatz=SNR_type)
 
     def grid_z(self, snr_m5, whatx='SNR', minx=1., maxx=200., whatstep=0.1, whatz='m5'):
 
@@ -621,12 +636,12 @@ class SNR_z:
         z = grp.name[2]
 
         dictband, SNR = self.get_SNR(grp)
-
+        #print(dictband,SNR)
         SNR_split = self.splitSNR(SNR, nbands=5, nsplit=4)
         # SNR_split = self.splitSNR(SNR, nbands=-1, nsplit=3)
         if self.verbose:
             print('SNR_split', grp.name, SNR_split.keys())
-
+            
         # for key, vals in SNR_split.items():
         #    print('SNR_split', key, vals)
 
@@ -776,17 +791,21 @@ class SNR_z:
 
         time_ref = time.time()
         dfres = pd.DataFrame()
+        
         for key in keys:
             vals = SNR_split[key]
             if self.verbose:
                 print('Processing SNR', key, vals)
             resi = self.combiSNR(grp, dictband, vals, x1, color, z, key)
+    
             if resi is not None:
                 if self.save_SNR_combi:
                     self.saveCombi(resi, x1, color, z, '{}_{}'.format(j, key))
                 else:
                     dfres = pd.concat((dfres, resi), ignore_index=True)
 
+        #res = dfres
+        """
         if not dfres.empty:
             minPar = 'Nvisits'
             dfres = dfres.sort_values(by=[minPar])
@@ -794,11 +813,12 @@ class SNR_z:
             res = dfres[:no]
         else:
             res = dfres
+        """
         print('done processing', j, time.time()-time_ref)
         if output_q is not None:
-            return output_q.put({j: res})
+            return output_q.put({j: dfres})
         else:
-            return res
+            return dfres
 
     def combiSNR(self, grp, dictband, SNR, x1, color, z, icombi):
 
@@ -815,7 +835,7 @@ class SNR_z:
         # make the SNR combination for this first band
         df_ref = self.addSNR_all(df_ref, SNR[bands[0]], bands[0], z)
 
-        # print('there man',bands[0],  dictband[bands[0]],z,SNR[bands[0]],df_ref)
+        #print('there man',bands[0],  dictband[bands[0]],z,SNR[bands[0]],df_ref)
         # now make all the combinations
         df_tot = pd.DataFrame()
         df_merged = df_ref.copy()
@@ -894,7 +914,7 @@ class SNR_z:
 
         # select only combi with less than 200 visits per night
 
-        max_visits = 300
+        max_visits = 200
         if z >= 0.75:
             max_visits = self.SNR_par['Nvisits_max_night']
         idx = dfres['Nvisits'] <= max_visits
@@ -902,8 +922,8 @@ class SNR_z:
 
         # print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
         idx = df_tot['sigmaC'] >= 0.039
-        idx = df_tot['sigmaC'] < 0.05
-
+        idx &= df_tot['sigmaC'] < 0.05
+        
         if self.verbose:
             print('sigmaC_cut', len(df_tot[idx]))
 
@@ -1125,8 +1145,11 @@ class SNR_z:
                   df_tot['mag'], df_tot['m5calc'])
 
         # get the total SNR
-        df_tot['SNR_indiv_tot'] = self.SNR_combi(
-            df_tot['SNR_indiv'], df_tot['SNR_model'])
+        if self.include_error_model_sigmac:
+            df_tot['SNR_indiv_tot'] = self.SNR_combi(
+                df_tot['SNR_indiv'], df_tot['SNR_model'])
+        else:
+             df_tot['SNR_indiv_tot'] = df_tot['SNR_indiv']
         # print('there man',b,len(df_tot),df_tot[['SNRcalc','m5calc','SNR_indiv_tot','SNR_model','SNR_indiv','flux_e_sec']])
         df_tot['fluxerr_indiv'] = df_tot['flux']/df_tot['SNR_indiv_tot']
         # update Fisher elements
