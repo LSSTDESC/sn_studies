@@ -18,7 +18,8 @@ class zlim_template:
                  sn_simulator='sn_fast',
                  lcDir='.',
                  m5_file='medValues_flexddf_v1.4_10yrs_DD.npy',
-                 m5_dir='dd_design/m5_files'):
+                 m5_dir='dd_design/m5_files',
+                 include_error_model_sigmac=False):
 
         cutof = self.cutoff(error_model, bluecutoff, redcutoff)
         lcName = 'LC_{}_{}_{}_ebv_{}_{}_cad_{}_0.hdf5'.format(
@@ -32,7 +33,8 @@ class zlim_template:
         self.Fisher_el = ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
                           'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor', 'F_colorcolor']
         self.errmodrel = errmodrel
-
+        self.include_error_model_sigmac=include_error_model_sigmac
+        
     def cutoff(self, error_model, bluecutoff, redcutoff):
 
         cuto = '{}_{}'.format(bluecutoff, redcutoff)
@@ -133,6 +135,9 @@ class zlim_template:
     def fit(self, lc, m5_values):
 
         idx = lc['flux'] > 0.
+        if not self.include_error_model_sigmac:
+            lc['fluxerr'] =lc['fluxerr_photo']
+            
         idx &= lc['fluxerr'] > 0.
 
         #selecta = lc.loc[idx, :]
