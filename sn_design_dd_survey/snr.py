@@ -295,10 +295,11 @@ class SNR_z:
 
         print('test extrapo', self.m5_from_SNR['z'](([30.], [0.7])))
         """
-        self.m5_from_SNR, self.snrdict = self.grid_z(snr_m5, minx=0.)
+        self.m5_from_SNR, self.snrdict = self.grid_z(
+            snr_m5, minx=0., whatx='SNR_photo_bd', whatz='m5')
 
         self.SNR_from_m5, self.snrdictb = self.grid_z(
-            snr_m5, whatx='m5', minx=20., maxx=30., whatstep=0.1, whatz='SNR')
+            snr_m5, whatx='m5', minx=20., maxx=30., whatstep=0.1, whatz='SNR_photo_bd')
 
     def grid_z(self, snr_m5, whatx='SNR', minx=1., maxx=200., whatstep=0.1, whatz='m5'):
 
@@ -901,7 +902,7 @@ class SNR_z:
 
         # print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
         idx = df_tot['sigmaC'] >= 0.039
-        idx = df_tot['sigmaC'] < 0.042
+        idx = df_tot['sigmaC'] < 0.05
 
         if self.verbose:
             print('sigmaC_cut', len(df_tot[idx]))
