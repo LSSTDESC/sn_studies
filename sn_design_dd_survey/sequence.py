@@ -257,9 +257,9 @@ class DD_SNR:
         """
 
         zref = np.round(np.arange(zmin, zmax+zstep, zstep), 2)
-        if np.abs(zmax-zmin)<1.e-5:
-            zref=[np.round(zmin,2)]
-        
+        if np.abs(zmax-zmin) < 1.e-5:
+            zref = [np.round(zmin, 2)]
+
         SNR_name = (self.data.lcName
                     .replace('LC', 'SNR_m5')
                     .replace('.hdf5', '.npy')
