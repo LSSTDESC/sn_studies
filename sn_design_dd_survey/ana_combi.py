@@ -197,6 +197,7 @@ class CombiChoice:
 
         """
         sel = snr.copy()
+        """
         sel['Delta_iz'] = np.abs(sel['Nvisits_i']-sel['Nvisits_z'])
         sel['Delta_SNR'] = sel['SNRcalc_z']-sel['SNRcalc_i']
 
@@ -225,6 +226,40 @@ class CombiChoice:
 
         selvar = ['Nvisits', 'Nvisits_y', 'Delta_iz']
         minparname = ['nvisits', 'nvisits_y', 'deltav_iz']
+        """
+
+        seldict = {}
+        seldict['zmin'] = 0.6
+        seldict['cut1'] = {}
+        seldict['cut1']['var'] = 'Nvisits_r'
+        seldict['cut1']['value'] = 2
+        seldict['cut1']['op'] = operator.le
+        seldict['cut2'] = {}
+        seldict['cut2']['var'] = 'Nvisits_g'
+        seldict['cut2']['value'] = 2
+        seldict['cut2']['op'] = operator.le
+
+        seldictb = seldict.copy()
+        seldictb['cut3'] = {}
+        seldictb['cut3']['var'] = 'Nvisits_y'
+        seldictb['cut3']['value'] = 20.
+        seldictb['cut3']['op'] = operator.le
+
+        seldictc = seldict.copy()
+        seldictc['cut3'] = {}
+        seldictc['cut3']['var'] = 'Nvisits_y'
+        seldictc['cut3']['value'] = 30.
+        seldictc['cut3']['op'] = operator.le
+
+        seldictd = seldict.copy()
+        seldictd['cut3'] = {}
+        seldictd['cut3']['var'] = 'Nvisits_y'
+        seldictd['cut3']['value'] = 40.
+        seldictd['cut3']['op'] = operator.le
+
+        selvar = ['Nvisits']
+        minparname = ['nvisits']
+
         combi = dict(zip(selvar, minparname))
         snr_visits = pd.DataFrame()
 
@@ -232,12 +267,16 @@ class CombiChoice:
             res = self.min_nvisits(sel, key, val, seldict)
             snr_visits = pd.concat((snr_visits, res))
 
-        for key, val in combi.items():
-            res = self.min_nvisits(sel, key, '{}_sel'.format(val), seldictb)
+        # for key, val in combi.items():
+            res = self.min_nvisits(sel, key, '{}_sela'.format(val), seldictb)
             snr_visits = pd.concat((snr_visits, res))
 
-        for key, val in combi.items():
+        # for key, val in combi.items():
             res = self.min_nvisits(sel, key, '{}_selb'.format(val), seldictc)
+            snr_visits = pd.concat((snr_visits, res))
+
+        # for key, val in combi.items():
+            res = self.min_nvisits(sel, key, '{}_selc'.format(val), seldictd)
             snr_visits = pd.concat((snr_visits, res))
 
         # snr_chisq = self.min_chisq(snr.copy())
