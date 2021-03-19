@@ -232,7 +232,6 @@ class SNR_z:
         idx &= data.lc['z'].isin(zref)
 
         self.lcdf = data.lc.loc[idx]
-
         # estimate the derivative vs Fisher parameters here
         for vv in self.listcol:
             self.lcdf.loc[:, 'd_{}'.format(
@@ -636,12 +635,12 @@ class SNR_z:
         z = grp.name[2]
 
         dictband, SNR = self.get_SNR(grp)
-        #print(dictband,SNR)
+        # print(dictband,SNR)
         SNR_split = self.splitSNR(SNR, nbands=5, nsplit=4)
         # SNR_split = self.splitSNR(SNR, nbands=-1, nsplit=3)
         if self.verbose:
             print('SNR_split', grp.name, SNR_split.keys())
-            
+
         # for key, vals in SNR_split.items():
         #    print('SNR_split', key, vals)
 
@@ -791,13 +790,13 @@ class SNR_z:
 
         time_ref = time.time()
         dfres = pd.DataFrame()
-        
+
         for key in keys:
             vals = SNR_split[key]
             if self.verbose:
                 print('Processing SNR', key, vals)
             resi = self.combiSNR(grp, dictband, vals, x1, color, z, key)
-    
+
             if resi is not None:
                 if self.save_SNR_combi:
                     self.saveCombi(resi, x1, color, z, '{}_{}'.format(j, key))
@@ -923,7 +922,7 @@ class SNR_z:
         # print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
         idx = df_tot['sigmaC'] >= 0.039
         idx &= df_tot['sigmaC'] < 0.05
-        
+
         if self.verbose:
             print('sigmaC_cut', len(df_tot[idx]))
 
@@ -1149,7 +1148,7 @@ class SNR_z:
             df_tot['SNR_indiv_tot'] = self.SNR_combi(
                 df_tot['SNR_indiv'], df_tot['SNR_model'])
         else:
-             df_tot['SNR_indiv_tot'] = df_tot['SNR_indiv']
+            df_tot['SNR_indiv_tot'] = df_tot['SNR_indiv']
         # print('there man',b,len(df_tot),df_tot[['SNRcalc','m5calc','SNR_indiv_tot','SNR_model','SNR_indiv','flux_e_sec']])
         df_tot['fluxerr_indiv'] = df_tot['flux']/df_tot['SNR_indiv_tot']
         # update Fisher elements

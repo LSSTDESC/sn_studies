@@ -43,7 +43,7 @@ class SNR_m5:
 
         refdata = pd.DataFrame(np.copy(load(inputDir, refFile)))
         refdata['band'] = refdata['band'].map(lambda x: x.decode()[-1])
-
+        print('loading', inputDir, refFile, refdata['z'].max())
         self.error_model = 0.
         if 'error_model' in refFile:
             self.error_model = 1
@@ -137,9 +137,9 @@ class SNR_m5:
         datab = data.copy()
 
         idc = datab['flux'] > 1.e-10
-        if self.error_model:
-            idc &= datab['fluxerr_model'] > 0.
 
+        if self.error_model:
+            idc &= datab['fluxerr_model'] >= 0.
         datab = datab[idc]
 
         # set the error model error to the one corresponding to the flux in elec/sec
@@ -171,8 +171,7 @@ class SNR_m5:
             plt.show()
             """
             # select only LC points with SNR>=snrmin
-            idsnr = datab['SNR_bd'] >= self.snrmin
-
+            idsnr = datab['SNR_photo_bd'] >= self.snrmin
             grp = datab[idsnr].groupby(['band', 'z']).apply(
                 lambda x: self.calc(x, m5)).reset_index()
             res = pd.concat((res, grp))

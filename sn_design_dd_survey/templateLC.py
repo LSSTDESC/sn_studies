@@ -1,6 +1,7 @@
 import os
 
-def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,error_model_cut,zmin,zmax,zstep,outDir,bands,cadence,prodid):
+
+def templateLC(x1, color, simulator, ebvofMW, bluecutoff, redcutoff, error_model, error_model_cut, zmin, zmax, zstep, outDir, bands, cadence, prodid):
     """
     Method used to simulate LC from Fakes
 
@@ -46,16 +47,15 @@ def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,error
     cmd = 'python run_scripts/make_yaml/make_yaml_fakes.py'
     cmd += ' --fileName {}'.format(fake_config)
     cmd += ' --bands {}'.format(bands)
-    for key,val in cadence.items():
-        cmd += ' --cadence_{} {}'.format(key,val)
+    for key, val in cadence.items():
+        cmd += ' --cadence_{} {}'.format(key, val)
 
     os.system(cmd)
 
-    
-    cutoff = '{}_{}'.format(bluecutoff,redcutoff)
+    cutoff = '{}_{}'.format(bluecutoff, redcutoff)
     if error_model:
         cutoff = 'error_model'
-    
+
     #outDir_simu = 'Output_Simu_{}_ebvofMW_{}'.format(cutoff,ebv)
     outDir_simu = outDir
     """
@@ -85,18 +85,17 @@ def templateLC(x1,color,simulator,ebvofMW,bluecutoff,redcutoff,error_model,error
     cmd += ' --Observations_fieldtype Fake'
     cmd += ' --Observations_coadd 0'
     cmd += ' --radius 0.01'
-    cmd += ' --Output_directory {}'.format(outDir_simu)
+    cmd += ' --OutputSimu_directory {}'.format(outDir_simu)
     cmd += ' --Simulator_name sn_simulator.{}'.format(simulator)
-    cmd += ' --Multiprocessing_nproc 1'
+    cmd += ' --MultiprocessingSimu_nproc 1'
     cmd += ' --RAmin 0.0'
     cmd += ' --RAmax 0.1'
-    cmd += '  --ProductionID {}'.format(prodid)
+    cmd += '  --ProductionIDSimu {}'.format(prodid)
     cmd += ' --SN_ebvofMW {}'.format(ebvofMW)
     cmd += ' --SN_blueCutoff {}'.format(bluecutoff)
     cmd += ' --SN_redCutoff {}'.format(redcutoff)
     cmd += ' --npixels -1'
     cmd += ' --Simulator_errorModel {}'.format(error_model)
-    cmd += ' --Simulator_errorModelCut {}'.format(error_model_cut)
     cmd += ' --SN_maxRFphase 60.'
     print(cmd)
     os.system(cmd)
