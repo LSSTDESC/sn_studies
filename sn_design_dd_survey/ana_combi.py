@@ -227,7 +227,8 @@ class CombiChoice:
         selvar = ['Nvisits', 'Nvisits_y', 'Delta_iz']
         minparname = ['nvisits', 'nvisits_y', 'deltav_iz']
         """
-
+        sel['Delta_SNR'] = sel['SNRcalc_z']-sel['SNRcalc_y']
+        sel['Delta_Nvisits'] = sel['Nvisits_z']-sel['Nvisits_y']
         seldict = {}
         seldict['zmin'] = 0.6
         seldict['cut1'] = {}
@@ -239,23 +240,28 @@ class CombiChoice:
         seldict['cut2']['value'] = 2
         seldict['cut2']['op'] = operator.le
 
+        seldict['cut3'] = {}
+        seldict['cut3']['var'] = 'Delta_Nvisits'
+        seldict['cut3']['value'] = 3
+        seldict['cut3']['op'] = operator.ge
+
         seldictb = seldict.copy()
-        seldictb['cut3'] = {}
-        seldictb['cut3']['var'] = 'Nvisits_y'
-        seldictb['cut3']['value'] = 20.
-        seldictb['cut3']['op'] = operator.le
+        seldictb['cut4'] = {}
+        seldictb['cut4']['var'] = 'Nvisits_y'
+        seldictb['cut4']['value'] = 20.
+        seldictb['cut4']['op'] = operator.le
 
         seldictc = seldict.copy()
-        seldictc['cut3'] = {}
-        seldictc['cut3']['var'] = 'Nvisits_y'
-        seldictc['cut3']['value'] = 30.
-        seldictc['cut3']['op'] = operator.le
+        seldictc['cut4'] = {}
+        seldictc['cut4']['var'] = 'Nvisits_y'
+        seldictc['cut4']['value'] = 30.
+        seldictc['cut4']['op'] = operator.le
 
         seldictd = seldict.copy()
-        seldictd['cut3'] = {}
-        seldictd['cut3']['var'] = 'Nvisits_y'
-        seldictd['cut3']['value'] = 40.
-        seldictd['cut3']['op'] = operator.le
+        seldictd['cut4'] = {}
+        seldictd['cut4']['var'] = 'Nvisits_y'
+        seldictd['cut4']['value'] = 40.
+        seldictd['cut4']['op'] = operator.le
 
         selvar = ['Nvisits']
         minparname = ['nvisits']
