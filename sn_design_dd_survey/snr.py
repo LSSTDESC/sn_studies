@@ -80,7 +80,6 @@ class SNR:
         # plt.show()
         # now choose SNR corresponding to sigmaC~0.04 vs z
 
-        print('resultat', SNR_dict.keys())
         if self.verbose:
             print('SNR class - sigma_C selection')
             # SNR_dict = myclass.SNR(dfsigmaC)
@@ -198,7 +197,7 @@ class SNR_z:
 
         """
         # verbose
-        # verbose = True
+        #verbose = True
         self.verbose = verbose
         # get data parameters
         self.x1 = data.x1
@@ -484,7 +483,7 @@ class SNR_z:
         dfsigmaCb = self.lcdf.groupby(['x1', 'color', 'z']).apply(
             lambda x: self.sigmaC_all(x)).reset_index()
 
-        print('Done sigma', dfsigmaCb.columns)
+        #print('Done sigma', dfsigmaCb.columns)
         """
         cols = ['z']
         for val in ['SNRcalc','flux_5_e_sec']:
@@ -761,10 +760,15 @@ class SNR_z:
         t = np.linspace(0, nz, self.nproc+1, dtype='int')
         result_queue = multiprocessing.Queue()
 
+        
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.loopSNR,
                                          args=(ref[t[j]:t[j+1]], grp, SNR_split, dictband, x1, color, z, j, result_queue))
                  for j in range(self.nproc)]
-
+        """
+        j=0
+        procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.loopSNR,
+                                         args=(ref[:1], grp, SNR_split, dictband, x1, color, z, j, result_queue))]
+        """
         for p in procs:
             p.start()
 
@@ -788,6 +792,10 @@ class SNR_z:
 
     def loopSNR(self, keys, grp, SNR_split, dictband, x1, color, z, j=0, output_q=None):
 
+        """
+        print('processing',keys,SNR_split[keys[0]])
+        SNR_split[0] = dict(zip('grizy',[[0.],[0.],[33.],[4.],[37.]]))
+        """
         time_ref = time.time()
         dfres = pd.DataFrame()
 
@@ -795,8 +803,9 @@ class SNR_z:
             vals = SNR_split[key]
             if self.verbose:
                 print('Processing SNR', key, vals)
-            resi = self.combiSNR(grp, dictband, vals, x1, color, z, key)
-
+            #resi = self.combiSNR(grp, dictband, vals, x1, color, z, key)
+            resi = self.combiSNR(dictband, vals, x1, color, z, key)
+            #print('ici',resi)
             if resi is not None:
                 if self.save_SNR_combi:
                     self.saveCombi(resi, x1, color, z, '{}_{}'.format(j, key))
@@ -819,8 +828,8 @@ class SNR_z:
         else:
             return dfres
 
-    def combiSNR(self, grp, dictband, SNR, x1, color, z, icombi):
-
+    #def combiSNR(self, grp, dictband, SNR, x1, color, z, icombi):
+    def combiSNR(self, dictband, SNR, x1, color, z, icombi):
         # existing bands
         bands = ''.join(list(dictband.keys()))
 
@@ -872,7 +881,7 @@ class SNR_z:
 
         if self.verbose:
             vv = []
-            for b in 'gri':
+            for b in 'izy':
                 for val in ['m5calc', 'SNRcalc']:
                     vv.append('{}_{}'.format(val, b))
             print('estimating sigmaC', df_tot[vv])
@@ -889,9 +898,9 @@ class SNR_z:
                     vv.append('{}_{}'.format(bb,b))
             print(df_tot[vv])
             """
-
+        
         df_tot['sigmaC'] = np.sqrt(CovColor(df_tot).Cov_colorcolor)
-
+        #print('estimating sigmaC',df_tot['sigmaC'])
         if self.verbose:
             print('sigmaC', df_tot['sigmaC'])
         # add the missing bands to have a uniform format z-independent
@@ -920,8 +929,8 @@ class SNR_z:
         df_tot = dfres[idx]
 
         # print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
-        idx = df_tot['sigmaC'] >= 0.039
-        idx &= df_tot['sigmaC'] < 0.05
+        idx = df_tot['sigmaC'] >= 0.99*0.04
+        idx &= df_tot['sigmaC'] <=1.01*0.04
 
         if self.verbose:
             print('sigmaC_cut', len(df_tot[idx]))
@@ -1091,7 +1100,7 @@ class SNR_z:
             df_tot.loc[:, 'flux_e_sec_{}'.format(b)] = 0.0
             df_tot.loc[:, 'm5calc_{}'.format(b)] = 0.0
 
-            # select only combi with sigma_C ~ self.sigma_color_cut
+        # select only combi with sigma_C ~ self.sigma_color_cut
         idx = np.abs(df_tot['sigmaC'] -
                      self.sigma_color_cut) < 0.01*self.sigma_color_cut
 
@@ -1139,23 +1148,27 @@ class SNR_z:
             (df_tot['SNRcalc'].values, [z]*len(df_tot)))
 
         # now need to estimate the phot error for this m5
-        df_tot['SNR_indiv'] = 1. / \
+        df_tot['SNR_photo'] = 1. / \
             srand(self.gamma[b](df_tot['m5calc']),
                   df_tot['mag'], df_tot['m5calc'])
-
+        #df_tot['SNR_photo']=df_tot['SNRcalc']
         # get the total SNR
+        
         if self.include_error_model_sigmac:
             df_tot['SNR_indiv_tot'] = self.SNR_combi(
-                df_tot['SNR_indiv'], df_tot['SNR_model'])
+                df_tot['SNR_photo'], df_tot['SNR_model'])
         else:
-            df_tot['SNR_indiv_tot'] = df_tot['SNR_indiv']
-        # print('there man',b,len(df_tot),df_tot[['SNRcalc','m5calc','SNR_indiv_tot','SNR_model','SNR_indiv','flux_e_sec']])
+            df_tot['SNR_indiv_tot'] = df_tot['SNR_photo']
+        
         df_tot['fluxerr_indiv'] = df_tot['flux']/df_tot['SNR_indiv_tot']
+        
         # update Fisher elements
 
+    
         for col in self.listcol:
             df_tot[col] = df_tot[col.replace(
                 'F', 'd')]/df_tot['fluxerr_indiv']**2
+        
             """
             df_tot[col] = df_tot[col] * \
                 (df_tot['SNR_indiv']/df_tot['snr_m5'])**2.
