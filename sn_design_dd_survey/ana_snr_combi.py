@@ -97,7 +97,7 @@ def min_nvisits(z, snr, colout, mincol='Nvisits', minpar='nvisits', select={}):
             for key, vals in select.items():
                 if key != 'zmin':
                     idx &= vals['op'](snr[vals['var']], vals['value'])
-                    snr = snr[idx]
+            snr = snr[idx]
     print('hello', len(snr), mincol)
     if mincol != 'Nvisits':
         snr = snr.sort_values(by=['Nvisits', mincol])
@@ -107,7 +107,7 @@ def min_nvisits(z, snr, colout, mincol='Nvisits', minpar='nvisits', select={}):
     snr['min_val'] = snr[mincol]
 
     nout = np.min([len(snr), 10])
-    return snr[colout][:nout]
+    return snr[colout]
 
 
 def load_multiple(thedir, snrfi, sigmaC_min, sigmaC_max, nproc=8):
@@ -373,7 +373,7 @@ plotb(snr, z, 'SNRcalc', 'Nvisits', bands=bands, colors=colors)
 plotb(snr, z, 'SNRcalc', 'm5calc', bands=bands, colors=colors)
 fig, ax = plt.subplots()
 ax.plot(snr['sigmaC'], snr['Nvisits'], 'ko')
-plt.show()
+
 
 colout = ['sigmaC', 'SNRcalc_tot', 'Nvisits', 'Nvisits_g', 'SNRcalc_g',
           'Nvisits_r', 'SNRcalc_r', 'Nvisits_i', 'SNRcalc_i', 'Nvisits_z',
@@ -387,7 +387,7 @@ colout = ['sigmaC', 'Nvisits',
                        'SNRcalc_z', 'Nvisits_y', 'SNRcalc_y']
 
 sel = snr.copy()
-
+"""
 sel['Delta_iz'] = np.abs(sel['Nvisits_i']-sel['Nvisits_z'])
 sel['Delta_SNR'] = sel['SNRcalc_z']-sel['SNRcalc_y']
 
@@ -410,10 +410,66 @@ seldictb['cut3']['op'] = operator.ge
 
 selvar = ['Nvisits', 'Nvisits_y', 'Delta_iz']
 minparname = ['nvisits', 'nvisits_y', 'deltav_iz']
+"""
+sel['Delta_SNR'] = sel['SNRcalc_z']-sel['SNRcalc_y']
+sel['Delta_Nvisits'] = sel['Nvisits_z']-sel['Nvisits_y']
+seldict = {}
+seldict['zmin'] = 0.6
+seldict['cut1'] = {}
+seldict['cut1']['var'] = 'Nvisits_r'
+seldict['cut1']['value'] = 2
+seldict['cut1']['op'] = operator.le
+seldict['cut2'] = {}
+seldict['cut2']['var'] = 'Nvisits_g'
+seldict['cut2']['value'] = 2
+seldict['cut2']['op'] = operator.le
+
+seldict['cut3'] = {}
+seldict['cut3']['var'] = 'Delta_Nvisits'
+seldict['cut3']['value'] = 3
+seldict['cut3']['op'] = operator.ge
+
+seldictb = seldict.copy()
+seldictb['cut4'] = {}
+seldictb['cut4']['var'] = 'Nvisits_y'
+seldictb['cut4']['value'] = 20.
+seldictb['cut4']['op'] = operator.le
+
+seldictc = seldict.copy()
+seldictc['cut4'] = {}
+seldictc['cut4']['var'] = 'Nvisits_y'
+seldictc['cut4']['value'] = 30.
+seldictc['cut4']['op'] = operator.le
+
+seldictd = seldict.copy()
+seldictd['cut4'] = {}
+seldictd['cut4']['var'] = 'Nvisits_y'
+seldictd['cut4']['value'] = 40.
+seldictd['cut4']['op'] = operator.le
+
+selvar = ['Nvisits']
+minparname = ['nvisits']
+
+
 combi = dict(zip(selvar, minparname))
 snr_visits = pd.DataFrame()
 
 for key, val in combi.items():
     res = min_nvisits(z, sel, colout, key, val, seldict)
+
     print('parameter', key)
-    print(res)
+    # for key, val in combi.items():
+    print('tttt', sel.columns)
+    res = min_nvisits(z, sel, colout, key, '{}_sela'.format(val), seldictb)
+    snr_visits = pd.concat((snr_visits, res))
+    """
+    # for key, val in combi.items():
+    res = self.min_nvisits(sel, key, '{}_selb'.format(val), seldictc)
+    snr_visits = pd.concat((snr_visits, res))
+
+    # for key, val in combi.items():
+    res = self.min_nvisits(sel, key, '{}_selc'.format(val), seldictd)
+    snr_visits = pd.concat((snr_visits, res))
+    """
+print(snr_visits)
+plt.show()
