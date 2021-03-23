@@ -29,7 +29,7 @@ def plot_SNR_Nvisits(sel_snr, bands='izy', z=np.arange(0.8, 1.1, 0.1)):
             if zv <= 1:
                 idb = np.abs(sela['z']-zv) < 1.e-5
                 selb = sela[idb].to_records(index=False)
-                ax.plot(selb['nVisits'], selb['SNR'], color=colors[b],
+                ax.plot(selb['m5'], selb['SNR_photo_bd'], color=colors[b],
                         label='{} - z={}'.format(b, zv), ls=ls[zv])
 
     ax.grid()
@@ -135,7 +135,7 @@ snr = snr.rename(columns={"fiveSigmaDepth": "m5_single"})
 snr['nVisits'] = 10**((snr['m5']-snr['m5_single'])/1.25)
 print(snr)
 
-io = snr['nVisits'] <= 100.  # max number of visits per band
+io = snr['nVisits'] <= 250.  # max number of visits per band
 
 sel_snr = snr[io]
 
