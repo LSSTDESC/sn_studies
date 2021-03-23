@@ -136,7 +136,7 @@ class CombiChoice:
 
         snr = None
         for fi in fis:
-            # print('loading', fi)
+            print('loading', fi)
             tab = np.load(fi, allow_pickle=True)
             # analyzing the file here
             sel = self.anafich(tab)
@@ -172,7 +172,7 @@ class CombiChoice:
 
         """
         idx = tab['Nvisits'] < 100000000.
-        # idx &= tab['sigmaC'] >= 0.0390
+        idx &= tab['sigmaC'] < 1.01*0.04
         sel = pd.DataFrame(tab[idx].copy())
         if len(sel) <= 0:
             return None
