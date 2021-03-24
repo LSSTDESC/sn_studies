@@ -302,7 +302,7 @@ def OptiCombi(fracSignalBand, dirStudy='dd_design',
 
     resdf = pd.DataFrame()
     snr_dirs = glob.glob('{}/*'.format(dirSNR_combi_full))
-    #zvals = np.arange(zmin, zmax+zstep, zstep)
+    # zvals = np.arange(zmin, zmax+zstep, zstep)
     """
     for fi in snr_dirs:
         z = (
@@ -366,7 +366,6 @@ def Nvisits_Cadence_z(m5_single, snr_opti_file,
         bb.append('Nvisits_{}'.format(b))
     # load SNR_m5 files for various cadences
     fis = glob.glob('{}/{}/*'.format(dirStudy, dirSNR_m5))
-
     res = pd.DataFrame()
     for fi in fis:
         fib = (
@@ -395,6 +394,7 @@ def Nvisits_Cadence_z(m5_single, snr_opti_file,
 
     # replace nan with zeros
     res = res.fillna(0.)
+
     np.save(outFull, res.to_records(index=False))
 
     # transform the data to have a format compatible with GUI
@@ -481,7 +481,7 @@ class Nvisits_Cadence_Fields:
         self.Nvisits_z_med = Nvisits_z_med
         self.cadence_for_opti = cadence_for_opti
 
-        #restot = self.multiproc()
+        # restot = self.multiproc()
 
         restot = pd.DataFrame()
         for j, cadence in enumerate(cadences):
@@ -507,8 +507,8 @@ class Nvisits_Cadence_Fields:
         time_ref = time.time()
         result_queue = multiprocessing.Queue()
 
-        #cadences = range(2, 5)
-        #cadences = np.unique(self.nvisits_ref['cadence'])
+        # cadences = range(2, 5)
+        # cadences = np.unique(self.nvisits_ref['cadence'])
         nproc = len(self.cadences)
 
         for j, cadence in enumerate(self.cadences):
