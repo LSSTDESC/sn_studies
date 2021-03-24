@@ -399,6 +399,7 @@ class Visits_Cadence:
 
         # add the number of visits corresponding to m5 values
         m5_cad = self.add_Nvisits(m5_cad)
+        idx = np.abs(m5_cad['z']-0.9) < 1.e-5
 
         # get the number of visits corresponding to snr_opti
         res = pd.DataFrame()
@@ -478,7 +479,7 @@ class Visits_Cadence:
         Nvisits_orig = snr_opti[idx]['Nvisits_{}'.format(band)]
 
         fb = interp1d(
-            grp['SNR'], grp['Nvisits'], bounds_error=False, fill_value=0.)
+            grp['SNR_photo_bd'], grp['Nvisits'], bounds_error=False, fill_value=0.)
 
         res = pd.DataFrame({'Nvisits': fb(snr_val),
                             'Nvisits_orig': Nvisits_orig.tolist()})
