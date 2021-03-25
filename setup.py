@@ -14,5 +14,6 @@ setup(
     zip_safe=False,
     install_requires=[
         'sn_tools>=0.1',
+        'sn_simulation>=0.1'
     ],
 )
