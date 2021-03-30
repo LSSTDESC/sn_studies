@@ -291,7 +291,8 @@ class Fields_up:
         if len(r) > 0:
             time_obs = unix2mjd(np.max(r))-unix2mjd(np.min(r))
             nvisits = time_obs*24.*3600./30
-            time_begin = np.min(r)
+            time_begin = unix2mjd(np.min(r))
+
         resdf = pd.DataFrame({'name': [name], 'ra': [ra], 'dec': [dec], 'night': [
                              nightNum], 'timeObs': [time_obs], 'nvisits': [nvisits],
             'timeBegin': [time_begin],
