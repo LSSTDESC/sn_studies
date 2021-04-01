@@ -263,6 +263,18 @@ class CombiChoice:
         seldictd['cut4']['value'] = 40.
         seldictd['cut4']['op'] = operator.le
 
+        seldicte = seldict.copy()
+        seldicte['cut4'] = {}
+        seldicte['cut4']['var'] = 'Nvisits_y'
+        seldicte['cut4']['value'] = 60.
+        seldicte['cut4']['op'] = operator.le
+
+        seldictf = seldict.copy()
+        seldictf['cut4'] = {}
+        seldictf['cut4']['var'] = 'Nvisits_y'
+        seldictf['cut4']['value'] = 80.
+        seldictf['cut4']['op'] = operator.le
+
         selvar = ['Nvisits']
         minparname = ['nvisits']
 
@@ -272,17 +284,20 @@ class CombiChoice:
         for key, val in combi.items():
             res = self.min_nvisits(sel, key, val, seldict)
             snr_visits = pd.concat((snr_visits, res))
-
-        # for key, val in combi.items():
-            res = self.min_nvisits(sel, key, '{}_sela'.format(val), seldictb)
+            
+            res = self.min_nvisits(sel, key, '{}_Ny_20'.format(val), seldictb)
+            snr_visits = pd.concat((snr_visits, res))
+            
+            res = self.min_nvisits(sel, key, '{}_Ny_30'.format(val), seldictc)
             snr_visits = pd.concat((snr_visits, res))
 
-        # for key, val in combi.items():
-            res = self.min_nvisits(sel, key, '{}_selb'.format(val), seldictc)
+            res = self.min_nvisits(sel, key, '{}_Ny_40'.format(val), seldictd)
             snr_visits = pd.concat((snr_visits, res))
 
-        # for key, val in combi.items():
-            res = self.min_nvisits(sel, key, '{}_selc'.format(val), seldictd)
+            res = self.min_nvisits(sel, key, '{}_Ny_60'.format(val), seldicte)
+            snr_visits = pd.concat((snr_visits, res))
+
+            res = self.min_nvisits(sel, key, '{}_Ny_80'.format(val), seldictf)
             snr_visits = pd.concat((snr_visits, res))
 
         # snr_chisq = self.min_chisq(snr.copy())
