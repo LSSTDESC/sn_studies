@@ -558,7 +558,10 @@ class SNR_z:
             nvisits = 10**((m5-m5_single)/1.25)
             # print(band, m5, type(m5),nvisits,m5_single)
             idx = m5 > 0.
-            idx &= nvisits <= 200.
+            if band != 'g' and band != 'r':
+                idx &= nvisits <= 200.
+            else:
+                idx &= nvisits <= 10.
             # print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
             # print(band,z,SNR[band],type(SNR[band]))
             SNR[band] = SNR[band][idx].tolist()
@@ -566,6 +569,7 @@ class SNR_z:
                 SNR[band].append(100000.)
             if band == 'r':
                 SNR[band].append(100000.)
+                #print(band, SNR[band],nvisits)
             # SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
             # SNR[band] = [SNR_min]
             """
@@ -929,7 +933,8 @@ class SNR_z:
         df_tot = dfres[idx]
 
         # print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
-        idx = df_tot['sigmaC'] >= 0.99*0.04
+        #idx = df_tot['sigmaC'] >= 0.90*0.04
+        idx = df_tot['sigmaC'] >= 0.025
         idx &= df_tot['sigmaC'] <=1.01*0.04
 
         if self.verbose:

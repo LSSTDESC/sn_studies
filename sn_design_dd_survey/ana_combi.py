@@ -230,14 +230,14 @@ class CombiChoice:
         sel['Delta_SNR'] = sel['SNRcalc_z']-sel['SNRcalc_y']
         sel['Delta_Nvisits'] = sel['Nvisits_z']-sel['Nvisits_y']
         seldict = {}
-        seldict['zmin'] = 0.6
+        seldict['zmin'] = 0.65
         seldict['cut1'] = {}
         seldict['cut1']['var'] = 'Nvisits_r'
         seldict['cut1']['value'] = 2
         seldict['cut1']['op'] = operator.le
         seldict['cut2'] = {}
         seldict['cut2']['var'] = 'Nvisits_g'
-        seldict['cut2']['value'] = 2
+        seldict['cut2']['value'] = 3
         seldict['cut2']['op'] = operator.le
 
         seldict['cut3'] = {}
