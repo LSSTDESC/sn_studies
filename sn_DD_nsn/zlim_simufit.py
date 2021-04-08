@@ -9,7 +9,7 @@ from scipy.interpolate import interp1d
 parser = OptionParser(
     description='Estimate zlim from simulation+fit data')
 parser.add_option("--dbDir", type="str",
-                  default='/sps/lsst/users/gris/DD/Fit/',
+                  default='/sps/lsst/users/gris/DD/Fit',
                   help="file directory [%default]")
 parser.add_option("--dbName", type="str",
                   default='descddf_v1.5_10yrs',
@@ -55,7 +55,7 @@ for healpixID in np.unique(tab['healpixID']):
                 norm = np.cumsum(selb['z'])[-1]
                 zlim = interp1d(
                     np.cumsum(selb['z'])/norm, selb['z'], bounds_error=False, fill_value=0.)
-                print('zlim', zlim(0.95))
+                #print('zlim', zlim(0.95))
                 r.append((healpixID, season, zlim(0.95)))
                 """
                 fig, ax = plt.subplots()
@@ -74,3 +74,5 @@ for healpixID in np.unique(tab['healpixID']):
 res = np.rec.fromrecords(r, names=['healpixID', 'season', 'zlim'])
 
 print(np.median(res['zlim']))
+
+np.save('zlim_simufit.py',res)
