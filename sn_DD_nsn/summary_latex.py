@@ -68,9 +68,10 @@ def print_resu(fia, fieldName, selb, npixa, npixb, frac_DD):
     else:
         finalres += '& '
 
-    finalres += '& {} & {} & {} & {} & {} & {} & {} & {} \\\\'.format(fieldName,
-                                                                      cadence, filter_alloc, m5, nights, season_length, int(npixa), int(npixb))
-
+    # finalres += '& {} & {} & {} & {} & {} & {} & {} & {} \\\\'.format(fieldName,
+    #                                                                  cadence, filter_alloc, m5, nights, season_length, int(npixa), int(npixb))
+    finalres += '& {} & {} & {} & {} & {} & {} \\\\'.format(fieldName,
+                                                            cadence, filter_alloc, nights, season_length, int(npixa))
     # finalres += '& {} & {} & {} & {} & {}  \\\\'.format(fieldName,
     #                                                    cadence, filter_alloc, m5, nights)
 
@@ -91,13 +92,20 @@ def print_bandeau(fia):
 
     """
     fia.write('\\begin{center} \n')
-    fia.write('\\begin{sidewaystable}[htbp] \n')
+    #fia.write('\\begin{sidewaystable}[htbp] \n')
     fia.write('\\resizebox{\\textwidth}{!}{% \n')
+    """
     fia.write('\\begin{tabular}{c|c|c|c|c|c|c|c|c|c} \n ')
     fia.write(
         'Observing & DD frac(\%) & Field & cadence & Nvisits & m5 & Nnights & season length & total area & effective area \\\\ \n')
     fia.write(
         ' Strategy &  &  & min/med/max & g/r/i/z/y & g/r/i/z/y & & [days] & [deg2] & [deg2] \\\\ \n')
+    """
+    fia.write('\\begin{tabular}{c|c|c|c|c|c|c|c|c|c} \n ')
+    fia.write(
+        'Observing & DD budget(\%) & Field & cadence & Nvisits & Nnights & season length & area \\\\ \n')
+    fia.write(
+        ' Strategy &  &  & min/med/max & g/r/i/z/y & & [days] & [deg2] \\\\ \n')
 
 
 def print_bandeau_old(fia, fib):
@@ -196,7 +204,7 @@ for dbName in dbNames:
     frac_DD = np.round(frac_DD, 1)
 
     icount += 1
-    if icount > 4:
+    if icount > 7:
         icount = 0
         idb += 1
 
