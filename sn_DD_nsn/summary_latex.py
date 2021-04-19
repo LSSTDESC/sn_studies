@@ -78,10 +78,26 @@ def print_resu(fia, fieldName, selb, npixa, npixb, frac_DD):
     # finalresb += '& {} & {} & {} & {} \\\\'.format(fieldName,
     #                                               season_length, int(npixa), int(npixb))
     fia.write('{} \n'.format(finalres))
-    #fib.write('{} \n'.format(finalresb))
+    # fib.write('{} \n'.format(finalresb))
 
 
-def print_bandeau(fia):
+def print_resu_summary(fia, dbName, frac_DD, cad_tot, nvisits_tot, nights_tot, seasonlength_tot, total_area):
+    cad = '/'.join(map(str, cad_tot))
+    nvisits = '/'.join(map(str, nvisits_tot))
+    nights = '/'.join(map(str, nights_tot))
+    seasonlength = '/'.join(map(str, seasonlength_tot))
+    area = np.round(total_area, 1)
+    """
+    finalres = '{} & {} & {} & {} & {} & {} & {} \\\\'.format(
+        dbName.replace('_', '\_'), cad, nvisits, nights, seasonlength, area, frac_DD)
+    fia.write('{} \n'.format(finalres))
+    """
+    finalres = '{} & {} & {} & {} & {} & {} \\\\'.format(
+        dbName.replace('_', '\_'), cad, nvisits, seasonlength, area, frac_DD)
+    fia.write('{} \n'.format(finalres))
+
+
+def print_bandeau(fia, fieldlist):
     """
     Function to write necessary latex info for tables
 
@@ -91,9 +107,14 @@ def print_bandeau(fia):
       file where infos will be written.
 
     """
-    fia.write('\\begin{center} \n')
-    #fia.write('\\begin{sidewaystable}[htbp] \n')
-    fia.write('\\resizebox{\\textwidth}{!}{% \n')
+    fia.write('\\begin{table}[!htbp] \n')
+    fia.write('\\caption{Survey parameters for the list of observing strategies analyzed in this paper. For the cadence and season length, the numbers correspond to ' +
+              fieldlist + ' fields, respectivelly.}\\label{tab:os} \n')
+    # fia.write('\\begin{center} \n')
+    # fia.write('\\centering')
+    # fia.write('\\begin{sidewaystable}[htbp] \n')
+    # fia.write('\\resizebox{1.1\\textwidth}{!}{% \n')
+    fia.write('\\begin{adjustbox}{width=1.2\\linewidth,center} \n')
     """
     fia.write('\\begin{tabular}{c|c|c|c|c|c|c|c|c|c} \n ')
     fia.write(
@@ -101,11 +122,18 @@ def print_bandeau(fia):
     fia.write(
         ' Strategy &  &  & min/med/max & g/r/i/z/y & g/r/i/z/y & & [days] & [deg2] & [deg2] \\\\ \n')
     """
+    """
     fia.write('\\begin{tabular}{c|c|c|c|c|c|c|c|c|c} \n ')
     fia.write(
-        'Observing & DD budget(\%) & Field & cadence & Nvisits & Nnights & season length & area \\\\ \n')
+        'Observing & DD budget(\%) & Field & cadence & Nvisits & season length & area \\\\ \n')
     fia.write(
-        ' Strategy &  &  & min/med/max & g/r/i/z/y & & [days] & [deg2] \\\\ \n')
+        ' Strategy &  &  & min/med/max & g/r/i/z/y & [days] & [deg2] \\\\ \n')
+    """
+    fia.write('\\begin{tabular}{c|c|c|c|c|c} \n ')
+    fia.write(
+        'Observing & cadence & Nvisits & season length & area & DD budget\\\\ \n')
+    fia.write(
+        ' Strategy & [days] & u/g/r/i/z/y & [days] & [deg2] &(\%)\\\\ \n')
 
 
 def print_bandeau_old(fia, fib):
@@ -135,9 +163,11 @@ def print_end(fia):
       file where infos will be written.
 
     """
-    fia.write('\end{tabular}} \n')
-    fia.write('\end{sidewaystable} \n')
-    fia.write('\end{center}')
+    fia.write('\\end{tabular} \n')
+    fia.write('\\end{adjustbox} \n')
+    # fia.write('\end{sidewaystable} \n')
+    # fia.write('\\end{center}')
+    fia.write('\\end{table} \n')
 
 
 def print_end_old(fia, fib):
@@ -158,7 +188,7 @@ group = OptionGroup(parser, "Warning",
                     "This file contains general infos about DD."
                     "It should have been produced with the script run_scripts/metrics/estimate_DDFrac.py")
 
-#group.add_option("-g", action="store_true", help="Group option.")
+# group.add_option("-g", action="store_true", help="Group option.")
 
 parser.add_option_group(group)
 
@@ -187,14 +217,23 @@ nfiles = int(np.round(len(dbNames)/4))
 print(nfiles)
 
 fia = {}
+fieldlist = []
+for dbName in dbNames:
+    fullName = 'DD_Summary_{}_128.npy'.format(dbName)
+    res = np.load(fullName, allow_pickle=True)
+    res.sort(order='fieldName')
+    for fieldName in np.unique(res['fieldName']):
+        fieldlist.append(fieldName)
+    break
+
 for i in range(nfiles):
     fia[i] = open('dd_summary_{}.tex'.format(i), 'w')
-    print_bandeau(fia[i])
+    print_bandeau(fia[i], '/'.join(fieldlist))
 
 # load generic infos for DD
 DD_gen = np.load('Nvisits.npy', allow_pickle=True)
 
-#print_bandeau(fia, fib)
+# print_bandeau(fia, fib)
 idb = 0
 icount = 0
 for dbName in dbNames:
@@ -204,19 +243,25 @@ for dbName in dbNames:
     frac_DD = np.round(frac_DD, 1)
 
     icount += 1
-    if icount > 7:
+    if icount > 20:
         icount = 0
         idb += 1
 
     fia[idb].write('\hline \n')
-    #fib.write('\hline \n')
+    # fib.write('\hline \n')
 
     nside = 128
     pixArea = hp.nside2pixarea(nside, degrees=True)
     fullName = 'DD_Summary_{}_128.npy'.format(dbName)
     res = np.load(fullName, allow_pickle=True)
     total_area = 0.
-    for fieldName in np.unique(res['fieldName']):
+    cad_tot = []
+    nvisits_tot = []
+    nights_tot = []
+    seasonlength_tot = []
+
+    # for i, fieldName in enumerate(np.unique(res['fieldName'])):
+    for i, fieldName in enumerate(fieldlist):
         idx = res['fieldName'] == fieldName
         sel = res[idx]
         npixels_total = len(np.unique(sel['healpixID']))
@@ -224,11 +269,23 @@ for dbName in dbNames:
         idxb = sel['nights'] >= 5
         selb = sel[idxb]
         npixels_eff = len(np.unique(selb['healpixID']))
+        """
         print_resu(fia[idb], fieldName, selb,
                    npixels_total*pixArea, npixels_eff*pixArea, frac_DD)
+        """
+        cadmi, cadmed, cadmax = min_med_max(selb['cadence'])
+        cad_tot.append(cadmed)
+        nights_mi, nights_med, nights_max = min_med_max(selb['nights'])
+        nights_tot.append(int(nights_med))
+        seasmi, seasmed, seasmax = min_med_max(selb['season_length'])
+        seasonlength_tot.append(int(seasmed))
+        if i == 0:
+            for band in 'grizy':
+                nvisits_tot.append(int(np.median(selb['N_{}'.format(band)])))
         total_area += npixels_total*pixArea
-    print(dbName, np.round(total_area, 1))
-
+    print(dbName, np.round(total_area, 1), cad_tot, nvisits_tot)
+    print_resu_summary(fia[idb], dbName, frac_DD, cad_tot, nvisits_tot, nights_tot,
+                       seasonlength_tot, total_area)
 for i in range(nfiles):
     print_end(fia[i])
     fia[i].close()
