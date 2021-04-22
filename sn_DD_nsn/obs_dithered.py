@@ -126,6 +126,7 @@ class DitheredObs:
         self.interseason = 100  # 100 days between seasons
         self.numExposures = 1  # 1 snap
         self.exposureTime = 30.  # exposure time in sec
+        self.visitTime = 31.  # visit time in sec
         self.airmass = 1.2  # airmass common value
 
     def generateObs(self):
@@ -169,6 +170,7 @@ class DitheredObs:
 
         obsID = 0
         r = []
+        print('valsref', valsref)
         for mjd in mjd_days:
             night = int(mjd-mjd_min)+1
             # make the sequence for each filter
@@ -181,7 +183,9 @@ class DitheredObs:
             obs.fill('airmass', self.airmass)
             obs.fill('night', night)
             obs.fill('season', seasnum)
+            obs.fill('visitTime', self.visitTime)
             obs.fill('exptime', self.exposureTime)
+
             for key, vals in self.filteralloc.items():
                 for nn in range(vals):
                     obsID += 1
