@@ -200,9 +200,9 @@ class DitheredObs:
         return np.rec.fromrecords(r, names=obs.varnames)
 
 
-def outName(dither, cadence):
+def outName(outDir, dither, cadence):
 
-    return 'Fakes_dither{}_cadence_{}.npy'.format(np.round(dither, 2), cadence)
+    return '{}/Fakes_dither{}_cadence_{}.npy'.format(outDir, np.round(dither, 2), cadence)
 
 
 parser = OptionParser(
@@ -218,6 +218,9 @@ parser.add_option("--cadence", type=str, default='1.',
                   help="cadence of observation [%default]")
 parser.add_option("--dither", type=str, default='0.0',
                   help="translational dither offset [%default]")
+parser.add_option("--outputDir", type=str, default='.',
+                  help="output directory [%default]")
+
 
 opts, args = parser.parse_args()
 
@@ -239,7 +242,7 @@ for fieldName in fieldNames:
             allobs = obs.generateObs()
 
             # print(allobs.dtype)
-            np.save(outName(dith, cad), allobs)
+            np.save(outName(opts.outputDir, dith, cad), allobs)
             nights = np.unique(allobs['night'])
             print('cadence', np.median(np.diff(nights)))
 
