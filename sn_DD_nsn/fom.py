@@ -7,6 +7,7 @@ from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
 import pandas as pd
 from scipy.interpolate import interp1d
+from sn_tools.sn_calcFast import faster_inverse
 
 
 def loadData(dirFile, dbName, tagprod):
@@ -110,32 +111,52 @@ class zcomp_pixels:
 
 class CosmoDist:
     """
-    class to estimate cosmology parameters 
+    class to estimate cosmology parameters
 
     Parameters
     ---------------
-    H0 = 72.  # km.s-1.Mpc-1
-    c = 299792.458  # km.s-1
+    H0 : float,opt
+      Hubble cte (default: 72.  # km.s-1.Mpc-1)
+    c: float, opt
+     speed of the light (default: = 299792.458  # km.s-1)
+
     """
 
-    def __init__(self, H0=72, c=299792.458, Om=0.3, w0=-1., wa=0.):
+    def __init__(self, H0=72, c=299792.458):
 
         self.H0 = H0
         self.c = c
-        self.Om = Om
-        self.w0 = w0
-        self.wa = wa
 
-    def func(self, z):
+    def func(self, z, Om=0.3, w0=-1.0, wa=0.0):
+        """
+        Method to estimate the integrand for the luminosity distance
 
-        wp = self.w0+self.wa*z/(1.+z)
+        Parameters
+        ---------------
+        z: float
+          redshift
+        Om: float, opt
+          Omega_m parameter (default: 0.3)
+        w0: float, opt
+         w0 DE parameter (default: -1.0)
+        wa: float, opt
+          wa DE parameter (default: 0.)
 
-        H = self.Om*(1+z)**3+(1.-self.Om)*(1+z)**(3*(1.+wp))
+        Returns
+        -----------
+        the integrand (float)
+
+        """
+        wp = w0+wa*z/(1.+z)
+
+        H = Om*(1+z)**3+(1.-Om)*(1+z)**(3*(1.+wp))
+        # H = Om*(1+z)**3+(1.-Om)*(1+z)
+
         fu = np.sqrt(H)
 
         return 1/fu
 
-    def dL(self, z):
+    def dL(self, z, Om=0.3, w0=-1., wa=0.0):
         """
         Method to estimate the luminosity distance
 
@@ -143,6 +164,12 @@ class CosmoDist:
         ---------------
         z: float
            redshift
+        Om: float, opt
+          Omega_m parameter (default: 0.3)
+        w0: float, opt
+         w0 DE parameter (default: -1.0)
+       wa: float, opt
+         wa DE parameter (default: 0.)
 
         Returns
         ----------
@@ -150,65 +177,186 @@ class CosmoDist:
         """
         norm = self.c*(1.+z)/self.H0
 
-        return norm*integrate.quad(lambda x: self.func(x), 0.01, z)[0]
+        return norm*integrate.quad(lambda x: self.func(x, Om, w0, wa), 0.01, z)[0]
 
-    def mu(self, z):
+    def mu(self, z, Om=0.3, w0=-1.0, wa=0.0):
         """
         Method to estimate distance modulus
 
         Parameters
         ---------------
-        z: float 
+        z: float
            redshift
+        Om: float, opt
+          Omega_m parameter (default: 0.3)
+        w0: float, opt
+          w0 DE parameter (default: -1.0)
+        wa: float, opt
+            wa DE parameter (default: 0.)
 
         Returns
         -----------
         distance modulus (float)
 
         """
-        return 5.*np.log10(self.dL(z))+25.
+
+        return 5.*np.log10(self.dL(z, Om, w0, wa))+25.
+
+    def mufit(self, z, alpha, beta, Mb, x1, color, mbfit, Om=0.3, w0=-1.0, wa=0.0):
+
+        return mbfit+alpha*x1-beta*color-self.mu(z, Om, w0, wa)-Mb
 
 
 class FoM(CosmoDist):
     """
+    Class to estimate a statistical FoM
+    This class inherits from the CosmoDist class
 
+    Parameters
+    ---------------
+    fDir: str
+      location dir of the files to process
+    dbName: str
+       db Name to process
+    tagprod: str
+       tag for the production
+    zlim: pandas df
+      redshift limit (per HEALPixel and season)
+    H0 : float,opt
+      Hubble cte (default: 72.  # km.s-1.Mpc-1)
+    c: float, opt
+     speed of the light (default: = 299792.458  # km.s-1)
 
     """
 
-    def __init__(self, fDir, dbName, tagprod, H0=72, c=299792.458, Om=0.3, w0=-1., wa=0.):
-        super().__init__(H0, c, Om, w0, wa)
+    def __init__(self, fDir, dbName, tagprod, zlim, H0=72, c=299792.458):
+        super().__init__(H0, c)
 
         # load data
-        self.data = loadData(fDir, dbName, tagprod)
+        data = loadData(fDir, dbName, tagprod)
 
-    def plot_data_cosmo(self):
+        # select data according to (zlim, season)
 
+        data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
+                          'healpixID', 'season'])
+
+        data = self.select(data)
+        idx = data['z']-data['zcomp'] <= 0.
+        self.data = data[idx].copy()
+        print('Number of SN', len(self.data))
+        self.NSN = int(len(self.data)/50.)
+
+    def select(self, dd):
+        """"
+        Method to select data
+
+        Parameters
+        ---------------
+        dd: pandas df
+          data to select
+
+        Returns
+        -----------
+        selected pandas df
+
+        """
+        idx = dd['z'] < 1.
+        idx &= dd['z'] >= 0.1
+        idx &= dd['fitstatus'] == 'fitok'
+        idx &= np.sqrt(dd['Cov_colorcolor']) < 0.04
+
+        return dd[idx].copy()
+
+    def plot_data_cosmo(self, data, binned=False):
+        """
+        Method to plot distance modulus vs redshift
+
+        Parameters
+        ---------------
+        data: pandas df
+         data to plot
+
+        """
+
+        zmax = np.max(data['z'])
+        zmin = np.min(data['z'])
         r = []
-        for z in np.arange(0.01, 1., 0.01):
+        for z in np.arange(zmin, zmax, 0.01):
             r.append((z, self.mu(z)))
 
         res = np.rec.fromrecords(r, names=['z', 'mu'])
 
-        plt.plot(res['z'], res['mu'], color='b')
-        idx = self.data['z'] < 1.0
-        idx &= self.data['fitstatus'] == 'fitok'
-        idx &= np.sqrt(self.data['Cov_colorcolor']) < 0.04
-        sel = self.data[idx].copy()
-        print(sel.columns)
-        sel['mu'] = sel['mbfit']+0.13 * \
-            sel['x1_fit']-3.*sel['color_fit']+19.
-        if 'mu' in sel.columns:
-            bins = np.linspace(0, 1, 100)
-            group = sel.groupby(pd.cut(sel.z, bins))
-            plot_centers = (bins[:-1] + bins[1:])/2
-            plot_values = group.mu.mean()
-            plt.plot(plot_centers, plot_values, 'ko')
-            """
-            pp = sel.to_records(index=False)
-            plt.plot(pp['z'], pp['mu'], 'ko')
-            plt.hist2d(pp['z'], pp['mu'], bins=20)
-            """
+        fix, ax = plt.subplots()
+        # figb, axb = plt.subplots()
+        ax.plot(res['z'], res['mu'], color='b')
+
+        print(data.columns)
+        # add the mu columns
+        data['mu'] = data['mbfit']+0.14 * \
+            data['x1_fit']-3.1*data['color_fit']+18.85
+
+        x, y, yerr = 0., 0., 0.
+        if binned:
+            x, y, yerr = self.binned_data(zmin, zmax, data)
+        else:
+            pp = data.to_records(index=False)
+            x, y, yerr = pp['z'], pp['mu'], pp['sigma_mu']
+
+        ax.errorbar(x, y, yerr=yerr,
+                    color='k', lineStyle='None')
+
         plt.show()
+
+    def binned_data(self, zmin, zmax, data):
+        """
+        Method to transform a set of data to binned data
+
+        Parameters
+        ---------------
+        zmin: float
+          min redshift
+        zmax: float
+          max redshift
+        data: pandas df
+          data to be binned
+
+        Returns
+        -----------
+        x, y, yerr:
+        x : redshift centers
+        y: weighted mean of distance modulus
+        yerr: distance modulus error
+
+        """
+        bins = np.linspace(zmin, zmax, 100)
+        group = data.groupby(pd.cut(data.z, bins))
+        plot_centers = (bins[:-1] + bins[1:])/2
+        plot_values = group.mu.mean()
+        plot_values = group.apply(lambda x: np.sum(
+            x['mu']/x['sigma_mu']**2)/np.sum(1./x['sigma_mu']**2))
+        print(plot_values)
+        error_values = group.apply(
+            lambda x: 1./np.sqrt(np.sum(1./x['sigma_mu']**2)))
+        print('error', error_values)
+
+        return plot_centers, plot_values, error_values
+
+
+def deriv(grp, fom, params, epsilon):
+
+    pplus = {}
+    pminus = {}
+    for key in params.keys():
+        pplus[key] = params[key]+epsilon[key]
+        pminus[key] = params[key]-epsilon[key]
+
+    vva = fom.mufit(grp['z'], pplus['alpha'], pplus['beta'], pplus['Mb'], grp['x1_fit'],
+                    grp['color_fit'], grp['mbfit'], pplus['Om'], pplus['w0'], pplus['wa'])
+
+    vvb = fom.mufit(grp['z'], pminus['alpha'], pminus['beta'], pminus['Mb'], grp['x1_fit'],
+                    grp['color_fit'], grp['mbfit'], pminus['Om'], pminus['w0'], pminus['wa'])
+
+    return vva-vvb
 
 
 parser = OptionParser(
@@ -225,14 +373,43 @@ opts, args = parser.parse_args()
 fileDir = opts.fileDir
 dbName = opts.dbName
 
-"""
+
 tt = zcomp_pixels(fileDir, dbName, 'faintSN')
 
 zcomp = tt()
 
 print(zcomp)
-"""
 
-fom = FoM(fileDir, dbName, 'allSN')
 
-fom.plot_data_cosmo()
+fom = FoM(fileDir, dbName, 'allSN', zcomp)
+
+Om = 0.3
+w0 = -1.0
+wa = 0.0
+alpha = 0.14
+beta = 0.13
+Mb = -18.8
+
+
+h = 1.e-8
+varFish = ['dOm', 'dw0', 'dalpha', 'dbeta', 'dMb']
+parNames = ['Om', 'w0', 'wa', 'alpha', 'beta', 'Mb']
+parameters = dict(zip(parNames, [0.3, -1.0, 0.0, 0.14, 3.1, -18.8]))
+epsilon = dict(zip(parNames, [0.]*len(parNames)))
+for i in range(20):
+    data = fom.data.sample(n=fom.NSN)
+    # fom.plot_data_cosmo(data, binned=True)
+    Fisher = np.zeros((len(varFish), len(varFish)))
+    for vv in parNames:
+        epsilon[vv] = h
+        data['d{}'.format(vv)] = data.apply(
+            lambda x: deriv(x, fom, parameters, epsilon)/2/h, axis=1, result_type='expand')
+        epsilon[vv] = 0.0
+
+    for i, vva in enumerate(varFish):
+        for j, vvb in enumerate(varFish):
+            Fisher[i, j] = np.sum((data[vva]*data[vvb])/data['sigma_mu']**2)
+    print(Fisher)
+    res = np.sqrt(np.diag(faster_inverse(Fisher)))
+    print(res)
+    print(len(data), 1./(res[0]*res[1]))
