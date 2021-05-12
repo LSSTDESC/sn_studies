@@ -442,9 +442,10 @@ def PlotPixel(seeing, psf_type, varxsel, xp, varysel, yp, varxplot, varyplot, ti
     fontsize = 20
     idx = np.abs(res['seeing']-seeing) < 1.e-3
     print(len(res[idx]))
-    idx &= np.abs(res[varxsel]-xp) < 1.e-5
-    idx &= np.abs(res[varysel]-yp) < 1.e-5
+    idx &= np.abs(res[varxplot]-xp) < 1.e-5
+    idx &= np.abs(res[varyplot]-yp) < 1.e-5
     sel = res[idx]
+    print('here man', varxplot, varyplot, seeing, len(sel))
     # print('selection',len(sel),np.unique(res[[varxsel,varysel]]))
     fig, ax = plt.subplots(figsize=(10, 10))
     seeing_pix = seeing/0.2  # seeing in arcsec - pixel LSST = 0.2"
@@ -455,11 +456,11 @@ def PlotPixel(seeing, psf_type, varxsel, xp, varysel, yp, varxplot, varyplot, ti
     # ax.set_title(titleform,fontsize=fontsize)
     ax.set_title(titleform)
     dim = int(np.sqrt(len(sel)))
-    xcm = np.reshape(sel[varxplot], (dim, dim))
-    ycm = np.reshape(sel[varyplot], (dim, dim))
+    xcm = np.reshape(sel[varxsel], (dim, dim))
+    ycm = np.reshape(sel[varysel], (dim, dim))
     Zc = np.reshape(sel['pixel_frac'], (dim, dim))
 
-    print('hhh', np.min(xcm), np.max(xcm), dim)
+    print('hhh', np.min(xcm), np.max(xcm), dim, len(sel))
     if type_plot == 'contour':
         CS = ax.contourf(xcm, ycm, Zc, 20, cmap=plt.cm.viridis)
     if type_plot == 'imshow':
@@ -472,7 +473,7 @@ def PlotPixel(seeing, psf_type, varxsel, xp, varysel, yp, varxplot, varyplot, ti
     vmax = np.round(vmax, 2)
     print(vmin, vmax, np.arange(vmin, vmax, 0.05))
     shrink = 0.82
-    #shrink = 1.
+    # shrink = 1.
     cbar = fig.colorbar(CS, ax=ax, ticks=np.arange(
         vmin, vmax, 0.01), shrink=shrink)
     """
