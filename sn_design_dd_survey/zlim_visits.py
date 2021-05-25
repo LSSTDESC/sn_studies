@@ -236,10 +236,10 @@ class zlim_template:
             lc_sel = vstack([lc_sel, lc[idx]])
 
         # now apply selection on g band for z>=0.25
-        sel_g = self.sel_band(lc, 'g', 0.25)
+        sel_g = self.sel_band(lc, 'g', 0.35)
 
         # now apply selection on r band for z>=0.6
-        sel_r = self.sel_band(lc, 'r', 0.6)
+        sel_r = self.sel_band(lc, 'r', 0.65)
 
         lc_sel = vstack([lc_sel, sel_g])
         lc_sel = vstack([lc_sel, sel_r])

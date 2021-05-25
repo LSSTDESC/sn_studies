@@ -237,13 +237,15 @@ class CombiChoice:
         seldict['cut1']['op'] = operator.le
         seldict['cut2'] = {}
         seldict['cut2']['var'] = 'Nvisits_g'
-        seldict['cut2']['value'] = 3
+        seldict['cut2']['value'] = 8
         seldict['cut2']['op'] = operator.le
 
         seldict['cut3'] = {}
-        seldict['cut3']['var'] = 'Delta_Nvisits'
-        seldict['cut3']['value'] = 3
-        seldict['cut3']['op'] = operator.ge
+        #seldict['cut3']['var'] = 'Delta_Nvisits'
+        #seldict['cut3']['value'] = 3
+        seldict['cut3']['var'] = 'Nvisits_g'
+        seldict['cut3']['value'] = 8
+        seldict['cut3']['op'] = operator.le
 
         seldictb = seldict.copy()
         seldictb['cut4'] = {}

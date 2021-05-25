@@ -258,6 +258,7 @@ class SNR_z:
         self.f5_to_m5 = flux5_to_m5(self.bands)
 
         # load SNR_m5 and make griddata
+        print('loading',SNR_m5_file)
         snr_m5 = np.load(SNR_m5_file, allow_pickle=True)
 
         """
@@ -522,7 +523,7 @@ class SNR_z:
 
         # SNR_min = 10.
         SNR_max = self.SNR_par['max']
-
+        
         """
         if z >= 0.65:
             SNR_min = 20.
@@ -538,8 +539,9 @@ class SNR_z:
             # Get SNR_min
             idxb = self.medm5['filter'] == band
             m5_single = self.medm5[idxb]['fiveSigmaDepth'].values
-            # print(band,'m5single', m5_single)
+            
             SNR_min = self.SNR_from_m5[band]((m5_single, z)).item()
+            #print(band,'m5single', m5_single,z,SNR_min)
             """
             if SNR_min == [0.]:
                 SNR_min = self.snrdictb[band][0].tolist()
@@ -550,18 +552,19 @@ class SNR_z:
             else:
                 SNR[band] = np.arange(np.round(SNR_min, 0),
                                       SNR_max, self.SNR_par['step'])
-
+            #print('nnn',band,SNR[band],SNR_max)
             # need to clean SNR here : if the corresponding number of visits is zero
 
             m5 = self.m5_from_SNR[band]((SNR[band], [z]*len(SNR[band])))
 
             nvisits = 10**((m5-m5_single)/1.25)
-            # print(band, m5, type(m5),nvisits,m5_single)
+            #print(band, m5, type(m5),nvisits,m5_single)
             idx = m5 > 0.
+            #idx &= nvisits>=0.9
             if band != 'g' and band != 'r':
                 idx &= nvisits <= 200.
             else:
-                idx &= nvisits <= 10.
+                idx &= nvisits <= 40.
             # print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
             # print(band,z,SNR[band],type(SNR[band]))
             SNR[band] = SNR[band][idx].tolist()
@@ -582,9 +585,10 @@ class SNR_z:
                 snrlist[0] = 0.0001
                 SNR[band] = snrlist
             """
-            if z <= 0.3:
+            if z <= 0.35:
                 SNR['z'] = [0.0]
-            if z <= 0.5:
+                SNR['y'] = [0.0]
+            if z <= 0.65:
                 SNR['y'] = [0.0]
 
         """
