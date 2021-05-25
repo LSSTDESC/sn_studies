@@ -770,7 +770,8 @@ class Select_errormodel:
             return Table()
 
         if sel.meta['z'] >= zref:
-            idb = sel['fluxerr_model']/sel['flux'] <= self.errormodelCut
+            idb = sel['fluxerr_model'] >= 0.
+            idb &= sel['fluxerr_model']/sel['flux'] <= self.errormodelCut
             selb = sel[idb]
             return selb
 

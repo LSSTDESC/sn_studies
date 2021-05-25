@@ -84,6 +84,7 @@ def templateLC(x1, color, simulator, ebvofMW, bluecutoff, redcutoff, error_model
     cmd += ' --SN_daymax_type unique'
     cmd += ' --Observations_fieldtype Fake'
     cmd += ' --Observations_coadd 0'
+    cmd += ' --Observations_season 1'
     cmd += ' --radius 0.01'
     cmd += ' --OutputSimu_directory {}'.format(outDir_simu)
     cmd += ' --Simulator_name sn_simulator.{}'.format(simulator)
@@ -97,5 +98,7 @@ def templateLC(x1, color, simulator, ebvofMW, bluecutoff, redcutoff, error_model
     cmd += ' --npixels -1'
     cmd += ' --Simulator_errorModel {}'.format(error_model)
     cmd += ' --SN_maxRFphase 60.'
+    cmd += ' --OutputSimu_throwempty 0'
+
     print(cmd)
     os.system(cmd)
