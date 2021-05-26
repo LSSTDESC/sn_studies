@@ -43,7 +43,7 @@ class SNR:
           to tag for error_model or not
         SNR_type: str, opt
           type of SNR to consider (SNR, SNR_photo_bd,...) (default: SNR_photo_bd)
-        include_error_model_sigmac: bool,opt 
+        include_error_model_sigmac: bool,opt
           to include or not error of the model when estimating sigmaC (default: False)
         SNR parameters
         verbose: str, opt
@@ -185,10 +185,10 @@ class SNR_z:
         sigma_color_cut: float, opt
           selection on sigma_color (default: 0.04)
         save_SNR_combi: bool, opt
-          to save SNR combination for sigmaC estimation        
+          to save SNR combination for sigmaC estimation
         SNR_type: str, opt
           type of SNR to consider (SNR, SNR_photo_bd,...)  (default: SNR_photo)
-        include_error_model_sigmac: bool,opt 
+        include_error_model_sigmac: bool,opt
           to include or not error of the model when estimating sigmaC (default: False)
         verbose: str, opt
           verbose mode for debugging
@@ -197,7 +197,7 @@ class SNR_z:
 
         """
         # verbose
-        #verbose = True
+        # verbose = True
         self.verbose = verbose
         # get data parameters
         self.x1 = data.x1
@@ -258,7 +258,7 @@ class SNR_z:
         self.f5_to_m5 = flux5_to_m5(self.bands)
 
         # load SNR_m5 and make griddata
-        print('loading',SNR_m5_file)
+        print('loading', SNR_m5_file)
         snr_m5 = np.load(SNR_m5_file, allow_pickle=True)
 
         """
@@ -484,7 +484,7 @@ class SNR_z:
         dfsigmaCb = self.lcdf.groupby(['x1', 'color', 'z']).apply(
             lambda x: self.sigmaC_all(x)).reset_index()
 
-        #print('Done sigma', dfsigmaCb.columns)
+        # print('Done sigma', dfsigmaCb.columns)
         """
         cols = ['z']
         for val in ['SNRcalc','flux_5_e_sec']:
@@ -523,7 +523,7 @@ class SNR_z:
 
         # SNR_min = 10.
         SNR_max = self.SNR_par['max']
-        
+
         """
         if z >= 0.65:
             SNR_min = 20.
@@ -539,9 +539,9 @@ class SNR_z:
             # Get SNR_min
             idxb = self.medm5['filter'] == band
             m5_single = self.medm5[idxb]['fiveSigmaDepth'].values
-            
+
             SNR_min = self.SNR_from_m5[band]((m5_single, z)).item()
-            #print(band,'m5single', m5_single,z,SNR_min)
+            # print(band,'m5single', m5_single,z,SNR_min)
             """
             if SNR_min == [0.]:
                 SNR_min = self.snrdictb[band][0].tolist()
@@ -552,15 +552,15 @@ class SNR_z:
             else:
                 SNR[band] = np.arange(np.round(SNR_min, 0),
                                       SNR_max, self.SNR_par['step'])
-            #print('nnn',band,SNR[band],SNR_max)
+            # print('nnn',band,SNR[band],SNR_max)
             # need to clean SNR here : if the corresponding number of visits is zero
 
             m5 = self.m5_from_SNR[band]((SNR[band], [z]*len(SNR[band])))
 
             nvisits = 10**((m5-m5_single)/1.25)
-            #print(band, m5, type(m5),nvisits,m5_single)
+            #print(band, m5, type(m5), nvisits, m5_single)
             idx = m5 > 0.
-            #idx &= nvisits>=0.9
+            # idx &= nvisits>=0.9
             if band != 'g' and band != 'r':
                 idx &= nvisits <= 200.
             else:
@@ -568,11 +568,14 @@ class SNR_z:
             # print(band, m5, type(m5),m5[idx],type(SNR[band]),SNR[band][idx])
             # print(band,z,SNR[band],type(SNR[band]))
             SNR[band] = SNR[band][idx].tolist()
-            if band == 'g':
-                SNR[band].append(100000.)
-            if band == 'r':
-                SNR[band].append(100000.)
-                #print(band, SNR[band],nvisits)
+            if z > 0.35:
+                if band == 'g':
+                    SNR[band].append(100000.)
+            if z > 0.65:
+                if band == 'r':
+                    SNR[band].append(100000.)
+                    print('SNR', band, SNR[band])
+                # print(band, SNR[band],nvisits)
             # SNR[band] = list(np.arange(SNR_min, SNR_min+10, 10))
             # SNR[band] = [SNR_min]
             """
@@ -588,9 +591,10 @@ class SNR_z:
             if z <= 0.35:
                 SNR['z'] = [0.0]
                 SNR['y'] = [0.0]
+            """
             if z <= 0.65:
                 SNR['y'] = [0.0]
-
+            """
         """
         for b in grp['band'].unique():
             SNR[b] = [20]
@@ -768,7 +772,6 @@ class SNR_z:
         t = np.linspace(0, nz, self.nproc+1, dtype='int')
         result_queue = multiprocessing.Queue()
 
-        
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.loopSNR,
                                          args=(ref[t[j]:t[j+1]], grp, SNR_split, dictband, x1, color, z, j, result_queue))
                  for j in range(self.nproc)]
@@ -799,7 +802,6 @@ class SNR_z:
         return restot
 
     def loopSNR(self, keys, grp, SNR_split, dictband, x1, color, z, j=0, output_q=None):
-
         """
         print('processing',keys,SNR_split[keys[0]])
         SNR_split[0] = dict(zip('grizy',[[0.],[0.],[33.],[4.],[37.]]))
@@ -811,16 +813,16 @@ class SNR_z:
             vals = SNR_split[key]
             if self.verbose:
                 print('Processing SNR', key, vals)
-            #resi = self.combiSNR(grp, dictband, vals, x1, color, z, key)
+            # resi = self.combiSNR(grp, dictband, vals, x1, color, z, key)
             resi = self.combiSNR(dictband, vals, x1, color, z, key)
-            #print('ici',resi)
+            # print('ici',resi)
             if resi is not None:
                 if self.save_SNR_combi:
                     self.saveCombi(resi, x1, color, z, '{}_{}'.format(j, key))
                 else:
                     dfres = pd.concat((dfres, resi), ignore_index=True)
 
-        #res = dfres
+        # res = dfres
         """
         if not dfres.empty:
             minPar = 'Nvisits'
@@ -836,7 +838,7 @@ class SNR_z:
         else:
             return dfres
 
-    #def combiSNR(self, grp, dictband, SNR, x1, color, z, icombi):
+    # def combiSNR(self, grp, dictband, SNR, x1, color, z, icombi):
     def combiSNR(self, dictband, SNR, x1, color, z, icombi):
         # existing bands
         bands = ''.join(list(dictband.keys()))
@@ -851,7 +853,7 @@ class SNR_z:
         # make the SNR combination for this first band
         df_ref = self.addSNR_all(df_ref, SNR[bands[0]], bands[0], z)
 
-        #print('there man',bands[0],  dictband[bands[0]],z,SNR[bands[0]],df_ref)
+        # print('there man',bands[0],  dictband[bands[0]],z,SNR[bands[0]],df_ref)
         # now make all the combinations
         df_tot = pd.DataFrame()
         df_merged = df_ref.copy()
@@ -906,9 +908,9 @@ class SNR_z:
                     vv.append('{}_{}'.format(bb,b))
             print(df_tot[vv])
             """
-        
+
         df_tot['sigmaC'] = np.sqrt(CovColor(df_tot).Cov_colorcolor)
-        #print('estimating sigmaC',df_tot['sigmaC'])
+        # print('estimating sigmaC',df_tot['sigmaC'])
         if self.verbose:
             print('sigmaC', df_tot['sigmaC'])
         # add the missing bands to have a uniform format z-independent
@@ -930,16 +932,19 @@ class SNR_z:
 
         # select only combi with less than 200 visits per night
 
-        max_visits = 200
+        max_visits = 150
         if z >= 0.75:
             max_visits = self.SNR_par['Nvisits_max_night']
         idx = dfres['Nvisits'] <= max_visits
         df_tot = dfres[idx]
 
         # print('uuuu',df_tot[['Nvisits_r','Nvisits_i','Nvisits_z','Nvisits_y','sigmaC']])
-        #idx = df_tot['sigmaC'] >= 0.90*0.04
-        idx = df_tot['sigmaC'] >= 0.025
-        idx &= df_tot['sigmaC'] <=1.01*0.04
+        # idx = df_tot['sigmaC'] >= 0.90*0.04
+        cmin = 0.025
+        if z <= 0.55:
+            cmin = 0.015
+        idx = df_tot['sigmaC'] >= cmin
+        idx &= df_tot['sigmaC'] <= 1.01*0.04
 
         if self.verbose:
             print('sigmaC_cut', len(df_tot[idx]))
@@ -1160,24 +1165,23 @@ class SNR_z:
         df_tot['SNR_photo'] = 1. / \
             srand(self.gamma[b](df_tot['m5calc']),
                   df_tot['mag'], df_tot['m5calc'])
-        #df_tot['SNR_photo']=df_tot['SNRcalc']
+        # df_tot['SNR_photo']=df_tot['SNRcalc']
         # get the total SNR
-        
+
         if self.include_error_model_sigmac:
             df_tot['SNR_indiv_tot'] = self.SNR_combi(
                 df_tot['SNR_photo'], df_tot['SNR_model'])
         else:
             df_tot['SNR_indiv_tot'] = df_tot['SNR_photo']
-        
+
         df_tot['fluxerr_indiv'] = df_tot['flux']/df_tot['SNR_indiv_tot']
-        
+
         # update Fisher elements
 
-    
         for col in self.listcol:
             df_tot[col] = df_tot[col.replace(
                 'F', 'd')]/df_tot['fluxerr_indiv']**2
-        
+
             """
             df_tot[col] = df_tot[col] * \
                 (df_tot['SNR_indiv']/df_tot['snr_m5'])**2.
