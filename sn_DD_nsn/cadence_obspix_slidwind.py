@@ -6,7 +6,8 @@ import os
 from sn_tools.sn_obs import season
 from sn_tools.sn_telescope import Telescope
 import matplotlib.pyplot as plt
-
+from sn_tools.sn_utils import multiproc
+import time
 
 class Coadd:
     """
@@ -129,7 +130,7 @@ class ObsSlidingWindow:
         selobs.sort(order=[self.mjdCol])
         ddf = pd.DataFrame(np.copy(selobs))
         do = ddf.groupby(['night'])[self.mjdCol].median().reset_index()
-        print(do.columns)
+
         cadence_season = np.mean(np.diff(do[self.mjdCol]))
         # loop on redshifts
         r = []
@@ -223,7 +224,9 @@ class Analysis:
     """
 
     def __init__(self, data_in, dbName, fieldName,
-                 nepochs_bef=4, nepochs_aft=10, nphase_min=1, nphase_max=1):
+                 nepochs_bef=4, nepochs_aft=10,
+                 nphase_min=1, nphase_max=1,
+                 nproc=8):
 
         self.nepochs_bef = nepochs_bef
         self.nepochs_aft = nepochs_aft
@@ -233,7 +236,7 @@ class Analysis:
         # get the data
         self.fName = '{}_{}_slidingWindow.npy'.format(dbName, fieldName)
         if not os.path.isfile(self.fName):
-            self.slidingWindow(data_in)
+            self.slidingWindow_multiproc(data_in,nproc=nproc)
 
         data = np.load(self.fName, allow_pickle=True)
 
@@ -252,18 +255,38 @@ class Analysis:
 
         plt.show()
 
-    def slidingWindow(self, data):
+
+    def slidingWindow_multiproc(self, data,nproc=8):
+
+        healpixIDs = np.unique(data['healpixID'])
+        print('number of pixels',len(healpixIDs))
+        params = {}
+        params['data'] = data
+        restot = multiproc(healpixIDs, params, self.slidingWindow,nproc=nproc)
+        
+        np.save(self.fName, restot)
+        
+    def slidingWindow(self, healpixIDs,params={}, j=0, output_q=None):
+        print('processing',j,len(healpixIDs))
+        time_ref = time.time()
+              
         restot = None
         cad = ObsSlidingWindow()
-        for healpixID in np.unique(data['healpixID']):
+        data = params['data']
+        for healpixID in healpixIDs:
             idx = data['healpixID'] == healpixID
             rr = cad(data[idx], healpixID)
             if restot is None:
                 restot = rr
             else:
-                restot = np.concatenate((restot, rr))
+                #restot = np.concatenate((restot, rr))
+                restot = np.hstack((restot,rr))
 
-        np.save(self.fName, restot)
+        print('end of processing',j,time.time()-time_ref)
+        if output_q is not None:
+            return output_q.put({j: restot})
+        else:
+            return restot
 
     def effiObs(self, df):
         """
