@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from sn_tools.sn_utils import multiproc
 import time
 
+
 class Coadd:
     """
     class to perform a coadd od obs per healpixID, night, filter
@@ -141,6 +142,17 @@ class ObsSlidingWindow:
 
             T0_min = season_min-self.min_rf_qual*(1.+z)
             T0_max = season_max-self.max_rf_qual*(1.+z)
+            T0s = np.arange(T0_min, T0_max, 3.)
+
+            phases = (-selobs[self.mjdCol]+T0s[:, np.newaxis])/(1.+z)
+
+            print(phases, phases.shape)
+            print(np.min(phases, axis=1), np.max(phases, axis=1))
+            flag = phases <= 0
+            phases_neg = np.ma.array(phases, mask=~flag)
+            print(phases_neg, phases_neg.count(axis=1))
+            print(test)
+
             for T0 in np.arange(T0_min, T0_max, 3.):
                 r_infos = [healpixID, season, z, T0, cadence_season]
                 sel = self.cutoff(selobs, T0, z)
@@ -236,7 +248,7 @@ class Analysis:
         # get the data
         self.fName = '{}_{}_slidingWindow.npy'.format(dbName, fieldName)
         if not os.path.isfile(self.fName):
-            self.slidingWindow_multiproc(data_in,nproc=nproc)
+            self.slidingWindow_multiproc(data_in, nproc=nproc)
 
         data = np.load(self.fName, allow_pickle=True)
 
@@ -255,34 +267,34 @@ class Analysis:
 
         plt.show()
 
-
-    def slidingWindow_multiproc(self, data,nproc=8):
+    def slidingWindow_multiproc(self, data, nproc=8):
 
         healpixIDs = np.unique(data['healpixID'])
-        print('number of pixels',len(healpixIDs))
+        print('number of pixels', len(healpixIDs))
         params = {}
         params['data'] = data
-        restot = multiproc(healpixIDs, params, self.slidingWindow,nproc=nproc)
-        
+        restot = multiproc(healpixIDs, params, self.slidingWindow, nproc=nproc)
+
         np.save(self.fName, restot)
-        
-    def slidingWindow(self, healpixIDs,params={}, j=0, output_q=None):
-        print('processing',j,len(healpixIDs))
+
+    def slidingWindow(self, healpixIDs, params={}, j=0, output_q=None):
+        print('processing', j, len(healpixIDs))
         time_ref = time.time()
-              
+
         restot = None
         cad = ObsSlidingWindow()
         data = params['data']
         for healpixID in healpixIDs:
+            time_refb = time.time()
             idx = data['healpixID'] == healpixID
             rr = cad(data[idx], healpixID)
             if restot is None:
                 restot = rr
             else:
                 #restot = np.concatenate((restot, rr))
-                restot = np.hstack((restot,rr))
-
-        print('end of processing',j,time.time()-time_ref)
+                restot = np.hstack((restot, rr))
+            print('Done with', healpixID, time.time()-time_refb)
+        print('end of processing', j, time.time()-time_ref)
         if output_q is not None:
             return output_q.put({j: restot})
         else:
@@ -351,7 +363,7 @@ data = Coadd(dirFiles, dbName, fieldName).data
 data = season(data)
 print(data.dtype)
 
-restot = Analysis(data, dbName, fieldName).data
+restot = Analysis(data, dbName, fieldName, nproc=1).data
 
 print(restot)
 
