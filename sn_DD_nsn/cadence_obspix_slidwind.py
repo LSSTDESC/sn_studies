@@ -1,13 +1,17 @@
 import numpy as np
 import glob
-from sn_stackers.coadd_stacker import CoaddStacker
 import pandas as pd
 import os
+import numpy.lib.recfunctions as rf
+import time
+import itertools
+
 from sn_tools.sn_obs import season
 from sn_tools.sn_telescope import Telescope
 import matplotlib.pyplot as plt
 from sn_tools.sn_utils import multiproc
-import time
+from sn_stackers.coadd_stacker import CoaddStacker
+
 
 
 class Coadd:
@@ -94,7 +98,9 @@ class ObsSlidingWindow:
 
     """
 
-    def __init__(self, min_rf_phase=-20., max_rf_phase=60., min_rf_qual=-15., max_rf_qual=30.,
+    def __init__(self, min_rf_phase=-20., max_rf_phase=60.,
+                 min_rf_qual=-15., max_rf_qual=30.,
+                 phase_min=-10,phase_max=20,
                  blue_cutoff=380., red_cutoff=800., filterCol='filter', mjdCol='observationStartMJD'):
 
         self.telescope = Telescope(airmass=1.2)
@@ -102,6 +108,8 @@ class ObsSlidingWindow:
         self.max_rf_phase = max_rf_phase
         self.min_rf_qual = min_rf_qual
         self.max_rf_qual = max_rf_qual
+        self.phase_min = phase_min
+        self.phase_max = phase_max
         self.blue_cutoff = blue_cutoff
         self.red_cutoff = red_cutoff
         self.filterCol = filterCol
@@ -130,27 +138,33 @@ class ObsSlidingWindow:
 
         selobs.sort(order=[self.mjdCol])
         ddf = pd.DataFrame(np.copy(selobs))
-        do = ddf.groupby(['night'])[self.mjdCol].median().reset_index()
+        do = ddf.groupby(['night'])[self.mjdCol].median().reset_index().to_records(index=False)
 
         cadence_season = np.mean(np.diff(do[self.mjdCol]))
         # loop on redshifts
         r = []
         zvals = list(np.arange(0., 1.10, 0.1))
         zvals[0] = 0.01
+
+        self.infos_broad(selobs,season_min, season_max,zvals,healpixID,season)          
+        
         for z in zvals:
             # for each redshift: get T0s
 
             T0_min = season_min-self.min_rf_qual*(1.+z)
             T0_max = season_max-self.max_rf_qual*(1.+z)
-            T0s = np.arange(T0_min, T0_max, 3.)
-
-            phases = (-selobs[self.mjdCol]+T0s[:, np.newaxis])/(1.+z)
+            
+            sel = self.cutoff(selobs, T0s, z)
+            print(sel)
+            print(test)
+            phases = (-do[self.mjdCol]+T0s[:, np.newaxis])/(1.+z)
 
             print(phases, phases.shape)
             print(np.min(phases, axis=1), np.max(phases, axis=1))
             flag = phases <= 0
             phases_neg = np.ma.array(phases, mask=~flag)
-            print(phases_neg, phases_neg.count(axis=1))
+            phases_pos = np.ma.array(phases, mask=flag)
+            print(np.min(phases, axis=1), np.max(phases, axis=1), phases_neg.count(axis=1),phases_pos.count(axis=1))
             print(test)
 
             for T0 in np.arange(T0_min, T0_max, 3.):
@@ -170,6 +184,84 @@ class ObsSlidingWindow:
 
         return rr
 
+    def infos_broad(self, selobs,season_min, season_max, zvals,healpixID,season):
+
+        # getting gen parameters
+            
+        T0s = np.arange(season_min, season_max, 3.)
+        T0s = T0s.reshape((len(T0s),1))
+
+        gen_par = np.rec.fromrecords(T0s,names=['T0'])
+        gen_par = rf.append_fields(gen_par, 'min_rf_phase', [self.min_rf_phase]*len(T0s))
+        gen_par = rf.append_fields(gen_par, 'max_rf_phase', [self.max_rf_phase]*len(T0s))
+        #gen_par = np.tile(gen_par, (len(zvals),1))
+        gen_par = np.repeat(gen_par,len(zvals))
+        tt = np.tile(zvals, (len(T0s),1)).tolist()
+        tt = list(itertools.chain(*tt))
+        gen_par = rf.append_fields(gen_par, 'z', tt)
+
+        # select T0s here depending on z
+        idx = gen_par['T0']>= season_min-self.min_rf_qual*gen_par['z']
+        idx &= gen_par['T0']<= season_max-self.max_rf_qual*gen_par['z']
+
+        gen_par = np.copy(gen_par[idx])
+        #print('hhh',gen_par)
+    
+        
+        for b in 'i':
+            night_neg, night_pos,phase_neg,phase_pos,z_vals,T0_vals = self.sel_band(b, selobs, gen_par)
+            nepochs_bef = night_neg.count(axis=1)
+            nepochs_aft = night_pos.count(axis=1)
+            nphase_min = phase_neg.count(axis=1)
+            nphase_max = phase_pos.count(axis=1)
+            print(z_vals)
+            print(T0_vals)
+            print(nepochs_bef.shape,z_vals.shape,T0_vals.shape)
+            res = np.rec.fromrecords([healpixID]*len(z_vals),names=['healpixID'])
+            #print(res)
+            res = rf.append_fields(res,'nepochs_bef',nepochs_bef)
+            print(res)
+                                 
+        print(test)
+
+    def sel_band(self, band,sel, gen_par):
+
+        idx = sel['filter'] == band
+        sel_obs = sel[idx]
+        
+        xi = (sel_obs[self.mjdCol]-gen_par['T0'][:, np.newaxis])
+        p = xi/(1.+gen_par['z'][:,np.newaxis])
+        
+        # remove LC points outside the restframe phase range
+        min_rf_phase = gen_par['min_rf_phase'][:, np.newaxis]
+        max_rf_phase = gen_par['max_rf_phase'][:, np.newaxis]
+        flag = (p >= min_rf_phase) & (p <= max_rf_phase)
+        
+        # remove LC points outside the (blue-red) range
+
+        mean_restframe_wavelength = np.array(
+            [self.telescope.mean_wavelength[band]]*len(sel_obs))
+        mean_restframe_wavelength = np.tile(mean_restframe_wavelength, (len(gen_par), 1))/(1.+gen_par['z'][:, np.newaxis])
+        #mean_restframe_wavelength = np.tile(mean_restframe_wavelength, (len(gen_par), 1))/(1.+z)
+        flag &= (mean_restframe_wavelength > self.blue_cutoff) & (
+            mean_restframe_wavelength < self.red_cutoff)
+
+        flag_idx = np.argwhere(flag)
+        phase_neg = p <= self.phase_min
+        phase_pos = p >= self.phase_max
+        night_neg = np.ma.array(np.tile(sel_obs['night'],(len(p),1)), mask=~(flag&phase_neg))
+        print(night_neg.shape,p.shape,len(sel_obs),len(gen_par))
+        night_pos = np.ma.array(np.tile(sel_obs['night'],(len(p),1)), mask=~(flag&phase_pos))
+        phase_neg = np.ma.array(p, mask=~(flag&phase_neg))
+        phase_pos= np.ma.array(p, mask=~(flag&phase_pos))
+        z_vals = gen_par['z'][flag_idx[:, 0]]
+        print('hhh',z_vals)
+        
+        T0_vals = gen_par['T0'][flag_idx[:, 0]]
+        print(band, phase_neg.shape)
+        #print(test)
+        return night_neg, night_pos,phase_neg,phase_pos,z_vals,T0_vals
+    
     def infos(self, obs, T0, z, phase_min=-10, phase_max=20):
 
         df = pd.DataFrame(np.copy(obs))
@@ -223,13 +315,13 @@ class ObsSlidingWindow:
              (1. + z) for obser in obs])
 
         p = (obs[self.mjdCol]-T0)/(1.+z)
-
+        obs_resh = obs.reshape(p.shape)
+        
         idx = (p >= 1.000000001*self.min_rf_phase) & (p <=
                                                       1.00001*self.max_rf_phase)
         idx &= (mean_restframe_wavelength > self.blue_cutoff)
         idx &= (mean_restframe_wavelength < self.red_cutoff)
         return obs[idx]
-
 
 class Analysis:
     """
