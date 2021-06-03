@@ -5,7 +5,7 @@ import os
 import numpy.lib.recfunctions as rf
 import time
 import itertools
-
+from optparse import OptionParser
 from sn_tools.sn_obs import season
 from sn_tools.sn_telescope import Telescope
 import matplotlib.pyplot as plt
@@ -81,7 +81,9 @@ class Coadd:
 
     def load(self, dirFile, dbName, fieldName):
 
-        fis = glob.glob('{}/{}/*{}*'.format(dirFiles, dbName, fieldName))
+        search_path = '{}/{}/*{}*'.format(dirFiles, dbName, fieldName)
+        print('looking for',search_path)
+        fis = glob.glob(search_path)
 
         res = None
         for fi in fis:
@@ -143,7 +145,8 @@ class ObsSlidingWindow:
         # get min and max season
         season_min = np.min(selobs[self.mjdCol])
         season_max = np.max(selobs[self.mjdCol])
-
+        season_length = season_max-season_min
+        
         selobs.sort(order=[self.mjdCol])
         ddf = pd.DataFrame(np.copy(selobs))
         do = ddf.groupby(['night'])[self.mjdCol].median(
@@ -159,13 +162,13 @@ class ObsSlidingWindow:
         time_ref = time.time()
         if fast_processing:
             res = self.infos_broad(selobs, season_min, season_max,
-                                   zvals, healpixID, season, cadence_season)
+                                   zvals, healpixID, season, cadence_season,season_length)
             # print('end of processing ', season,
             #      healpixID, time.time()-time_ref)
         else:
             time_ref = time.time()
             resb = self.infos_loop(selobs, season_min, season_max,
-                                   zvals, healpixID, season, cadence_season)
+                                   zvals, healpixID, season, cadence_season,season_length)
             # print('end of processing ', season,
             #      healpixID, time.time()-time_ref)
         #self.compare(res, resb)
@@ -201,7 +204,7 @@ class ObsSlidingWindow:
         # print(test)
 
     def infos_loop(self, selobs, season_min, season_max,
-                   zvals, healpixID, season, cadence_season):
+                   zvals, healpixID, season, cadence_season,season_length):
 
         r = []
         for z in zvals:
@@ -213,7 +216,7 @@ class ObsSlidingWindow:
             T0s = np.arange(T0_min, T0_max, self.T0step)
 
             for T0 in T0s:
-                r_infos = [healpixID, season, z, T0, cadence_season]
+                r_infos = [healpixID, season, z, T0, cadence_season,season_length]
                 sel = self.cutoff(selobs, T0, z)
                 # idx = sel[self.filterCol] == 'i'
                 r_infos += self.infos(sel, T0, z)
@@ -223,13 +226,13 @@ class ObsSlidingWindow:
         rr = None
         if len(r) > 0:
             rr = np.rec.fromrecords(r, names=[
-                                    'healpixID', 'season', 'z', 'T0', 'cadence_season',
+                                    'healpixID', 'season', 'z', 'T0', 'cadence_season','season_length',
                                     'nepochs_bef', 'nepochs_aft',
                                     'cadence', 'cadence_std',
                                     'nphase_min', 'nphase_max', 'max_gap'])
         return rr
 
-    def infos_broad(self, selobs, season_min, season_max, zvals, healpixID, season, cadence_season):
+    def infos_broad(self, selobs, season_min, season_max, zvals, healpixID, season, cadence_season,season_length):
 
         # getting gen parameters
 
@@ -320,9 +323,9 @@ class ObsSlidingWindow:
         """
         #print(df, mjds)
         for bb in mjds:
-            cm = 0.0
-            cstd = 0.0
-            mgp = 0.0
+            cm = -1.0
+            cstd = -1.0
+            mgp = -1.0
             unbb = np.unique(bb[~bb.mask])
 
             if len(unbb) >= 1:
@@ -367,6 +370,7 @@ class ObsSlidingWindow:
         df['healpixID'] = healpixID
         df['season'] = season
         df['cadence_season'] = cadence_season
+        df['season_length'] = season_length
         df['cadence'] = cadmean
         df['cadence_std'] = cadstd
         df['max_gap'] = maxgap
@@ -534,8 +538,19 @@ class Analysis:
 
         data = np.load(self.fName, allow_pickle=True)
 
-        print('boo', type(data))
         dd = pd.DataFrame(np.copy(data))
+
+        idx = dd['cadence'] > 0.001
+        dsel = dd[idx]
+        
+        dgrp = dsel.groupby(['healpixID','season']).median().reset_index()
+        plt.plot(dgrp['cadence'],dgrp['season_length'],'ko')
+        outName = 'cadence_slidingwindow_{}_{}.npy'.format(dbName,fieldName)
+        to_csv = ['healpixID','season','cadence','cadence_std','max_gap','season_length']
+        np.save(outName,dgrp[to_csv].to_records(index=False))
+        
+        # this is for effi plots
+        """
         res = dd.groupby(['healpixID', 'season']).apply(
             lambda x: self.effiObs(x)).reset_index()
         print(res['healpixID'].unique())
@@ -548,7 +563,7 @@ class Analysis:
             for season in sel['season'].unique():
                 io = sel['season'] == season
                 self.plot_indiv(ax, sel[io])
-
+        """
         plt.show()
 
     def slidingWindow_multiproc(self, data, nproc=8):
@@ -614,7 +629,7 @@ class Analysis:
         # Take the ratio to get efficiencies
         rb = (group_sel.size()/group.size())
         # err = np.sqrt(rb*(1.-rb)/group.size())
-        var = rb*(1.-rb)*group.size()
+        var = rb*(1.-rb)/group.size()
 
         rb = rb.array
         # err = err.array
@@ -641,18 +656,30 @@ class Analysis:
         print('hello', effis)
         ax.errorbar(effis['z'], effis['effi'], yerr=np.sqrt(effis['effi_var']))
 
+parser = OptionParser()
 
-dirFiles = '../../ObsPixelized_128'
-dbName = 'descddf_v1.5_10yrs'
+parser.add_option(
+    '--dirFiles', help='Obspixel file directory [%default]', default='../../ObsPixelized_128', type=str)
+parser.add_option(
+    '--dbName', help='OS to process [%default]', default='descddf_v1.5_10yrs', type=str)
+parser.add_option(
+    '--fieldName', help='DD field to consider [%default]', default='COSMOS', type=str)
+parser.add_option(
+    '--nproc', help='nproc for multiproc [%default]', default=8, type=int)
 
-fieldName = 'COSMOS'
+opts, args = parser.parse_args()
+
+dirFiles =opts.dirFiles
+dbName = opts.dbName
+fieldName = opts.fieldName
+nproc = opts.nproc
 
 data = Coadd(dirFiles, dbName, fieldName).data
 
 data = season(data)
 print(data.dtype)
 
-restot = Analysis(data, dbName, fieldName, nproc=4).data
+restot = Analysis(data, dbName, fieldName, nproc=nproc).data
 
 print(restot)
 
