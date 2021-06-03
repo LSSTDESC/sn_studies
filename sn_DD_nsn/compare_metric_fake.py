@@ -2,7 +2,7 @@ import pandas as pd
 from sn_tools.sn_io import loopStack
 import glob
 import matplotlib.pyplot as plt
-
+from optparse import OptionParser
 
 def loadMetric(metricDir, dbName):
 
@@ -25,10 +25,21 @@ def loadFakes(fakeDir, dbName):
 
     return df
 
+parser = OptionParser()
 
-metricDir = '../../MetricOutput_DD_new_128'
-dbName = 'daily_ddf_v1.5_10yrs'
-fakeDir = '.'
+parser.add_option(
+    '--metricDir', help='metric directory [%default]', default='../MetricOutput_DD_new_128',type=str)
+parser.add_option(
+    '--dbName', help='OS to process [%default]', default='daily_ddf_v1.5_10yrs', type=str)
+parser.add_option(
+    '--fakeDir', help='fake dir results [%default]', default='.', type=str)
+
+
+opts, args = parser.parse_args()
+
+metricDir = opts.metricDir
+dbName = opts.dbName
+fakeDir = opts.fakeDir
 
 df_metric = loadMetric(metricDir, dbName)
 df_fakes = loadFakes(fakeDir, dbName)
@@ -44,9 +55,12 @@ df['zlimdiff'] = df['zlim_faint']-df['zlim']
 df['nsnrat'] = df['nsn_med_faint']/df['nsn_exp']
 print(df[['zlimdiff', 'nsnrat']])
 print(df.columns)
+idx = df['nsnrat']>=2
+pp = ['healpixID','season','zlim_faint','zlim']
+print(df[idx][pp])
 fig, ax = plt.subplots()
 
-ax.plot(df['gap_max'], df['nsnrat'], 'ko')
+ax.plot(df['zlimdiff'], df['nsnrat'], 'ko')
 
 
 plt.show()
