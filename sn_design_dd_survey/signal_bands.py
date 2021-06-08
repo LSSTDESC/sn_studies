@@ -191,6 +191,6 @@ class SignalBand:
 
         ax.legend(ncol=5)
         ax.set_xlabel(r'z')
-        ax.set_xlim(0.01, 0.9)
+        ax.set_xlim(0.01, 1.1)
         ax.set_ylabel(r'Flux fraction per band')
         ax.grid()
