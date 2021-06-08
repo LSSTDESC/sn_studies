@@ -257,30 +257,52 @@ class CombiChoice:
         seldictb['cut4']['var'] = 'Nvisits_y'
         seldictb['cut4']['value'] = 20.
         seldictb['cut4']['op'] = operator.le
+        seldictb['cut4']['zmin'] = 0.65
+        seldictb['cut4']['zmax'] = 0.90
+        seldictb['cut4']['valmin'] = 0.
 
         seldictc = seldict.copy()
         seldictc['cut4'] = {}
         seldictc['cut4']['var'] = 'Nvisits_y'
         seldictc['cut4']['value'] = 30.
         seldictc['cut4']['op'] = operator.le
+        seldictc['cut4']['zmin'] = 0.65
+        seldictc['cut4']['zmax'] = 0.90
+        seldictc['cut4']['valmin'] = 0.
 
         seldictd = seldict.copy()
         seldictd['cut4'] = {}
         seldictd['cut4']['var'] = 'Nvisits_y'
         seldictd['cut4']['value'] = 40.
         seldictd['cut4']['op'] = operator.le
+        seldictd['cut4']['zmin'] = 0.65
+        seldictd['cut4']['zmax'] = 0.90
+        seldictd['cut4']['valmin'] = 0.
 
         seldicte = seldict.copy()
         seldicte['cut4'] = {}
         seldicte['cut4']['var'] = 'Nvisits_y'
         seldicte['cut4']['value'] = 60.
         seldicte['cut4']['op'] = operator.le
+        seldicte['cut4']['zmin'] = 0.65
+        seldicte['cut4']['zmax'] = 0.90
+        seldicte['cut4']['valmin'] = 0.
 
         seldictf = seldict.copy()
         seldictf['cut4'] = {}
         seldictf['cut4']['var'] = 'Nvisits_y'
         seldictf['cut4']['value'] = 80.
         seldictf['cut4']['op'] = operator.le
+        seldictf['cut4']['zmin'] = 0.65
+        seldictf['cut4']['zmax'] = 0.90
+        seldictf['cut4']['valmin'] = 0.
+        seldictf['cut5'] = {}
+        seldictf['cut5']['var'] = 'Nvisits_z'
+        seldictf['cut5']['value'] = 70.
+        seldictf['cut5']['op'] = operator.ge
+        seldictf['cut5']['zmin'] = 0.65
+        seldictf['cut5']['zmax'] = 0.90
+        seldictf['cut5']['valmin'] = 10.
 
         selvar = ['Nvisits']
         minparname = ['nvisits']
@@ -354,10 +376,30 @@ class CombiChoice:
                         #ccut = np.max([ccut, 60.])
                     idx &= vals['op'](snr[vals['var']],
                                       ccut)
-            if 'cut4' in select.keys():
+            if 'cut4' in select.keys() and self.z >= 0.65:
                 vals = select['cut4']
+                Nmax = vals['value']
+                zmax = vals['zmax']
+                Nmin = vals['valmin']
+                zmin = vals['zmin']
+                a = (Nmax-Nmin)/(zmax-zmin)
+                b = Nmax-a*zmax
+                selval = a*self.z+b
                 idx &= vals['op'](snr[vals['var']],
-                                  vals['value'])
+                                  selval)
+
+            if 'cut5' in select.keys() and self.z >= 0.65:
+                vals = select['cut5']
+                Nmax = vals['value']
+                zmax = vals['zmax']
+                Nmin = vals['valmin']
+                zmin = vals['zmin']
+                a = (Nmax-Nmin)/(zmax-zmin)
+                b = Nmax-a*zmax
+                selval = a*self.z+b
+                idx &= vals['op'](snr[vals['var']],
+                                  selval)
+
             snr = snr[idx]
 
         """
