@@ -6,8 +6,8 @@ plt.rcParams['ytick.labelsize'] = 15
 plt.rcParams['axes.labelsize'] = 15
 plt.rcParams['figure.titlesize'] = 15
 plt.rcParams['legend.fontsize'] = 15
-plt.rcParams['font.weight'] = 'bold'
-plt.rcParams['font.family'] = 'serif'
+#plt.rcParams['font.weight'] = 'bold'
+plt.rcParams['font.family'] = 'Arial'
 
 
 def budget(Nfields, Nseasons, Nvisits, season_length, cadence):
@@ -86,8 +86,8 @@ coords = [12.41, 41.5]
 ax.plot(coords, [180.]*2,  'ro')
 
 
-ax.set_xlabel('N$_{visits}$', weight='bold')
-ax.set_ylabel('Season length [days]', weight='bold')
+ax.set_xlabel('$\mathrm{N_{visits}}$', weight='normal')
+ax.set_ylabel('Season length [days]', weight='normal')
 ax.grid(alpha=0.3)
 """
 Nfields = 5

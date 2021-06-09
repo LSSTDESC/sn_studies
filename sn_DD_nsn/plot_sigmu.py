@@ -64,8 +64,11 @@ def plot_snr_sigmaC(sna):
     bands = 'izy'
     snrmin = {}
     for b in bands:
-        ax.plot(sna['SNR_{}'.format(b)], np.sqrt(sna['Cov_colorcolor']),
-                color=filtercolors[b], label='{} band'.format(b))
+        var = 'SNR_{}'.format(b)
+        idx = sna[var] > 0.
+        sel = sna[idx]
+        ax.plot(sel[var], np.sqrt(sel['Cov_colorcolor']),
+                color=filtercolors[b], label='${}$ band'.format(b))
         ii = interp1d(np.sqrt(sna['Cov_colorcolor']), sna['SNR_{}'.format(b)])
         snrmin[b] = ii(0.04)
 
@@ -87,9 +90,9 @@ def plot_snr_sigmaC(sna):
 parser = OptionParser()
 
 parser.add_option(
-    '--fileDir', help='file directory [%default]', default='zlim_test/Output_Fit_error_model_ebvofMW_0.0_snrmin_1_errmodrel_0.1', type=str)
+    '--fileDir', help='file directory [%default]', default='zlim_test/Output_Fit_error_model_ebvofMW_0.0_snrmin_1_errmodrel_0.05', type=str)
 parser.add_option(
-    '--fileDirb', help='file directory [%default]', default='zlim_test/Output_Fit_error_model_ebvofMW_0.0_snrmin_1_errmodrel_0.1', type=str)
+    '--fileDirb', help='file directory [%default]', default='zlim_test/Output_Fit_error_model_ebvofMW_0.0_snrmin_1_errmodrel_0.05', type=str)
 parser.add_option(
     '--fileName', help='file to process [%default]', default='Fit_sn_cosmo_Fake_-2.0_0.2_error_model_ebvofMW_0.0_1_sn_cosmo.hdf5', type=str)
 parser.add_option(
@@ -103,10 +106,11 @@ fileName = opts.fileName
 fileNameb = opts.fileNameb
 
 sn = loadFile(fileDir, fileName)
-sna = loadFile(opts.fileDirb, fileName.replace('error_model', '380.0_800.0'))
+#sna = loadFile(opts.fileDirb, fileName.replace('error_model', '380.0_800.0'))
 snb = loadFile(fileDir, fileNameb)
 
 plot_errorbud_z(sn, None)
+
 plot_snr_sigmaC(snb)
 
 
