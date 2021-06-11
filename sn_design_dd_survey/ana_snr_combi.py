@@ -243,6 +243,12 @@ def plotb(tab, z, whata='Nvisits', whatb='Nvisits', leg='$N_{visits}$',
         ax.plot(sel['{}_{}'.format(whata, b)],
                 sel['{}_{}'.format(whatb, b)], '{}.'.format(colors[b]), label='${}$-band'.format(b))
 
+    # this is for the total SNR
+    if 'SNR' in whata and 'Nvisits' in whatb:
+        print('ooo', whata, whatb)
+        ax.plot(sel['{}'.format(whata)],
+                sel['{}'.format(whatb)], 'k.', label='all bands')
+
     ax.set_xlabel(whata, fontsize=fontsize)
     ax.set_ylabel(whatb, fontsize=fontsize)
 
@@ -368,6 +374,7 @@ plot(snr, z, bands=bands, colors=colors)
 
 # plot(snr, whata='Nvisits', whatb='SNRcalc', legy='$SNR_{band}$')
 
+print(snr.columns)
 plot(snr, z, whata='sigmaC', whatb='SNRcalc',
      legx='sigmaC', legy='$SNR_{band}$', bands=bands, colors=colors)
 plotb(snr, z, 'SNRcalc', 'Nvisits', bands=bands, colors=colors)
@@ -375,6 +382,10 @@ plotb(snr, z, 'SNRcalc', 'm5calc', bands=bands, colors=colors)
 fig, ax = plt.subplots()
 ax.plot(snr['sigmaC'], snr['Nvisits'], 'ko')
 
+print('mina and max')
+for b in 'izy':
+    what = snr['SNRcalc_{}'.format(b)]
+    print(b, np.min(what), np.max(what))
 
 colout = ['sigmaC', 'SNRcalc_tot', 'Nvisits', 'Nvisits_g', 'SNRcalc_g',
           'Nvisits_r', 'SNRcalc_r', 'Nvisits_i', 'SNRcalc_i', 'Nvisits_z',
