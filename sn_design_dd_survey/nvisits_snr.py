@@ -2,6 +2,75 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from optparse import OptionParser
+from scipy.interpolate import griddata, interp2d
+from scipy.ndimage.filters import gaussian_filter
+
+colors = dict(zip('ugrizy', ['b', 'c', 'g', 'y', 'r', 'm']))
+
+
+def plot_contour_Nvisits(data):
+    """
+    Method to make a contour plot of Nvisits in the plane(SNR,z)
+
+    Parameters
+    ---------------
+    data_orig: pandas df
+    data to process
+
+    """
+
+    fig, ax = plt.subplots()
+    zmin, zmax = 0.5, 1.0
+    SNRmin, SNRmax = 0., 100.
+
+    zvals = np.linspace(zmin, zmax, 1000)
+    SNRvals = np.linspace(SNRmin, SNRmax, 100)
+
+    print('meshgrid')
+    Z, SNR = np.meshgrid(zvals, SNRvals)
+
+    color = 'k'
+    ls = 'dashed'
+    for b in 'izy':
+        idx = data['band'] == b
+        sel = data[idx]
+        print('interpol instance')
+        x = sel['z'].to_list()
+        y = sel['SNR'].to_list()
+        #v = np.tile(sel['nVisits'], (len(y), 1))
+        v = sel['nVisits'].to_list()
+        #v = fillZ(sel.to_records(index=False), 'z', 'SNR', 'nVisits')
+        """
+        print(x)
+        print(y)
+        print(v)
+        print(sel['SNR'])
+        print(len(x), len(y), v.shape, Z.shape, SNR.shape)
+        interpol = interp2d(
+            x, y, v, bounds_error=False, fill_value=0.)
+        print('interpol values')
+        NV = interpol(zvals, SNRvals)
+        print(NV)
+        print(Z)
+        print(SNR)
+        """
+        NV = griddata((x, y), v, (Z, SNR), method='linear')
+        # ax.imshow(NV, extent=(
+        #    zmin, zmax, SNRmin, SNRmax), aspect='auto', alpha=0.25, cmap='hsv')
+        print('plotting contour')
+        nvv = range(10, 100, 20)
+        CS = plt.contour(Z, SNR, gaussian_filter(
+            NV, sigma=3.), nvv, colors=colors[b])
+        fmt = {}
+        strs = ['%i' % nn for nn in nvv]
+        print(strs)
+        #strs = ['{}%'.format(np.int(zz)) for zz in zzvc]
+        for l, s in zip(CS.levels, strs):
+            fmt[l] = s
+        ax.clabel(CS, inline=True, fontsize=10,
+                  colors=colors[b], fmt=fmt)
+
+        # plt.show()
 
 
 def plot_SNR_Nvisits(sel_snr, bands='izy', z=np.arange(0.8, 1.1, 0.1)):
@@ -18,7 +87,6 @@ def plot_SNR_Nvisits(sel_snr, bands='izy', z=np.arange(0.8, 1.1, 0.1)):
       redshift range to plot (default: np.arange(0.8,1.1,0.1)
 
     """
-    colors = dict(zip('ugrizy', ['b', 'c', 'g', 'y', 'r', 'm']))
     ls = dict(zip(z, ['solid', 'dotted', 'dashed', 'solid']))
     print(ls, z)
     fig, ax = plt.subplots()
@@ -29,13 +97,15 @@ def plot_SNR_Nvisits(sel_snr, bands='izy', z=np.arange(0.8, 1.1, 0.1)):
             if zv <= 1:
                 idb = np.abs(sela['z']-zv) < 1.e-5
                 selb = sela[idb].to_records(index=False)
-                ax.plot(selb['m5'], selb['SNR_photo_bd'], color=colors[b],
+                ax.plot(selb['nVisits'], selb['SNR_photo_bd'], color=colors[b],
                         label='{} - z={}'.format(b, zv), ls=ls[zv])
 
     ax.grid()
     ax.set_xlabel('Nvisits')
     ax.set_ylabel('SNR')
     ax.legend()
+    ax.set_xlim([0., None])
+    ax.set_ylim([0., None])
 
 
 def plot_z(zref, sel_snr):
@@ -143,7 +213,8 @@ sel_snr = snr[io]
 
 zref = list(map(float, opts.z.split(',')))
 # plot_z(zref,sel_snr)
-print('hhh', zref)
+
 plot_SNR_Nvisits(sel_snr, z=zref)
+plot_contour_Nvisits(sel_snr)
 
 plt.show()
