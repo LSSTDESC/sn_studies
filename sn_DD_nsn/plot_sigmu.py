@@ -44,7 +44,7 @@ def plot(ax, sna):
     ax.legend(loc='upper left')
     ax.set_xlim([0.3, 0.8])
     ax.set_ylim([0., None])
-    ax.set_xlabel(r'z')
+    ax.set_xlabel(r'$z$')
     ax.set_ylabel(r'Error budget [mag]')
 
     interp = interp1d(sn['beta']*np.sqrt(sn['Cov_colorcolor']), sn['z'])
