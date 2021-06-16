@@ -395,7 +395,7 @@ def PlotMaxFrac(psf_type='single_gauss', title='Single gaussian profile'):
     print(grp)
 
     #fontsize = 20
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(12, 8))
     # ax.set_title(title,fontsize=fontsize)
     ax.set_title(title)
     ax.plot(grp['seeing'], grp['pixel_frac_med'],

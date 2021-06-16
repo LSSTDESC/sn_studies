@@ -2,7 +2,7 @@ from sn_tools.sn_telescope import Telescope
 from . import plt
 import numpy as np
 import numpy.lib.recfunctions as rf
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, RegularGridInterpolator
 
 
 class MagToFlux:
@@ -16,7 +16,7 @@ class MagToFlux:
 
     """
 
-    def __init__(self, airmass=1.2):
+    def __init__(self, airmass=1.2, bands='gri'):
 
         self.telescope = Telescope(airmass=airmass, aerosol=False)
 
@@ -27,7 +27,7 @@ class MagToFlux:
         mag = np.arange(14, 20.1, 0.1)
         exptime = 15.
         nexp = 1
-        self.bands = 'gri'
+        self.bands = bands
         self.filtcols = dict(zip(self.bands, 'bgr'))
         self.data = self.loop_band(mag, exptime, nexp)
 
@@ -103,7 +103,7 @@ class MagToFlux:
 
         """
 
-        #plt.ticklabel_format(style='scientific', axis='y',useMathText=True)
+        # plt.ticklabel_format(style='scientific', axis='y',useMathText=True)
         plt.figure()
         plt.gca().get_yaxis().get_major_formatter().set_powerlimits((0, 0))
         for band in self.bands:
@@ -112,7 +112,7 @@ class MagToFlux:
             plt.semilogy(sel['mag'], sel['flux_e_sec'],
                          color=self.filtcols[band], label='{} band'.format(band))
 
-            #plt.ticklabel_format(style='scientific', axis='y',useMathText=True)
+            # plt.ticklabel_format(style='scientific', axis='y',useMathText=True)
         plt.xlabel('mag')
         plt.ylabel('flux [pe/s]')
         plt.xlim([14., 20.])
@@ -226,7 +226,7 @@ class MagSaturation:
         return resu
 
 
-def PlotMagSat(bands, restot, psf_type='single_gauss'):
+def plotMagSat(bands, restot, psf_type='single_gauss'):
     """
     Display saturation magnitudes vs seeing (per band)
 
@@ -258,7 +258,7 @@ def PlotMagSat(bands, restot, psf_type='single_gauss'):
         for exptime in exptimes:
             for full_well in full_wells:
                 sela = select(restot, band, exptime, full_well, psf_type)
-                #label = 'exptime: {} s - full well: {} pe'.format(int(exptime),int(full_well))
+                # label = 'exptime: {} s - full well: {} pe'.format(int(exptime),int(full_well))
                 label = '{} s / {}k pe'.format(int(exptime),
                                                int(full_well/1000))
                 lstyle = lsstyle[exptime]
@@ -283,7 +283,7 @@ def PlotMagSat(bands, restot, psf_type='single_gauss'):
             ax[pos].set_title(r'{}'.format(psf_type), fontsize=fontsize)
             # ax[iw].legend(loc='best',prop={'size':fontsize})
         ax[pos].tick_params(labelsize=fontsize)
-        #ax[iw].set_title('full well = {} pe'.format(int(fwell)))
+        # ax[iw].set_title('full well = {} pe'.format(int(fwell)))
         ax[pos].grid()
         ax[pos].set_xlim([0.3, 2.5])
         ax[pos].xaxis.set_ticks(np.arange(0.3, 2.5, 0.4))
@@ -315,3 +315,122 @@ def select(res, band, exptime, full_well, profile):
     idb &= (np.abs(res['full_well']-full_well) < 1.e-5)
     idb &= res['psf_profile'] == profile
     return res[idb]
+
+
+def plotMagContour(fName, band='g'):
+
+    tab = np.load(fName, allow_pickle=True)
+
+    print(tab.dtype)
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    full_wells = np.unique(tab['full_well'])
+    colors = dict(zip(full_wells, ['k', 'r']))
+    ls = dict(zip(full_wells, ['solid', 'dashed']))
+
+    for full_well in full_wells:
+
+        idx = np.abs(tab['full_well']-full_well) < 1.e-5
+
+        mags = magInterp(tab[idx], band)
+
+        plotContour(ax, mags, color=colors[full_well], ls=ls[full_well],
+                    label='full well = {}k pe'.format(int(full_well/1000.)))
+
+    ax.set_xlabel('Exposure time [sec]')
+    ax.set_ylabel('Seeing [\'\']')
+    ax.legend(loc='upper left', bbox_to_anchor=(0.1, 1.1),
+              ncol=2, frameon=False)
+
+
+def plotContour(ax, mags, color='k', ls='solid', label=''):
+
+    expmin, expmax = 1., 40.
+    seeingmin, seeingmax = 0.3, 1.5
+    exptime = np.linspace(expmin, expmax, 1000)
+    seeing = np.linspace(seeingmin, seeingmax, 1000)
+
+    EXP, SEE = np.meshgrid(exptime, seeing)
+    MAG = mags((EXP, SEE))
+
+    ax.imshow(MAG, extent=(
+        expmin, expmax, seeingmin, seeingmax), aspect='auto', alpha=0.25, cmap='hsv')
+
+    zzv = [0.01, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15]
+    zzv = [15., 16., 17.]
+    zzv = np.arange(14., 18., 0.5)
+    print('hhhh', label)
+    CS = ax.contour(EXP, SEE, MAG, zzv, colors=color,
+                    linestyles=ls)
+
+    fmt = {}
+    strs = ['$%3.1f$' % zz for zz in zzv]
+    # strs = ['{}%'.format(np.int(zz)) for zz in zzvc]
+    for l, s in zip(CS.levels, strs):
+        fmt[l] = s
+    ax.clabel(CS, inline=True, fontsize=10,
+              colors=color, fmt=fmt)
+
+    CS.collections[0].set_label(label)
+
+
+def magInterp(tab, band):
+
+    idx = tab['band'] == band
+
+    sel = tab[idx]
+
+    print(sel)
+    zmin, zmax, zstep, nz = limVals(sel, 'seeing')
+    phamin, phamax, phastep, npha = limVals(sel, 'exptime')
+
+    zstep = np.round(zstep, 2)
+    phastep = np.round(phastep, 1)
+
+    zv = np.linspace(zmin, zmax, nz)
+    phav = np.linspace(phamin, phamax, npha)
+
+    index = np.lexsort((sel['seeing'], sel['exptime']))
+    magvals = np.reshape(sel[index]['mag'], (npha, nz))
+
+    mags = RegularGridInterpolator(
+        (phav, zv), magvals, method='linear', bounds_error=False, fill_value=-1.0)
+
+    return mags
+
+
+def limVals(lc, field):
+    """ Get unique values of a field in  a table
+    Parameters
+    ----------
+    lc: Table
+    astropy Table (here probably a LC)
+    field: str
+    name of the field of interest
+    Returns
+    -------
+    vmin: float
+    min value of the field
+    vmax: float
+     max value of the field
+    vstep: float
+    step value for this field (median)
+    nvals: int
+    number of unique values
+    """
+
+    lc.sort(order=field)
+    print('hhe', lc)
+    # vals = np.unique(lc[field].data.round(decimals=4))
+    vals = np.unique(lc[field])
+    vmin = np.min(vals)
+    vmax = np.max(vals)
+    vstep = np.median(vals[1:]-vals[:-1])
+
+    # make a check here
+    test = list(np.round(np.arange(vmin, vmax+vstep, vstep), 2))
+    if len(test) != len(vals):
+        print('problem here with ', field)
+        print('missing value', set(test).difference(set(vals)))
+        print('Interpolation results may not be accurate!!!!!')
+    return vmin, vmax, vstep, len(vals)
