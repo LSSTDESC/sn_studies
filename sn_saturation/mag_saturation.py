@@ -318,6 +318,17 @@ def select(res, band, exptime, full_well, profile):
 
 
 def plotMagContour(fName, band='g'):
+    """
+    Method to plot mag contours
+
+    Parameters
+    ---------------
+    fName: str
+      file name of the saturated mags
+    band: str, opt
+      band to consider (default: g)
+
+    """
 
     tab = np.load(fName, allow_pickle=True)
 
@@ -337,15 +348,32 @@ def plotMagContour(fName, band='g'):
         plotContour(ax, mags, color=colors[full_well], ls=ls[full_well],
                     label='full well = {}k pe'.format(int(full_well/1000.)))
 
-    ax.set_xlabel('Exposure time [sec]')
+    ax.set_xlabel('Exposure time [s]')
     ax.set_ylabel('Seeing [\'\']')
     ax.legend(loc='upper left', bbox_to_anchor=(0.1, 1.1),
               ncol=2, frameon=False)
 
 
 def plotContour(ax, mags, color='k', ls='solid', label=''):
+    """
+    Method to plot magnitude contours
 
-    expmin, expmax = 1., 40.
+    Parameters
+    ---------------
+    ax: matplotlib axis
+      axis where the contours will be plotted
+    mags: interpolator
+      RegularGridInterpolator to get mags
+    color: str, opt
+      contour colors (default: black)
+    ls: str, opt
+      contour line style (default: solid)
+    label: str, opt
+      contour label (default: '')
+
+
+    """
+    expmin, expmax = 1., 60.
     seeingmin, seeingmax = 0.3, 1.5
     exptime = np.linspace(expmin, expmax, 1000)
     seeing = np.linspace(seeingmin, seeingmax, 1000)
@@ -368,13 +396,28 @@ def plotContour(ax, mags, color='k', ls='solid', label=''):
     # strs = ['{}%'.format(np.int(zz)) for zz in zzvc]
     for l, s in zip(CS.levels, strs):
         fmt[l] = s
-    ax.clabel(CS, inline=True, fontsize=10,
+    ax.clabel(CS, inline=True, fontsize=14,
               colors=color, fmt=fmt)
 
     CS.collections[0].set_label(label)
 
 
 def magInterp(tab, band):
+    """
+    Method to get mag interp values in 2D (exptime, seeing)
+
+    Parameters
+    ---------------
+    tab: array
+      data to interpolate
+    band: str
+      band to consider
+
+    Returns
+    ----------
+    RegularGridInterpolator
+
+    """
 
     idx = tab['band'] == band
 
@@ -434,3 +477,74 @@ def limVals(lc, field):
         print('missing value', set(test).difference(set(vals)))
         print('Interpolation results may not be accurate!!!!!')
     return vmin, vmax, vstep, len(vals)
+
+
+def plotDeltamagContour(exptime_ref=30, fullwell_ref=120):
+    """
+    Method to plot deltamag contours
+
+    Parameters
+    ---------------
+    exptime_ref: float, opt
+      reference exposure time (default: 30 s)
+    fullwell_ref: float, opt
+      reference full well (default: 120 kpe)
+
+    """
+    fig, ax = plt.subplots(figsize=(12, 8))
+    color = 'k'
+    ls = ['solid', 'dashed']
+
+    expmin, expmax = 1., 60.
+    fullwellmin, fullwellmax = 70, 150
+    exptime = np.linspace(expmin, expmax, 1000)
+    fullwell = np.linspace(fullwellmin, fullwellmax, 1000)
+
+    EXP, FULLW = np.meshgrid(exptime, fullwell)
+    DMAG = dmag(FULLW, EXP, fullwell_ref, exptime_ref)
+
+    ax.imshow(DMAG, extent=(
+        expmin, expmax, fullwellmin, fullwellmax), aspect='auto', alpha=0.25, cmap='hsv')
+
+    zzv = [0.01, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15]
+    zzv = [15., 16., 17.]
+    zzv = np.arange(-2., 2., 0.4)
+    zzv = [-2.0, -1.6, -1.2, -0.8, -0.4, 0.0, 0.4, 0.8, 1.2]
+    CS = ax.contour(EXP, FULLW, DMAG, zzv, colors=color)
+
+    print(zzv)
+
+    fmt = {}
+    strs = ['$%3.1f$' % zz for zz in zzv]
+    # strs = ['{}%'.format(np.int(zz)) for zz in zzvc]
+    for l, s in zip(CS.levels, strs):
+        fmt[l] = s
+    ax.clabel(CS, inline=True, fontsize=13,
+              colors='b', fmt=fmt)
+
+    # CS.collections[0].set_label(label)
+    ax.set_xlabel('Exposure time [s]')
+    ax.set_ylabel('Full well [kpe]')
+
+
+def dmag(fwa, expta, fwb, exptb):
+    """
+    Method to estimated mag diff between two config in (fullwell, exptime)
+
+    Parameters
+    ---------------
+    fwa: float
+      full well a
+    expta: float
+      exptime a
+    fwb: float
+      full well b
+    exptb: float
+      exptime b
+
+    Returns
+    ----------
+    delta_mag = -2.5*log(fwa*exptb/(fwb*expta))
+
+    """
+    return -2.5*np.log10((fwa*exptb)/(fwb*expta))
