@@ -1,7 +1,7 @@
 import h5py
 from astropy.table import Table, vstack
 import numpy as np
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, RegularGridInterpolator
 import pandas as pd
 from . import plt
 from sn_tools.sn_utils import multiproc
@@ -171,10 +171,10 @@ class SaturationTime:
             lc.sort('time')
 
             lc.convert_bytestring_to_unicode()
-            #ttime_ref = time.time()
+            # ttime_ref = time.time()
             # for b in np.unique(lc['band']):
-            #io = lc['band'] == b
-            #mydf = pd.DataFrame(np.array(lc[io]))
+            # io = lc['band'] == b
+            # mydf = pd.DataFrame(np.array(lc[io]))
             dg = self.time_saturation_band(
                 mydf, full_well, lc.meta['daymax'])
             dg['x1'] = lc.meta['x1']
@@ -183,14 +183,15 @@ class SaturationTime:
             dg['z'] = lc.meta['z']
             dg['band'] = self.band
             dfres = pd.concat((dfres, dg))
-            #print('processed', time.time()-ttime_ref)
+            # print('processed', time.time()-ttime_ref)
         print('processed', time.time()-time_ref)
         # print(dfres)
         # print(test)
         """
             dfa = pd.DataFrame(np.array(lc))
             print(dfa[['band','flux_e_sec','time']])
-            df = dfa.groupby(['band']).apply(lambda x: self.time_saturation_band(x,full_well)).reset_index()
+            df = dfa.groupby(['band']).apply(
+                lambda x: self.time_saturation_band(x,full_well)).reset_index()
             print(df)
             print(test)
             df['x1'] =  lc.meta['x1']
@@ -232,7 +233,7 @@ class SaturationTime:
         import matplotlib.pyplot as plt
         plt.suptitle('{} band '.format(np.unique(grp['band'])))
         plt.plot(grp['phase'],grp['flux_e'])
-        #plt.plot(grp['time'],grp['flux_e_sec']*grp['visitExposureTime'])
+        # plt.plot(grp['time'],grp['flux_e_sec']*grp['visitExposureTime'])
         plt.plot(grp['phase'],grp['flux_e_sec'])
         plt.show()
         """
@@ -254,7 +255,7 @@ class SaturationTime:
         inosat = lcsnr['flux_e'] < full_well
         lcnosat = lcsnr[inosat]
 
-        #isattime = fluxtime >= full_well
+        # isattime = fluxtime >= full_well
         # print('snr',lcsnr['time'])
         # print('sat',lcsat['time'])
         if len(lcsnr) > 0.:
@@ -262,7 +263,7 @@ class SaturationTime:
 
         if len(lcsat) > 0.:
             timeSat = lcsat['time'].iloc[0]
-            #timeSat_interp = ttime[isattime][0]
+            # timeSat_interp = ttime[isattime][0]
 
         idxt = np.abs(lcnosat['time']-T0) <= 5.
         np_near_max = len(lcnosat[idxt])
@@ -279,6 +280,142 @@ class SaturationTime:
         df['exptime'] = np.mean(lcsnr['visitExposureTime'])
         df['npts_around_max'] = np_near_max
         return df
+
+
+def plotTimeSaturationContour(x1, color, prefix='TimeSat', cadence=1, band='g'):
+
+    data = np.load('{}_{}_{}.npy'.format(
+        prefix, cadence, band), allow_pickle=True)
+
+    idx = np.abs(data['x1']-x1) < 1.e-5
+    idx &= np.abs(data['color']-color) < 1.e-5
+
+    df = pd.DataFrame(np.copy(data[idx]))
+    df['deltaT'] = df['tSat']-df['tBeg']
+
+    idx = df['deltaT'] < 0.
+    df.loc[idx, 'deltaT'] = 0.
+    print('kkkk', df['deltaT'])
+    # print(test)
+    # get median values
+
+    dfmed = df.groupby(['band', 'full_well', 'exptime', 'z'])[
+        'deltaT'].median().reset_index()
+
+    data = dfmed.to_records(index=False)
+    print('dd', data)
+    full_wells = np.unique(data['full_well'])
+
+    fig, ax = plt.subplots()
+    for full_well in full_wells:
+        idx = data['full_well'] == full_well
+        sel = data[idx]
+        timeSat = tSat(sel)
+        print('ooo', sel)
+        plotSatContour(ax, timeSat)
+        break
+
+
+def plotSatContour(ax, dd, color='k', ls='solid', label=''):
+
+    exptmin, exptmax = 1., 60.
+    zmin, zmax = 0.01, 0.03
+    exptime = np.linspace(exptmin, exptmax, 60)
+    z = np.linspace(zmin, zmax, 10)
+
+    EXPT, Z = np.meshgrid(exptime, z)
+    TSAT = dd((EXPT, Z))
+
+    ax.imshow(TSAT, extent=(
+        exptmin, exptmax, zmin, zmax), aspect='auto', alpha=0.25, cmap='hsv')
+
+    zzv = [0.01, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15]
+    zzv = [15., 16., 17.]
+    zzv = np.arange(1, 10, 1)
+    print('hhhh', label)
+    CS = ax.contour(EXPT, Z, TSAT, zzv, colors=color,
+                    linestyles=ls)
+
+    fmt = {}
+    strs = ['$%i$' % zz for zz in zzv]
+    # strs = ['{}%'.format(np.int(zz)) for zz in zzvc]
+    for l, s in zip(CS.levels, strs):
+        fmt[l] = s
+    ax.clabel(CS, inline=True, fontsize=14,
+              colors=color, fmt=fmt)
+
+    CS.collections[0].set_label(label)
+
+
+def tSat(sel):
+    """
+    Method to get mag interp values in 2D (exptime, seeing)
+
+    Parameters
+    ---------------
+    sel: array
+      data to interpolate
+
+    Returns
+    ----------
+    RegularGridInterpolator
+
+    """
+
+    print(sel.dtype)
+    zmin, zmax, zstep, nz = limVals(sel, 'z')
+    phamin, phamax, phastep, npha = limVals(sel, 'exptime')
+
+    zstep = np.round(zstep, 2)
+    phastep = np.round(phastep, 1)
+
+    zv = np.linspace(zmin, zmax, nz)
+    phav = np.linspace(phamin, phamax, npha)
+
+    index = np.lexsort((sel['z'], sel['exptime']))
+    magvals = np.reshape(sel[index]['deltaT'], (npha, nz))
+
+    mags = RegularGridInterpolator(
+        (phav, zv), magvals, method='linear', bounds_error=False, fill_value=-1.0)
+
+    return mags
+
+
+def limVals(lc, field):
+    """ Get unique values of a field in  a table
+    Parameters
+    ----------
+    lc: Table
+    astropy Table (here probably a LC)
+    field: str
+    name of the field of interest
+    Returns
+    -------
+    vmin: float
+    min value of the field
+    vmax: float
+     max value of the field
+    vstep: float
+    step value for this field (median)
+    nvals: int
+    number of unique values
+    """
+
+    lc.sort(order=field)
+
+    # vals = np.unique(lc[field].data.round(decimals=4))
+    vals = np.unique(lc[field])
+    vmin = np.min(vals)
+    vmax = np.max(vals)
+    vstep = np.median(vals[1:]-vals[:-1])
+
+    # make a check here
+    test = list(np.round(np.arange(vmin, vmax+vstep, vstep), 2))
+    if len(test) != len(vals):
+        print('problem here with ', field)
+        print('missing value', set(test).difference(set(vals)))
+        print('Interpolation results may not be accurate!!!!!')
+    return vmin, vmax, vstep, len(vals)
 
 
 def plotTimeSaturation(x1, color, data):
@@ -391,14 +528,15 @@ def plot_gefficiency(x1, color, tab):
         sel = Table(snrtab[idx])
 
         groups = sel.group_by('z')
-        
+
         for group in groups.groups:
             z = np.unique(group['z'])[0]
             norm = len(group)
             isel = group['npts_around_max']>=3
             r.append((x1,color,z,exptime,fwell,len(group[isel])/norm,key))
-        
-    resu = np.rec.fromrecords(r, names=['x1','color','z','exptime','fwell','eff','psf_profile'])
+
+    resu = np.rec.fromrecords(
+        r, names=['x1','color','z','exptime','fwell','eff','psf_profile'])
     """
     resu = tab.groupby(['exptime', 'full_well']).apply(
         lambda x: gefficiency(x)).reset_index()
@@ -420,8 +558,8 @@ def plot_gefficiency(x1, color, tab):
     """
     ib = -1
     for key, val in ls.items():
-        ib +=1 
-        #ax.hlines(0.9,0.011+5.*0.01*ib,0.013+5.*0.01*ib,linestyles=val)
+        ib +=1
+        # ax.hlines(0.9,0.011+5.*0.01*ib,0.013+5.*0.01*ib,linestyles=val)
         ax.hlines(0.97-0.05*ib,0.010,0.011,linestyles=val)
         ax.text(0.0112,0.97-0.05*ib-0.007,corresp[key],fontsize=fontsize-3)
     """
