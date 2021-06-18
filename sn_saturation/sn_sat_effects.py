@@ -4,7 +4,8 @@ import numpy as np
 from scipy.interpolate import interp1d
 import pandas as pd
 from . import plt
-import multiprocessing
+from sn_tools.sn_utils import multiproc
+import time
 
 
 class LC:
@@ -80,17 +81,20 @@ class SaturationTime:
       season of observation
    cadence: int
        cadence of observation
+   band: str, opt
+      band to process (default: g)
    psf_profile: str
       psf profile (default: single_gauss)
 
     """
 
-    def __init__(self, dirFile, x1, color, nexp, exptime, season, cadence, psf_profile='single_gauss'):
+    def __init__(self, dirFile, x1, color, nexp, exptime, season, cadence, band='g', psf_profile='single_gauss'):
 
         prodid = 'Saturation_{}_{}_{}_{}_{}_{}_0'.format(
             nexp, exptime, x1, color, cadence, season)
 
         self.lc = LC(dirFile, prodid)
+        self.band = band
 
         pixel_npy = np.load('PSF_pixel_{}_summary.npy'.format(psf_profile))
         """
@@ -108,12 +112,18 @@ class SaturationTime:
         # print(self.lc.simuPars)
 
     def multi_time(self, full_well, npp=8):
-
+        """
         nlc = len(self.lc.simuPars)
         batch = np.linspace(0, nlc, npp+1, dtype='int')
 
         result_queue = multiprocessing.Queue()
+        """
+        params = {}
+        params['full_well'] = full_well
 
+        df = multiproc(self.lc.simuPars, params,
+                       self.time_of_saturation, npp)
+        """
         for i in range(npp):
 
             ida = batch[i]
@@ -134,10 +144,10 @@ class SaturationTime:
         df = pd.DataFrame()
         for j in range(npp):
             df = pd.concat((df, resultdict[j]))
-
+        """
         return df
 
-    def time_of_saturation(self, full_well, simuPars, j=0, output_q=None):
+    def time_of_saturation(self, simuPars, params, j=0, output_q=None):
         """
         Method to estimate the time of saturation wrt full_well
 
@@ -148,29 +158,36 @@ class SaturationTime:
 
         """
 
+        full_well = params['full_well']
         dfres = pd.DataFrame()
+        time_ref = time.time()
+        print('to process', len(simuPars))
         for par in simuPars:
+
             lc = self.lc.getLC(par['index_hdf5'])
+            io = lc['band'] == 'LSST::{}'.format(self.band)
+            mydf = pd.DataFrame(np.copy(lc[io]))
 
             lc.sort('time')
 
             lc.convert_bytestring_to_unicode()
-
-            for b in np.unique(lc['band']):
-                io = lc['band'] == b
-                mydf = pd.DataFrame(np.array(lc[io]))
-                dg = self.time_saturation_band(
-                    mydf, full_well, lc.meta['daymax'])
-                dg['x1'] = lc.meta['x1']
-                dg['color'] = lc.meta['color']
-                dg['daymax'] = lc.meta['daymax']
-                dg['z'] = lc.meta['z']
-                dg['band'] = b
-                dfres = pd.concat((dfres, dg))
-
-            # print(dfres)
-            # print(test)
-            """
+            #ttime_ref = time.time()
+            # for b in np.unique(lc['band']):
+            #io = lc['band'] == b
+            #mydf = pd.DataFrame(np.array(lc[io]))
+            dg = self.time_saturation_band(
+                mydf, full_well, lc.meta['daymax'])
+            dg['x1'] = lc.meta['x1']
+            dg['color'] = lc.meta['color']
+            dg['daymax'] = lc.meta['daymax']
+            dg['z'] = lc.meta['z']
+            dg['band'] = self.band
+            dfres = pd.concat((dfres, dg))
+            #print('processed', time.time()-ttime_ref)
+        print('processed', time.time()-time_ref)
+        # print(dfres)
+        # print(test)
+        """
             dfa = pd.DataFrame(np.array(lc))
             print(dfa[['band','flux_e_sec','time']])
             df = dfa.groupby(['band']).apply(lambda x: self.time_saturation_band(x,full_well)).reset_index()
@@ -208,6 +225,8 @@ class SaturationTime:
         grp['flux_e'] = grp['flux_e_sec']*grp['visitExposureTime'] * \
             self.pixel_max(grp[self.seeing_simu])
 
+        isnr = grp['snr_m5'] >= 5.
+        lcsnr = grp[isnr]
         """
         print(grp.columns)
         import matplotlib.pyplot as plt
@@ -220,23 +239,22 @@ class SaturationTime:
         timeBegin = 0.
         timeSat = 0.
         timeSat_interp = 0.
+        """
         tmin = np.min(grp['time'])
         tmax = np.max(grp['time'])
+
         ttime = np.arange(tmin, tmax, 1.)
 
-        lcinterp = interp1d(grp['time'], grp['flux_e'],
+        lcinterp = interp1d(lcsnr['time'], lcsnr['flux_e'],
                             fill_value=0.0, bounds_error=False)
         fluxtime = lcinterp(ttime)
+        """
+        isat = lcsnr['flux_e'] >= full_well
+        lcsat = lcsnr[isat]
+        inosat = lcsnr['flux_e'] < full_well
+        lcnosat = lcsnr[inosat]
 
-        isnr = grp['snr_m5'] >= 5.
-        lcsnr = grp[isnr]
-
-        isat = grp['flux_e'] >= full_well
-        lcsat = grp[isat]
-        inosat = grp['flux_e'] <= full_well
-        lcnosat = grp[inosat]
-
-        isattime = fluxtime >= full_well
+        #isattime = fluxtime >= full_well
         # print('snr',lcsnr['time'])
         # print('sat',lcsat['time'])
         if len(lcsnr) > 0.:
@@ -244,7 +262,7 @@ class SaturationTime:
 
         if len(lcsat) > 0.:
             timeSat = lcsat['time'].iloc[0]
-            timeSat_interp = ttime[isattime][0]
+            #timeSat_interp = ttime[isattime][0]
 
         idxt = np.abs(lcnosat['time']-T0) <= 5.
         np_near_max = len(lcnosat[idxt])
@@ -258,7 +276,7 @@ class SaturationTime:
         df['tBeg'] = timeBegin
         df['tSat'] = timeSat
         df['tSat_interp'] = timeSat_interp
-        df['exptime'] = np.mean(grp['visitExposureTime'])
+        df['exptime'] = np.mean(lcsnr['visitExposureTime'])
         df['npts_around_max'] = np_near_max
         return df
 
