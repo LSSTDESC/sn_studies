@@ -6,7 +6,7 @@ import pandas as pd
 from . import plt
 from sn_tools.sn_utils import multiproc
 import time
-
+from scipy.ndimage.filters import gaussian_filter
 
 class LC:
     """
@@ -74,9 +74,9 @@ class SaturationTime:
     color: float
       SN color
     nexp: int
-      number of exposures
+      number of exposures of the ref lc file
     exptime: float
-      exposure time
+      exposure time of the ref lc file
    season: int
       season of observation
    cadence: int
@@ -93,6 +93,7 @@ class SaturationTime:
         prodid = 'Saturation_{}_{}_{}_{}_{}_{}_0'.format(
             nexp, exptime, x1, color, cadence, season)
 
+        print('getting LC file',nexp,exptime)
         self.lc = LC(dirFile, prodid)
         self.band = band
 
@@ -111,40 +112,16 @@ class SaturationTime:
         self.seeing_simu = seeings[psf_profile]
         # print(self.lc.simuPars)
 
-    def multi_time(self, full_well, npp=8):
-        """
-        nlc = len(self.lc.simuPars)
-        batch = np.linspace(0, nlc, npp+1, dtype='int')
-
-        result_queue = multiprocessing.Queue()
-        """
+    def multi_time(self, full_well, nexp, expt, npp=8):
+       
         params = {}
         params['full_well'] = full_well
+        params['nexp'] = nexp
+        params['expt'] = expt
 
         df = multiproc(self.lc.simuPars, params,
                        self.time_of_saturation, npp)
-        """
-        for i in range(npp):
-
-            ida = batch[i]
-            idb = batch[i+1]
-
-            p = multiprocessing.Process(name='Subprocess', target=self.time_of_saturation, args=(
-                full_well, self.lc.simuPars[ida:idb], i, result_queue))
-            p.start()
-
-        resultdict = {}
-
-        for j in range(npp):
-            resultdict.update(result_queue.get())
-
-        for p in multiprocessing.active_children():
-            p.join()
-
-        df = pd.DataFrame()
-        for j in range(npp):
-            df = pd.concat((df, resultdict[j]))
-        """
+        
         return df
 
     def time_of_saturation(self, simuPars, params, j=0, output_q=None):
@@ -159,6 +136,7 @@ class SaturationTime:
         """
 
         full_well = params['full_well']
+        expt = params['expt']
         dfres = pd.DataFrame()
         time_ref = time.time()
         print('to process', len(simuPars))
@@ -175,8 +153,9 @@ class SaturationTime:
             # for b in np.unique(lc['band']):
             # io = lc['band'] == b
             # mydf = pd.DataFrame(np.array(lc[io]))
+            
             dg = self.time_saturation_band(
-                mydf, full_well, lc.meta['daymax'])
+                mydf, full_well, lc.meta['daymax'],expt)
             dg['x1'] = lc.meta['x1']
             dg['color'] = lc.meta['color']
             dg['daymax'] = lc.meta['daymax']
@@ -205,7 +184,7 @@ class SaturationTime:
         else:
             return dfres
 
-    def time_saturation_band(self, grp, full_well, T0):
+    def time_saturation_band(self, grp, full_well, T0,expt):
         """
         Method to estimate the saturation time per band
 
@@ -215,6 +194,7 @@ class SaturationTime:
           data to process
         full_well: float
           full well value (in pe)
+        expt: exposure time
 
         Returns
         ----------
@@ -223,24 +203,24 @@ class SaturationTime:
 
         """
         # print(grp[['band','flux_e_sec','visitExposureTime','time']])
-        grp['flux_e'] = grp['flux_e_sec']*grp['visitExposureTime'] * \
+        grp['flux_e'] = grp['flux_e_sec']*expt* \
             self.pixel_max(grp[self.seeing_simu])
 
         isnr = grp['snr_m5'] >= 5.
         lcsnr = grp[isnr]
+    
         """
-        print(grp.columns)
         import matplotlib.pyplot as plt
         plt.suptitle('{} band '.format(np.unique(grp['band'])))
-        plt.plot(grp['phase'],grp['flux_e'])
-        # plt.plot(grp['time'],grp['flux_e_sec']*grp['visitExposureTime'])
-        plt.plot(grp['phase'],grp['flux_e_sec'])
+        plt.plot(grp['time'],grp['flux_e_sec'])
+        #plt.plot(grp['time'],grp['flux_e_sec']*grp['visitExposureTime'])
+        #plt.plot(grp['phase'],grp['flux_e_sec'])
         plt.show()
         """
         timeBegin = 0.
         timeSat = 0.
         timeSat_interp = 0.
-        """
+        
         tmin = np.min(grp['time'])
         tmax = np.max(grp['time'])
 
@@ -249,13 +229,13 @@ class SaturationTime:
         lcinterp = interp1d(lcsnr['time'], lcsnr['flux_e'],
                             fill_value=0.0, bounds_error=False)
         fluxtime = lcinterp(ttime)
-        """
+        
         isat = lcsnr['flux_e'] >= full_well
         lcsat = lcsnr[isat]
         inosat = lcsnr['flux_e'] < full_well
         lcnosat = lcsnr[inosat]
 
-        # isattime = fluxtime >= full_well
+        isattime = fluxtime >= full_well
         # print('snr',lcsnr['time'])
         # print('sat',lcsat['time'])
         if len(lcsnr) > 0.:
@@ -263,7 +243,7 @@ class SaturationTime:
 
         if len(lcsat) > 0.:
             timeSat = lcsat['time'].iloc[0]
-            # timeSat_interp = ttime[isattime][0]
+            timeSat_interp = ttime[isattime][0]
 
         idxt = np.abs(lcnosat['time']-T0) <= 5.
         np_near_max = len(lcnosat[idxt])
@@ -277,7 +257,8 @@ class SaturationTime:
         df['tBeg'] = timeBegin
         df['tSat'] = timeSat
         df['tSat_interp'] = timeSat_interp
-        df['exptime'] = np.mean(lcsnr['visitExposureTime'])
+        #df['exptime'] = np.mean(lcsnr['visitExposureTime'])
+        df['exptime'] = expt
         df['npts_around_max'] = np_near_max
         return df
 
@@ -291,7 +272,7 @@ def plotTimeSaturationContour(x1, color, prefix='TimeSat', cadence=1, band='g'):
     idx &= np.abs(data['color']-color) < 1.e-5
 
     df = pd.DataFrame(np.copy(data[idx]))
-    df['deltaT'] = df['tSat']-df['tBeg']
+    df['deltaT'] = df['tSat_interp']-df['tBeg']
 
     idx = df['deltaT'] < 0.
     df.loc[idx, 'deltaT'] = 0.
@@ -300,16 +281,21 @@ def plotTimeSaturationContour(x1, color, prefix='TimeSat', cadence=1, band='g'):
     # get median values
 
     dfmed = df.groupby(['band', 'full_well', 'exptime', 'z'])[
-        'deltaT'].median().reset_index()
+        'deltaT'].mean().reset_index()
 
     data = dfmed.to_records(index=False)
-    print('dd', data)
+    print('dd', data.dtype)
     full_wells = np.unique(data['full_well'])
 
     fig, ax = plt.subplots()
     for full_well in full_wells:
         idx = data['full_well'] == full_well
         sel = data[idx]
+        """
+        idd = np.abs(sel['exptime']-40.)<1.e-5
+        ssol = sel[idd]
+        ax.plot(ssol['z'],ssol['deltaT'],'ko')
+        """
         timeSat = tSat(sel)
         print('ooo', sel)
         plotSatContour(ax, timeSat)
@@ -319,9 +305,10 @@ def plotTimeSaturationContour(x1, color, prefix='TimeSat', cadence=1, band='g'):
 def plotSatContour(ax, dd, color='k', ls='solid', label=''):
 
     exptmin, exptmax = 1., 60.
-    zmin, zmax = 0.01, 0.03
-    exptime = np.linspace(exptmin, exptmax, 60)
-    z = np.linspace(zmin, zmax, 10)
+    zmin, zmax = 0.01, 0.05
+    exptime = np.linspace(exptmin, exptmax, 1000)
+    print(exptime)
+    z = np.linspace(zmin, zmax, 1000)
 
     EXPT, Z = np.meshgrid(exptime, z)
     TSAT = dd((EXPT, Z))
@@ -331,9 +318,9 @@ def plotSatContour(ax, dd, color='k', ls='solid', label=''):
 
     zzv = [0.01, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15]
     zzv = [15., 16., 17.]
-    zzv = np.arange(1, 10, 1)
+    zzv = np.arange(1, 15, 3)
     print('hhhh', label)
-    CS = ax.contour(EXPT, Z, TSAT, zzv, colors=color,
+    CS = ax.contour(EXPT, Z, gaussian_filter(TSAT,40), zzv, colors=color,
                     linestyles=ls)
 
     fmt = {}
@@ -366,8 +353,8 @@ def tSat(sel):
     zmin, zmax, zstep, nz = limVals(sel, 'z')
     phamin, phamax, phastep, npha = limVals(sel, 'exptime')
 
-    zstep = np.round(zstep, 2)
-    phastep = np.round(phastep, 1)
+    zstep = np.round(zstep, 3)
+    phastep = np.round(phastep, 0)
 
     zv = np.linspace(zmin, zmax, nz)
     phav = np.linspace(phamin, phamax, npha)
@@ -485,7 +472,6 @@ def plotBands(ax, full_well, exptime, data, bands='gri'):
     idx = np.abs(data['full_well']-full_well) < 1.e-5
     idx &= np.abs(data['exptime']-exptime) < 1.e-5
     sel = data[idx]
-    print('hhh', full_well, exptime)
     for b in bands:
         idx = sel['band'] == 'LSST::{}'.format(b)
         idx &= sel['deltaT'] >= 0.
