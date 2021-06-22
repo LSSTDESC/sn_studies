@@ -274,35 +274,119 @@ def plotTimeSaturationContour(x1, color, prefix='TimeSat', cadence=1, band='g'):
     df = pd.DataFrame(np.copy(data[idx]))
     df['deltaT'] = df['tSat_interp']-df['tBeg']
 
+    """
     idx = df['deltaT'] < 0.
     df.loc[idx, 'deltaT'] = 0.
+    #df = df[idx]
     print('kkkk', df['deltaT'])
     # print(test)
     # get median values
+    """
+    
+    dfeffi = df.groupby(['band', 'full_well', 'exptime', 'z']).apply(lambda x: effi(x)).reset_index()
+    print(dfeffi)
 
+    """
     dfmed = df.groupby(['band', 'full_well', 'exptime', 'z'])[
         'deltaT'].mean().reset_index()
-
-    data = dfmed.to_records(index=False)
+    """
+    
+    data = dfeffi.to_records(index=False)
     print('dd', data.dtype)
     full_wells = np.unique(data['full_well'])
-
-    fig, ax = plt.subplots()
+    #plotEffiContour(data,full_wells)
+    plotSat(data,full_wells)
+    #plotEffiContour(data,full_wells,var='deltaT_min',zzv=[1,3,5,7,10,15],percent=False)
+    
+def plotSat(data, full_wells):
+    
+    fig, ax = plt.subplots(figsize=(12,8))
+    colors = dict(zip(full_wells,['k','r']))
+    ls = dict(zip(['deltaT_med','deltaT_min','deltaT_max'],['solid','dashed','dotted']))
+    ls = dict(zip([15.,30.],['solid','dashed']))
+    vvals = ['deltaT_med']
     for full_well in full_wells:
         idx = data['full_well'] == full_well
         sel = data[idx]
+        for exptt in [15.,30.]:
+            label = '({} s, {} kpe)'.format(int(exptt),int(full_well/1000))
+            idd = np.abs(sel['exptime']-exptt)<1.e-5
+            idd &= sel['deltaT_med']>0.
+            ssol = sel[idd]
+            print('yop',ssol)
+            for vv in vvals:
+                ax.plot(ssol['z'],gaussian_filter(ssol[vv],1.1),ls=ls[exptt],color=colors[full_well],label=label)
+            #ax.plot(ssol['z'],ssol[vv],'{}o'.format(colors[full_well]))
+        """
+        ax.plot(ssol['z'],ssol['deltaT_med'])
+        ax.plot(ssol['z'],ssol['deltaT_min'])
+        ax.plot(ssol['z'],ssol['deltaT_max'])
+        """
+        #break
+    ax.set_ylabel('$\Delta t $[day]')
+    ax.set_xlabel('$z$')
+    ax.legend(loc='upper left', bbox_to_anchor=(0.1, 1.16),ncol=2,frameon=False)
+    ax.set_xlim([0.01,0.04])
+
+def plotEffiContour(data, full_wells,var='effi',zzv=[0.05,0.20,0.5,0.75,0.99],percent=True):
+    
+    fig, ax = plt.subplots(figsize=(12,8))
+    colors = dict(zip(full_wells,['k','r']))
+    ls = dict(zip(full_wells,['solid','dashed']))
+    
+    for full_well in full_wells:
+        idx = data['full_well'] == full_well
+        sel = data[idx]
+
         """
         idd = np.abs(sel['exptime']-40.)<1.e-5
         ssol = sel[idd]
-        ax.plot(ssol['z'],ssol['deltaT'],'ko')
+        ax.plot(ssol['z'],ssol['deltaT_med'],'ko')
         """
-        timeSat = tSat(sel)
+        timeSat = tSat(sel,varout=var)
         print('ooo', sel)
-        plotSatContour(ax, timeSat)
-        break
+        plotSatContour(ax, timeSat,color=colors[full_well],ls = ls[full_well],label='full well {} kpe'.format(int(full_well/1000)),zzv=zzv,percent=percent)
+    
+    ax.set_xlabel('Exposure Time [s]')
+    ax.set_ylabel('$z$')
+    ax.legend(loc='upper left', bbox_to_anchor=(0.1, 1.1),ncol=2,frameon=False)
+    ax.set_xlim([1,60])
+    
+def effi(grp):
+    """
+    Method to estimate grp efficiency
 
+    Parameters
+    --------------
+    grp: pandas grp
 
-def plotSatContour(ax, dd, color='k', ls='solid', label=''):
+    Returns
+    ----------
+    pandas df with efficiencies
+
+    """
+
+    # event with saturation
+    idx = grp['deltaT'] >0
+
+    sel = grp[idx]
+
+    vmin = 0.
+    vmax = 0.
+    vmed = 0.
+    
+    if len(sel) > 0:
+        vmin = sel['deltaT'].min()
+        vmax = sel['deltaT'].max()
+        vmed = sel['deltaT'].median()
+        
+    return pd.DataFrame({'effi': [sel.size/grp.size],
+                         'deltaT_min': [vmin],
+                         'deltaT_max': [vmax],
+                         'deltaT_med': [vmed]})
+
+    
+def plotSatContour(ax, dd, color='k', ls='solid', label='',zzv=[0.05,0.20,0.5,0.75,0.99],percent=True):
 
     exptmin, exptmax = 1., 60.
     zmin, zmax = 0.01, 0.05
@@ -316,15 +400,24 @@ def plotSatContour(ax, dd, color='k', ls='solid', label=''):
     ax.imshow(TSAT, extent=(
         exptmin, exptmax, zmin, zmax), aspect='auto', alpha=0.25, cmap='hsv')
 
+    """
     zzv = [0.01, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15]
     zzv = [15., 16., 17.]
-    zzv = np.arange(1, 15, 3)
+    zzv = np.arange(0.1, 1.2, 0.2)
+    zzv = [0.05,0.20,0.5,0.75,0.99]
+    zzv = [0.05,0.20,0.5,0.75,0.99]
+    """
     print('hhhh', label)
-    CS = ax.contour(EXPT, Z, gaussian_filter(TSAT,40), zzv, colors=color,
+    CS = ax.contour(EXPT, Z, gaussian_filter(TSAT,10), zzv, colors=color,
                     linestyles=ls)
-
+    #CS = ax.contour(EXPT, Z, TSAT, zzv, colors=color,
+    #              linestyles=ls)
     fmt = {}
-    strs = ['$%i$' % zz for zz in zzv]
+    strs = ['$%i$' % (100*zz) for zz in zzv]
+    if percent:
+        strs = ['{}$\%$'.format(int(100*zz)) for zz in zzv]
+    else:
+       strs = ['{}'.format(int(zz)) for zz in zzv] 
     # strs = ['{}%'.format(np.int(zz)) for zz in zzvc]
     for l, s in zip(CS.levels, strs):
         fmt[l] = s
@@ -334,7 +427,7 @@ def plotSatContour(ax, dd, color='k', ls='solid', label=''):
     CS.collections[0].set_label(label)
 
 
-def tSat(sel):
+def tSat(sel, varout='effi'):
     """
     Method to get mag interp values in 2D (exptime, seeing)
 
@@ -342,6 +435,8 @@ def tSat(sel):
     ---------------
     sel: array
       data to interpolate
+    varout: str
+      variable for interp
 
     Returns
     ----------
@@ -360,7 +455,7 @@ def tSat(sel):
     phav = np.linspace(phamin, phamax, npha)
 
     index = np.lexsort((sel['z'], sel['exptime']))
-    magvals = np.reshape(sel[index]['deltaT'], (npha, nz))
+    magvals = np.reshape(sel[index][varout], (npha, nz))
 
     mags = RegularGridInterpolator(
         (phav, zv), magvals, method='linear', bounds_error=False, fill_value=-1.0)
