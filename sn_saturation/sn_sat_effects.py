@@ -274,61 +274,95 @@ def plotTimeSaturationContour(x1, color, prefix='TimeSat', cadence=1, band='g'):
     df = pd.DataFrame(np.copy(data[idx]))
     df['deltaT'] = df['tSat_interp']-df['tBeg']
 
-    """
-    idx = df['deltaT'] < 0.
-    df.loc[idx, 'deltaT'] = 0.
-    #df = df[idx]
-    print('kkkk', df['deltaT'])
-    # print(test)
-    # get median values
-    """
-    
     dfeffi = df.groupby(['band', 'full_well', 'exptime', 'z']).apply(lambda x: effi(x)).reset_index()
     print(dfeffi)
-
-    """
-    dfmed = df.groupby(['band', 'full_well', 'exptime', 'z'])[
-        'deltaT'].mean().reset_index()
-    """
     
     data = dfeffi.to_records(index=False)
     print('dd', data.dtype)
     full_wells = np.unique(data['full_well'])
-    #plotEffiContour(data,full_wells)
-    plotSat(data,full_wells)
+    plotEffiContour(data,full_wells)
+    plotSatDeltaT(data,full_wells)
+    plotSatPeak(data,full_wells)
     #plotEffiContour(data,full_wells,var='deltaT_min',zzv=[1,3,5,7,10,15],percent=False)
     
-def plotSat(data, full_wells):
+def plotSatDeltaT(data, full_wells):
     
     fig, ax = plt.subplots(figsize=(12,8))
-    colors = dict(zip(full_wells,['k','r']))
-    ls = dict(zip(['deltaT_med','deltaT_min','deltaT_max'],['solid','dashed','dotted']))
-    ls = dict(zip([15.,30.],['solid','dashed']))
+    expts = [5.,15.,30.]
+    colors = dict(zip(expts,['k','r','b']))
+    ls = dict(zip(full_wells,['solid','dashed']))
     vvals = ['deltaT_med']
     for full_well in full_wells:
         idx = data['full_well'] == full_well
         sel = data[idx]
-        for exptt in [15.,30.]:
+        for exptt in expts:
             label = '({} s, {} kpe)'.format(int(exptt),int(full_well/1000))
             idd = np.abs(sel['exptime']-exptt)<1.e-5
             idd &= sel['deltaT_med']>0.
             ssol = sel[idd]
             print('yop',ssol)
             for vv in vvals:
-                ax.plot(ssol['z'],gaussian_filter(ssol[vv],1.1),ls=ls[exptt],color=colors[full_well],label=label)
-            #ax.plot(ssol['z'],ssol[vv],'{}o'.format(colors[full_well]))
-        """
-        ax.plot(ssol['z'],ssol['deltaT_med'])
-        ax.plot(ssol['z'],ssol['deltaT_min'])
-        ax.plot(ssol['z'],ssol['deltaT_max'])
-        """
-        #break
-    ax.set_ylabel('$\Delta t $[day]')
+                ax.plot(ssol['z'],gaussian_filter(ssol[vv],1.1),ls=ls[full_well],color=colors[exptt],label=label)
+          
+    ax.set_ylabel('$\Delta$t [day]')
     ax.set_xlabel('$z$')
-    ax.legend(loc='upper left', bbox_to_anchor=(0.1, 1.16),ncol=2,frameon=False)
-    ax.set_xlim([0.01,0.04])
 
-def plotEffiContour(data, full_wells,var='effi',zzv=[0.05,0.20,0.5,0.75,0.99],percent=True):
+    ax.set_xlim([0.01,0.04])
+    ax.grid()
+    handles, labels = ax.get_legend_handles_labels()
+    # sort both labels and handles by labels
+    labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
+
+    for vs in [(0,4),(1,5),(2,4),(3,5)]:
+        labels = swap(vs[0],vs[1],labels)
+        handles = swap(vs[0],vs[1],handles)
+        
+        
+    ax.legend(handles, labels,loc='upper left', bbox_to_anchor=(-0.01, 1.16),ncol=3,frameon=False,columnspacing=1.)
+    
+def swap(i,j,thelist):
+
+    mylist = np.copy(thelist)
+    mylist[i],mylist[j] = mylist[j],mylist[i]
+    return mylist
+
+def plotSatPeak(data, full_wells):
+    
+    fig, ax = plt.subplots(figsize=(12,8))
+    expts = [5.,15.,30.]
+    colors = dict(zip(expts,['k','r','b']))
+    ls = dict(zip(full_wells,['solid','dashed']))
+    vv = 'effi_peak'
+    for full_well in full_wells:
+        idx = data['full_well'] == full_well
+        sel = data[idx]
+        for exptt in [5.,15.,30.]:
+            label = '({} s, {} kpe)'.format(int(exptt),int(full_well/1000))
+            idd = np.abs(sel['exptime']-exptt)<1.e-5
+            #idd &= sel['deltaT_med']>0.
+            ssol = sel[idd]
+            ax.plot(ssol['z'],gaussian_filter(ssol[vv],1.1),ls=ls[full_well],color=colors[exptt],label=label)
+            ax.errorbar(ssol['z'],gaussian_filter(ssol[vv],1.1),yerr=ssol['{}_err'.format(vv)],color=colors[exptt],marker='.',ls='None')
+       
+    ax.set_ylabel('Efficiency')
+    ax.set_xlabel('$z$')
+    
+    handles, labels = ax.get_legend_handles_labels()
+    # sort both labels and handles by labels
+    labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
+    
+    for vs in [(0,4),(1,5),(2,4),(3,5)]:
+        labels = swap(vs[0],vs[1],labels)
+        handles = swap(vs[0],vs[1],handles)
+        
+        
+    ax.legend(handles, labels,loc='upper left', bbox_to_anchor=(-0.01, 1.16),ncol=3,frameon=False,columnspacing=1.)
+    
+    #ax.legend(loc='upper left', bbox_to_anchor=(0.0, 1.16),ncol=3,frameon=False)
+    ax.set_xlim([0.01,0.04])
+    ax.grid()
+    
+def plotEffiContour(data, full_wells,var='effi_deltaT',zzv=[0.05,0.20,0.5,0.75,0.99],percent=True):
     
     fig, ax = plt.subplots(figsize=(12,8))
     colors = dict(zip(full_wells,['k','r']))
@@ -368,9 +402,11 @@ def effi(grp):
 
     # event with saturation
     idx = grp['deltaT'] >0
+    isel = grp['npts_around_max'] >= 3
 
     sel = grp[idx]
-
+    selnp = grp[isel]
+    
     vmin = 0.
     vmax = 0.
     vmed = 0.
@@ -379,11 +415,19 @@ def effi(grp):
         vmin = sel['deltaT'].min()
         vmax = sel['deltaT'].max()
         vmed = sel['deltaT'].median()
-        
-    return pd.DataFrame({'effi': [sel.size/grp.size],
+
+    effi_deltaT = sel.size/grp.size
+    effi_deltaT_err = np.sqrt(sel.size*(1.-effi_deltaT))/grp.size
+    effi_peak = selnp.size/grp.size
+    effi_peak_err = np.sqrt(selnp.size*(1.-effi_peak))/grp.size
+    
+    return pd.DataFrame({'effi_deltaT': [effi_deltaT],
+                         'effi_deltaT_err': [effi_deltaT_err],
                          'deltaT_min': [vmin],
                          'deltaT_max': [vmax],
-                         'deltaT_med': [vmed]})
+                         'deltaT_med': [vmed],
+                         'effi_peak': [effi_peak],
+                         'effi_peak_err': [effi_peak_err]})
 
     
 def plotSatContour(ax, dd, color='k', ls='solid', label='',zzv=[0.05,0.20,0.5,0.75,0.99],percent=True):
