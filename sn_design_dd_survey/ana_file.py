@@ -79,7 +79,7 @@ class AnaMedValues:
             """
             axres.plot(dffilt_season['fieldname'], dffilt_season['fiveSigmaDepth'],
                        marker='s', color=filtercolors[band], label='{} band'.format(band))
-
+            print('median m5',band,np.median(dffilt_season['fiveSigmaDepth']))
         axres.legend(loc='upper left', bbox_to_anchor=(0.01, 1.15),
                      ncol=4, fancybox=True, shadow=True, fontsize=fontsize)
         axres.set_ylabel(
