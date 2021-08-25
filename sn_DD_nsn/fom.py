@@ -177,7 +177,7 @@ class CosmoDist:
         """
         norm = self.c*(1.+z)/self.H0
 
-        return norm*integrate.quad(lambda x: self.func(x, Om, w0, wa), 0.01, z)[0]
+        return norm*integrate.quad(lambda x: self.func(x, Om, w0, wa), 0.0001, z)[0]
 
     def mu(self, z, Om=0.3, w0=-1.0, wa=0.0):
         """
@@ -229,7 +229,7 @@ class FoM(CosmoDist):
 
     """
 
-    def __init__(self, fDir, dbName, tagprod, zlim, H0=72, c=299792.458):
+    def __init__(self, fDir, dbName, tagprod, zlim, H0=72, c=299792.458, rescale_factor=1):
         super().__init__(H0, c)
 
         # load data
@@ -240,11 +240,15 @@ class FoM(CosmoDist):
         data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
                           'healpixID', 'season'])
 
+        self.data_all = data
+
         data = self.select(data)
         idx = data['z']-data['zcomp'] <= 0.
+        idx = np.abs(data['z']-data['zcomp']) >= 0.
+
         self.data = data[idx].copy()
         print('Number of SN', len(self.data))
-        self.NSN = int(len(self.data)/50.)
+        self.NSN = int(len(self.data)/rescale_factor)
 
     def select(self, dd):
         """"
@@ -261,13 +265,33 @@ class FoM(CosmoDist):
 
         """
         idx = dd['z'] < 1.
-        idx &= dd['z'] >= 0.1
+        idx &= dd['z'] >= 0.01
         idx &= dd['fitstatus'] == 'fitok'
         idx &= np.sqrt(dd['Cov_colorcolor']) < 0.04
 
         return dd[idx].copy()
 
-    def plot_data_cosmo(self, data, binned=False):
+    def plot_sn_vars(self):
+        """
+        plot data related to supernovae: x1, color and diff with fits
+
+        """
+
+        fig, ax = plt.subplots(ncols=2, nrows=2)
+
+        vars = ['x1', 'x1_fit', 'color', 'color_fit']
+
+        ax[0, 0].hist(self.data_all['x1'], bins=100, histtype='step')
+        ax[0, 1].hist(self.data_all['color'], bins=100, histtype='step')
+
+        idx = self.data_all['fitstatus'] == 'fitok'
+        sel = self.data_all[idx]
+        ax[1, 0].hist(sel['x1']-sel['x1_fit'],
+                      bins=20, histtype='step')
+        ax[1, 1].hist(sel['color'] -
+                      sel['color_fit'], bins=20, histtype='step')
+
+    def plot_data_cosmo(self, data, alpha=0.14, beta=3.1, Mb=-18.8, binned=False, nbins=50):
         """
         Method to plot distance modulus vs redshift
 
@@ -281,33 +305,55 @@ class FoM(CosmoDist):
         zmax = np.max(data['z'])
         zmin = np.min(data['z'])
         r = []
-        for z in np.arange(zmin, zmax, 0.01):
+        for z in np.arange(zmin, zmax+0.01, 0.01):
             r.append((z, self.mu(z)))
 
         res = np.rec.fromrecords(r, names=['z', 'mu'])
 
-        fix, ax = plt.subplots()
+        # fix, ax = plt.subplots()
+        fig = plt.figure()
         # figb, axb = plt.subplots()
+        ax = fig.add_axes((.1, .3, .8, .6))
+
         ax.plot(res['z'], res['mu'], color='b')
+
+        res_interp = interp1d(res['z'], res['mu'],
+                              bounds_error=False, fill_value=0.)
 
         print(data.columns)
         # add the mu columns
-        data['mu'] = data['mbfit']+0.14 * \
-            data['x1_fit']-3.1*data['color_fit']+18.85
+        data['mu'] = data['mbfit']+alpha * \
+            data['x1_fit']-beta*data['color_fit']-Mb
 
-        x, y, yerr = 0., 0., 0.
+        # add the mu_th column
+        data['mu_th'] = res_interp(data['z'])
+
+        # residuals: mu-mu_th/mu
+        data['mu_residual'] = (data['mu_th']-data['mu'])
+
+        x, y, yerr, residuals = 0., 0., 0., 0.
         if binned:
-            x, y, yerr = self.binned_data(zmin, zmax, data)
+            x, y, yerr = self.binned_data(zmin, zmax, data, nbins)
+            mu_th_binned = res_interp(x)
+            residuals = (y-mu_th_binned)
+            io = x >= 0.3
+            io &= x <= 0.4
+            print('mean residual', np.mean(residuals[io]))
         else:
             pp = data.to_records(index=False)
             x, y, yerr = pp['z'], pp['mu'], pp['sigma_mu']
-
+            residuals = pp['mu_residual']
         ax.errorbar(x, y, yerr=yerr,
-                    color='k', lineStyle='None')
+                    color='k', lineStyle='None', marker='o', ms=2)
+        ax.grid()
 
+        axb = fig.add_axes((.1, .1, .8, .2))
+        axb.errorbar(x, residuals, yerr=yerr, color='k',
+                     lineStyle='None', marker='o', ms=2)
+        axb.grid()
         plt.show()
 
-    def binned_data(self, zmin, zmax, data):
+    def binned_data(self, zmin, zmax, data, nbins, vary='mu', erry='sigma_mu'):
         """
         Method to transform a set of data to binned data
 
@@ -319,6 +365,10 @@ class FoM(CosmoDist):
           max redshift
         data: pandas df
           data to be binned
+        vary: str, opt
+          y-axis variable (default: mu)
+        erry: str, opt
+          y-axis var error (default: sigma_mu)
 
         Returns
         -----------
@@ -328,15 +378,15 @@ class FoM(CosmoDist):
         yerr: distance modulus error
 
         """
-        bins = np.linspace(zmin, zmax, 100)
+        bins = np.linspace(zmin, zmax, nbins)
         group = data.groupby(pd.cut(data.z, bins))
         plot_centers = (bins[:-1] + bins[1:])/2
         plot_values = group.mu.mean()
         plot_values = group.apply(lambda x: np.sum(
-            x['mu']/x['sigma_mu']**2)/np.sum(1./x['sigma_mu']**2))
+            x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
         print(plot_values)
         error_values = group.apply(
-            lambda x: 1./np.sqrt(np.sum(1./x['sigma_mu']**2)))
+            lambda x: 1./np.sqrt(np.sum(1./x[erry]**2)))
         print('error', error_values)
 
         return plot_centers, plot_values, error_values
@@ -382,23 +432,28 @@ print(zcomp)
 
 
 fom = FoM(fileDir, dbName, 'allSN', zcomp)
+fom.plot_sn_vars()
+# plt.show()
 
 Om = 0.3
 w0 = -1.0
 wa = 0.0
 alpha = 0.14
-beta = 0.13
-Mb = -18.8
+beta = 3.1
+Mb = -19.0481
+#Mb = -19.07
 
 
 h = 1.e-8
 varFish = ['dOm', 'dw0', 'dalpha', 'dbeta', 'dMb']
 parNames = ['Om', 'w0', 'wa', 'alpha', 'beta', 'Mb']
-parameters = dict(zip(parNames, [0.3, -1.0, 0.0, 0.14, 3.1, -18.8]))
+parameters = dict(zip(parNames, [Om, w0, wa, alpha, beta, Mb]))
 epsilon = dict(zip(parNames, [0.]*len(parNames)))
-for i in range(20):
+for i in range(1):
     data = fom.data.sample(n=fom.NSN)
-    # fom.plot_data_cosmo(data, binned=True)
+    fom.plot_data_cosmo(data, alpha=alpha, beta=beta,
+                        Mb=Mb, binned=True, nbins=20)
+
     Fisher = np.zeros((len(varFish), len(varFish)))
     for vv in parNames:
         epsilon[vv] = h
