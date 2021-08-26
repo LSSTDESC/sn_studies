@@ -264,7 +264,7 @@ class FoM(CosmoDist):
         selected pandas df
 
         """
-        idx = dd['z'] < 1.
+        idx = dd['z'] < 1.2
         idx &= dd['z'] >= 0.01
         idx &= dd['fitstatus'] == 'fitok'
         idx &= np.sqrt(dd['Cov_colorcolor']) <= 0.04
@@ -277,19 +277,23 @@ class FoM(CosmoDist):
 
         """
 
-        fig, ax = plt.subplots(ncols=2, nrows=2)
+        fig, ax = plt.subplots(ncols=3, nrows=2)
 
         vars = ['x1', 'x1_fit', 'color', 'color_fit']
 
         ax[0, 0].hist(self.data_all['x1'], bins=100, histtype='step')
         ax[0, 1].hist(self.data_all['color'], bins=100, histtype='step')
+        ax[0, 2].hist(self.data_all['z'], bins=100, histtype='step')
 
         idx = self.data_all['fitstatus'] == 'fitok'
+        #idx &= np.sqrt(self.data_all['Cov_colorcolor']) <= 0.04
         sel = self.data_all[idx]
         ax[1, 0].hist(sel['x1']-sel['x1_fit'],
                       bins=20, histtype='step')
         ax[1, 1].hist(sel['color'] -
                       sel['color_fit'], bins=20, histtype='step')
+        #ax[1, 2].hist(sel['z'], bins=20, histtype='step')
+        ax[1, 2].plot(sel['z'], np.sqrt(sel['Cov_colorcolor']), 'ko')
 
     def plot_data_cosmo(self, data, alpha=0.14, beta=3.1, Mb=-18.8, binned=False, nbins=50):
         """
@@ -305,20 +309,13 @@ class FoM(CosmoDist):
         zmax = np.max(data['z'])
         zmin = np.min(data['z'])
         r = []
-        rp = []
-        rm = []
-        for z in np.arange(zmin, zmax+0.01, 0.001):
-            r.append((z, self.mu(z)))
 
         for z in np.arange(zmin, zmax+0.01, 0.001):
-            rp.append((z, self.mu(z, w0=-1.0+0.05)))
+            mu, mup, mum = self.mu(z), self.mu(
+                z, w0=-1.0+0.05), self.mu(z, w0=-1.0-0.05)
+            r.append((z, mu, mup, mum))
 
-        for z in np.arange(zmin, zmax+0.01, 0.001):
-            rm.append((z, self.mu(z, w0=-1.0-0.05)))
-
-        res = np.rec.fromrecords(r, names=['z', 'mu'])
-        resp = np.rec.fromrecords(rp, names=['z', 'mu'])
-        resm = np.rec.fromrecords(rm, names=['z', 'mu'])
+        res = np.rec.fromrecords(r, names=['z', 'mu', 'mup', 'mum'])
 
         # fix, ax = plt.subplots()
         fig = plt.figure()
@@ -326,8 +323,8 @@ class FoM(CosmoDist):
         ax = fig.add_axes((.1, .3, .8, .6))
 
         ax.plot(res['z'], res['mu'], color='r')
-        ax.plot(resp['z'], resp['mu'], color='b')
-        ax.plot(resm['z'], resm['mu'], color='b')
+        ax.plot(res['z'], res['mup'], color='b')
+        ax.plot(res['z'], res['mum'], color='b')
 
         res_interp = interp1d(res['z'], res['mu'],
                               bounds_error=False, fill_value=0.)
@@ -345,9 +342,8 @@ class FoM(CosmoDist):
 
         x, y, yerr, residuals = 0., 0., 0., 0.
         if binned:
-            x, y, yerr = self.binned_data(zmin, zmax, data, nbins)
-            mu_th_binned = res_interp(x)
-            residuals = (y-mu_th_binned)
+            x, y, yerr, residuals = self.binned_data(
+                zmin, zmax, data, nbins, res_interp)
             io = x >= 0.3
             io &= x <= 0.4
             print('mean residual', np.mean(residuals[io]))
@@ -363,12 +359,12 @@ class FoM(CosmoDist):
         ax.grid()
 
         axb = fig.add_axes((.1, .1, .8, .2))
-        axb.errorbar(x, residuals, yerr=yerr, color='k',
+        axb.errorbar(x, residuals, yerr=None, color='k',
                      lineStyle='None', marker='o', ms=2)
         axb.grid()
         plt.show()
 
-    def binned_data(self, zmin, zmax, data, nbins, vary='mu', erry='sigma_mu'):
+    def binned_data(self, zmin, zmax, data, nbins, muth_interp, vary='mu', erry='sigma_mu'):
         """
         Method to transform a set of data to binned data
 
@@ -393,10 +389,12 @@ class FoM(CosmoDist):
         yerr: distance modulus error
 
         """
+        data['diff_mu'] = muth_interp(data['z'])-data[vary]
         bins = np.linspace(zmin, zmax, nbins)
         group = data.groupby(pd.cut(data.z, bins))
         plot_centers = (bins[:-1] + bins[1:])/2
         plot_values = group.mu.mean()
+        residuals = group.diff_mu.mean()
         # plot_values = group.apply(lambda x: np.sum(
         #    x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
         print(plot_values)
@@ -404,7 +402,7 @@ class FoM(CosmoDist):
             lambda x: 1./np.sqrt(np.sum(1./x[erry]**2)))
         print('error', error_values)
 
-        return plot_centers, plot_values, error_values
+        return plot_centers, plot_values, error_values, residuals
 
 
 def deriv(grp, fom, params, epsilon):
@@ -467,7 +465,7 @@ epsilon = dict(zip(parNames, [0.]*len(parNames)))
 for i in range(1):
     data = fom.data.sample(n=fom.NSN)
     fom.plot_data_cosmo(data, alpha=alpha, beta=beta,
-                        Mb=Mb, binned=False, nbins=100)
+                        Mb=Mb, binned=False, nbins=20)
 
     Fisher = np.zeros((len(varFish), len(varFish)))
     for vv in parNames:
