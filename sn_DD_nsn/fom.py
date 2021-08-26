@@ -267,7 +267,7 @@ class FoM(CosmoDist):
         idx = dd['z'] < 1.
         idx &= dd['z'] >= 0.01
         idx &= dd['fitstatus'] == 'fitok'
-        idx &= np.sqrt(dd['Cov_colorcolor']) < 0.04
+        idx &= np.sqrt(dd['Cov_colorcolor']) <= 0.04
 
         return dd[idx].copy()
 
@@ -305,17 +305,29 @@ class FoM(CosmoDist):
         zmax = np.max(data['z'])
         zmin = np.min(data['z'])
         r = []
-        for z in np.arange(zmin, zmax+0.01, 0.01):
+        rp = []
+        rm = []
+        for z in np.arange(zmin, zmax+0.01, 0.001):
             r.append((z, self.mu(z)))
 
+        for z in np.arange(zmin, zmax+0.01, 0.001):
+            rp.append((z, self.mu(z, w0=-1.0+0.05)))
+
+        for z in np.arange(zmin, zmax+0.01, 0.001):
+            rm.append((z, self.mu(z, w0=-1.0-0.05)))
+
         res = np.rec.fromrecords(r, names=['z', 'mu'])
+        resp = np.rec.fromrecords(rp, names=['z', 'mu'])
+        resm = np.rec.fromrecords(rm, names=['z', 'mu'])
 
         # fix, ax = plt.subplots()
         fig = plt.figure()
         # figb, axb = plt.subplots()
         ax = fig.add_axes((.1, .3, .8, .6))
 
-        ax.plot(res['z'], res['mu'], color='b')
+        ax.plot(res['z'], res['mu'], color='r')
+        ax.plot(resp['z'], resp['mu'], color='b')
+        ax.plot(resm['z'], resm['mu'], color='b')
 
         res_interp = interp1d(res['z'], res['mu'],
                               bounds_error=False, fill_value=0.)
@@ -343,6 +355,9 @@ class FoM(CosmoDist):
             pp = data.to_records(index=False)
             x, y, yerr = pp['z'], pp['mu'], pp['sigma_mu']
             residuals = pp['mu_residual']
+            io = x >= 0.3
+            io &= x <= 0.4
+            print('mean residual', np.mean(residuals[io]))
         ax.errorbar(x, y, yerr=yerr,
                     color='k', lineStyle='None', marker='o', ms=2)
         ax.grid()
@@ -382,8 +397,8 @@ class FoM(CosmoDist):
         group = data.groupby(pd.cut(data.z, bins))
         plot_centers = (bins[:-1] + bins[1:])/2
         plot_values = group.mu.mean()
-        plot_values = group.apply(lambda x: np.sum(
-            x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
+        # plot_values = group.apply(lambda x: np.sum(
+        #    x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
         print(plot_values)
         error_values = group.apply(
             lambda x: 1./np.sqrt(np.sum(1./x[erry]**2)))
@@ -441,7 +456,7 @@ wa = 0.0
 alpha = 0.14
 beta = 3.1
 Mb = -19.0481
-#Mb = -19.07
+Mb = -19.04
 
 
 h = 1.e-8
@@ -452,7 +467,7 @@ epsilon = dict(zip(parNames, [0.]*len(parNames)))
 for i in range(1):
     data = fom.data.sample(n=fom.NSN)
     fom.plot_data_cosmo(data, alpha=alpha, beta=beta,
-                        Mb=Mb, binned=True, nbins=20)
+                        Mb=Mb, binned=False, nbins=100)
 
     Fisher = np.zeros((len(varFish), len(varFish)))
     for vv in parNames:
