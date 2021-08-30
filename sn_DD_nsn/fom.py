@@ -7,6 +7,8 @@ from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
 import pandas as pd
 from scipy.interpolate import interp1d
+from scipy.integrate import quad
+from scipy import optimize
 from sn_tools.sn_calcFast import faster_inverse
 
 
@@ -21,6 +23,28 @@ def loadData(dirFile, dbName, tagprod):
     params = dict(zip(['objtype'], ['astropyTable']))
 
     return multiproc(fis, params, loopStack_params, 4).to_pandas()
+
+
+def select(dd):
+    """"
+    Function to select data
+
+    Parameters
+    ---------------
+    dd: pandas df
+      data to select
+
+    Returns
+    -----------
+    selected pandas df
+
+    """
+    idx = dd['z'] < 1.2
+    idx &= dd['z'] >= 0.01
+    idx &= dd['fitstatus'] == 'fitok'
+    idx &= np.sqrt(dd['Cov_colorcolor']) <= 0.04
+
+    return dd[idx].copy()
 
 
 class zcomp_pixels:
@@ -242,34 +266,13 @@ class FoM(CosmoDist):
 
         self.data_all = data
 
-        data = self.select(data)
+        data = select(data)
         idx = data['z']-data['zcomp'] <= 0.
         idx = np.abs(data['z']-data['zcomp']) >= 0.
 
         self.data = data[idx].copy()
         print('Number of SN', len(self.data))
         self.NSN = int(len(self.data)/rescale_factor)
-
-    def select(self, dd):
-        """"
-        Method to select data
-
-        Parameters
-        ---------------
-        dd: pandas df
-          data to select
-
-        Returns
-        -----------
-        selected pandas df
-
-        """
-        idx = dd['z'] < 1.2
-        idx &= dd['z'] >= 0.01
-        idx &= dd['fitstatus'] == 'fitok'
-        idx &= np.sqrt(dd['Cov_colorcolor']) <= 0.04
-
-        return dd[idx].copy()
 
     def plot_sn_vars(self):
         """
@@ -312,7 +315,7 @@ class FoM(CosmoDist):
 
         for z in np.arange(zmin, zmax+0.01, 0.001):
             mu, mup, mum = self.mu(z), self.mu(
-                z, w0=-1.0+0.05), self.mu(z, w0=-1.0-0.05)
+                z, w0=-1.0+0.01), self.mu(z, w0=-1.0-0.01)
             r.append((z, mu, mup, mum))
 
         res = np.rec.fromrecords(r, names=['z', 'mu', 'mup', 'mum'])
@@ -361,6 +364,9 @@ class FoM(CosmoDist):
         axb = fig.add_axes((.1, .1, .8, .2))
         axb.errorbar(x, residuals, yerr=None, color='k',
                      lineStyle='None', marker='o', ms=2)
+        axb.errorbar(res['z'], res['mu']-res['mup'], color='r', ls='dotted')
+        axb.errorbar(res['z'], res['mu']-res['mum'], color='r', ls='dotted')
+
         axb.grid()
         plt.show()
 
@@ -422,6 +428,145 @@ def deriv(grp, fom, params, epsilon):
     return vva-vvb
 
 
+class FitCosmo:
+    """
+    Class to fit cosmology from a set of data
+
+    Parameters
+    ---------------
+
+
+    """
+
+    def __init__(self, fDir, dbName, tagprod, zlim):
+
+        # load data
+        data = loadData(fDir, dbName, tagprod)
+
+        # select data according to (zlim, season)
+
+        data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
+                          'healpixID', 'season'])
+
+        print(data.columns)
+
+        data = select(data)
+        idx = data['z']-data['zcomp'] <= 0.
+        #idx &= data['z'] >= 0.1
+        idx = np.abs(data['z']-data['zcomp']) >= 0.
+        data = data[idx].copy()
+
+        #data = data[:100]
+
+        print('Number of SN', len(data))
+        # print set([d[name]['idr.subset'] for name in d.keys()]
+
+        self.Z = data['z_fit']
+        self.Mb = data['mbfit']
+        self.Mber = np.sqrt(data['Cov_mbmb'])
+        self.gx1 = data['Cov_x1x1']
+        self.gxc = data['Cov_colorcolor']
+        self.cov1 = -2.5*data['Cov_x0x1'] / \
+            (data['x0']*np.log(10))
+        self.cov2 = -2.5*data['Cov_x0color'] / \
+            (data['x0']*np.log(10))
+        self.cov3 = data['Cov_x1color']
+        self.sigZ = data['z_fit']/(1.e5*data['z_fit'])
+        self.X1 = data['x1_fit']
+        self.X2 = data['color_fit']
+
+        mu = self.distance_modulus(self.Z)
+
+        mean = np.sum((self.Mb-mu)/self.Mber**2 / np.sum(1/self.Mber**2))
+        print(mean)
+
+        gzero = 0.273409368886
+        gzero = 0.
+        ol = 0.84943991855238044
+        ol = 0.3
+        m = -19.260197289410925
+        xi1 = -0.13514318369819331
+        xi2 = 1.8706300018097486
+
+        self.sigZ = np.sqrt(self.sigZ**2+1.e-6)
+
+        #gzero = self.zfinal2(self.Mb, self.Z, self.X1, self.X2, self.sigZ)
+
+        #print('Resultats 1', ol, m, xi1, xi2, gzero)
+
+        ol, m, xi1, xi2 = self.zfinal1(
+            self.Mb, self.Z, gzero, self.X1, self.X2, self.sigZ)
+
+        print('Resultats 2', ol, m, xi1, xi2)
+
+        self.plot_hubble(gzero, ol, m, xi1, xi2)
+        plt.show()
+
+    def luminosity_distance(self, Z, Ol):
+        """ Returns the product of H0 and D_l, the luminosity distance
+        Z : range of redshifts
+        Ol : Omega_Lambda """
+        def integrand(x): return 1/np.sqrt(Ol+(1-Ol)*(1+x)**3)
+        if (hasattr(Z, '__iter__')):
+            s = np.zeros(len(Z))
+            for i, t in enumerate(Z):
+                s[i] = (1+t)*quad(integrand, 0, t)[0]
+            return s
+        else:
+            return (1+Z)*quad(integrand, 0, Z)[0]
+
+    def distance_modulus(self, Z, Ol=0.72):
+        if (hasattr(Z, '__iter__')):
+            return np.log10(self.luminosity_distance(Z, Ol)*3e11/72)*5-5
+        else:
+            return (np.log10(self.luminosity_distance([Z], Ol)*3e11/72)*5-5)[0]
+
+    def plot_modulus(self, offset=0):
+        z = np.arange(0.001, 0.12, 0.001)
+        for Ol in [0, 0.3, 0.7, 1]:
+            # hodl=luminosity_distance(z,Ol)
+            r = self.distance_modulus(z, Ol)
+            plt.plot(z, hodl)
+            plt.plot(z, r+offset, 'x')
+        plt.show()
+
+    def sigmI(self, Xi1, Xi2):
+
+        return self.Mber**2+(Xi1**2)*self.gx1+(Xi2**2)*self.gxc-2*Xi1*self.cov1-2*Xi2*self.cov2+2*Xi1*Xi2*self.cov3
+
+    def sigMu(self, Ol, Z, sigZ):
+        return self.derivate2(Z, Ol)*sigZ
+
+    def zchii2(self, tup, Mb, Z, gzero, X1, X2, sigZ):
+        Ol, M, Xi1, Xi2 = tup
+        return np.sum((Mb-self.distance_modulus(Z, Ol)-M-Xi1*X1-Xi2*X2)**2/(self.sigmI(Xi1, Xi2)+gzero**2+self.sigMu(Ol, Z, sigZ)**2))
+
+    def zfinal1(self, Mb, Z, gzero, X1, X2, sigZ):
+        return optimize.fmin(self.zchii2, (0.7, -19, -0.5, 1.2), args=(Mb, Z, gzero, X1, X2, sigZ))
+
+    def zchi2ndf(self, gzero, Z, Mb, X1, X2, sigZ):
+        ol, m, xi1, xi2 = self.zfinal1(Mb, Z, gzero, X1, X2, sigZ)
+        return self.zchii2((ol, m, xi1, xi2), Mb, Z, gzero, X1, X2, sigZ)-119
+
+    def zfinal2(self, Mb, Z, X1, X2, sigZ):
+        return optimize.newton(self.zchi2ndf, 0.1, args=(Z, Mb, X1, X2, sigZ))
+
+    def derivate2(self, Z, Ol):
+        dl = self.luminosity_distance(Z, Ol)
+        integrand = 1/np.sqrt(Ol+(1-Ol)*(1+Z)**3)
+        coeff = 5./np.log(10)
+        val1 = coeff/(1+Z)
+        val2 = coeff*(1+Z)/dl*(integrand)
+        return val1+val2
+
+    def plot_hubble(self, gzero, Ol, M, Xi1, Xi2):
+        plt.errorbar(self.Z, self.Mb-Xi1*self.X1-Xi2*self.X2,
+                     yerr=np.sqrt(self.sigmI(Xi1, Xi2)+gzero**2), xerr=None, fmt='o')
+        z = np.arange(0.001, 1., 0.001)
+        r = self.distance_modulus(z, Ol)
+        plt.plot(z, r+M, 'x')
+
+
 parser = OptionParser(
     description='Estimate zlim from simulation+fit data')
 parser.add_option("--fileDir", type="str",
@@ -443,6 +588,9 @@ zcomp = tt()
 
 print(zcomp)
 
+fit = FitCosmo(fileDir, dbName, 'allSN', zcomp)
+
+print(test)
 
 fom = FoM(fileDir, dbName, 'allSN', zcomp)
 fom.plot_sn_vars()
@@ -454,7 +602,7 @@ wa = 0.0
 alpha = 0.14
 beta = 3.1
 Mb = -19.0481
-Mb = -19.04
+Mb = -19.039
 
 
 h = 1.e-8
@@ -465,7 +613,7 @@ epsilon = dict(zip(parNames, [0.]*len(parNames)))
 for i in range(1):
     data = fom.data.sample(n=fom.NSN)
     fom.plot_data_cosmo(data, alpha=alpha, beta=beta,
-                        Mb=Mb, binned=False, nbins=20)
+                        Mb=Mb, binned=True, nbins=100)
 
     Fisher = np.zeros((len(varFish), len(varFish)))
     for vv in parNames:
