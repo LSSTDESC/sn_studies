@@ -10,50 +10,40 @@ from scipy.interpolate import interp1d
 from scipy.integrate import quad
 from scipy import optimize
 from sn_tools.sn_calcFast import faster_inverse
+from sn_fom.nsn_scenario import NSN_config
 
 
-def NSN(season_length=180., area=9.6):
-    """
-    Function to estimate the number of SN per redshift bin
+def update_config(fields, config, zcomp):
 
-    Parameters
-    ---------------
-    nseasons: int, opt
-      number of seasons (default: 10)
-    season_length: float
-      season length (default: 180 days)
-    area: float
-      survey area (default: 9.6 deg2)
+    conf = np.copy(config)
+    idx = np.in1d(conf['fieldName'], fields)
+    conf[idx]['zcomp'] = zcomp
 
-    Returns
-    -----------
+    print('hello', conf[idx], zcomp)
+    return conf
 
 
-    """
-    from sn_tools.sn_rate import SN_Rate
+def getSN(fDir, dbName, tagprod, zlim):
 
-    rateSN = SN_Rate(H0=70., Om0=0.3,
-                     min_rf_phase=-15., max_rf_phase=30)
+    # load data
+    data = loadData(fDir, dbName, tagprod)
 
-    zmin = 0.05
-    zmax = 1.2
-    zstep = 0.05
+    # select data according to (zlim, season)
 
-    zvals = np.arange(zmin, zmax, zstep).tolist()
+    data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
+        'healpixID', 'season'])
 
-    r = []
-    for z in zvals:
-        zzmax = np.round(z+zstep, 2)
-        zz, rate, err_rate, nsn, err_nsn = rateSN(zmin=zmin,
-                                                  zmax=z+zstep,
-                                                  dz=0.001,
-                                                  duration=season_length,
-                                                  survey_area=area,
-                                                  account_for_edges=True)
-        nsn = np.round(np.cumsum(nsn)[-1], 4)
-        r.append((zzmax, nsn))
+    data = select(data)
+    idx = data['z']-data['zcomp'] <= 0.
+    # idx &= data['z'] >= 0.1
+    # idx = np.abs(data['z']-data['zcomp']) >= 0.
+    data = data[idx].copy()
 
-    return np.rec.fromrecords(r, names=['z', 'nsn'])
+    # data = data[:100]
+
+    print('Number of SN', len(data))
+
+    return data
 
 
 def loadData(dirFile, dbName, tagprod):
@@ -159,7 +149,7 @@ class zcomp_pixels:
         sel = self.data[idx]
 
         res = sel.groupby(['healpixID', 'season']).apply(
-            lambda x: self.zcomp095(x))
+            lambda x: self.zcomp095(x)).reset_index()
 
         if output_q is not None:
             return output_q.put({j: res})
@@ -512,28 +502,10 @@ class FitCosmo(CosmoDist):
 
     """
 
-    def __init__(self, fDir, dbName, tagprod, zlim, H0=72, c=299792.458):
+    def __init__(self, data, H0=72, c=299792.458):
         super().__init__(H0, c)
 
-        # load data
-        data = loadData(fDir, dbName, tagprod)
-
-        # select data according to (zlim, season)
-
-        data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
-            'healpixID', 'season'])
-
-        print(data.columns)
-
-        data = select(data)
-        idx = data['z']-data['zcomp'] <= 0.
-        # idx &= data['z'] >= 0.1
-        #idx = np.abs(data['z']-data['zcomp']) >= 0.
-        data = data[idx].copy()
-
-        # data = data[:100]
-
-        print('Number of SN', len(data))
+        print('Number of SN for fit', len(data))
         # print set([d[name]['idr.subset'] for name in d.keys()]
 
         self.Z = data['z_fit']
@@ -580,7 +552,7 @@ class FitCosmo(CosmoDist):
 
         errors = np.sqrt(np.diag(res.hess_inv))
         print('Resultats', res.x, errors, 1./(errors[1]*errors[2]))
-        #print('Resultats', om, w0, wa, m, xi1, xi2)
+        # print('Resultats', om, w0, wa, m, xi1, xi2)
 
         om = res.x[0]
         w0 = res.x[1]
@@ -680,26 +652,41 @@ fileDir = opts.fileDir
 dbName = opts.dbName
 
 
+nseasons = 2
+max_season_length = 180.
+zcomp = 0.8
+survey_area = 9.6
+fields = ['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS']
+nfields = dict(zip(fields, [1, 1, 1, 1, 2]))
+
+# get scenario
+r = []
+
+for field in fields:
+    r.append((field, zcomp, max_season_length,
+              nfields[field], survey_area, nseasons))
+
+config = np.rec.fromrecords(
+    r, names=['fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
+
+# get redshift completeness and apply it to config
 tt = zcomp_pixels(fileDir, dbName, 'faintSN')
-
 zcomp = tt()
-
-nsn_z = NSN()
-
-nseason = 2
-print(nsn_z)
-nsn_tot = 0
-idx = np.abs(nsn_z['z']-0.9) < 1.e-5
-nsn_tot += 2.*nsn_z['nsn'][idx].item()
-idx = np.abs(nsn_z['z']-0.65) < 1.e-5
-nsn_tot += 4.*nsn_z['nsn'][idx].item()
-
-print(nsn_tot*nseason)
-
+config = update_config(['COSMOS', 'XMM-LSS'], config,
+                       np.round(zcomp['zcomp'][0], 2))
+print(config)
 print(test)
-print(zcomp)
 
-fit = FitCosmo(fileDir, dbName, 'allSN', zcomp)
+
+# get number of supernovae
+nsn_scen = NSN_config(config)
+print('total number of SN', nsn_scen.nsn_tot())
+
+# get SN data
+data_sn = getSN(fileDir, dbName, 'allSN', zcomp)
+
+
+fit = FitCosmo(data_sn)
 
 print(test)
 

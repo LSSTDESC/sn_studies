@@ -251,6 +251,35 @@ class NSN_scenario:
         return res
 
 
+class NSN_config:
+
+    def __init__(self, config):
+        # get season lengths
+        fDir = 'sn_studies/input'
+        fName = 'Nvisits_z_-2.0_0.2_error_model_ebvofMW_0.0_nvisits_Ny_20.npy'
+        slDir = fDir
+        slName = 'seasonlength_nvisits.npy'
+        sl = SeasonLength(fDir, fName, slDir, slName)
+        config = sl(config)
+
+        print('here sl', config)
+        # get nsn
+        nsn = NSN_scenario()
+        config = nsn(config)
+
+        config['nsn_survey'] = config['nseasons'] * \
+            config['nfields']*config['nsn_season']
+
+        self.data = config
+
+    def nsn_tot(self):
+
+        idx = np.abs(self.data['z']-self.data['zcomp']) < 1.e-5
+
+        return np.sum(self.data[idx]['nsn_survey'])
+
+
+"""
 r = []
 r.append(('COSMOS', 0.9, 180., 1, 9.6, 2))
 r.append(('XMM-LSS', 0.9, 180., 1, 9.6, 2))
@@ -261,22 +290,8 @@ r.append(('ADFS', 0.65, 180., 2, 9.6, 2))
 config = np.rec.fromrecords(
     r, names=['fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
 
-# get season lengths
-fDir = 'sn_studies/input'
-fName = 'Nvisits_z_-2.0_0.2_error_model_ebvofMW_0.0_nvisits_Ny_20.npy'
-slDir = fDir
-slName = 'seasonlength_nvisits.npy'
-sl = SeasonLength(fDir, fName, slDir, slName)
-config = sl(config)
 
-print('here sl', config)
-# get nsn
-nsn = NSN_scenario()
-config = nsn(config)
+res = nsn_config(config)
 
-config['nsn_survey'] = config['nseasons'] * \
-    config['nfields']*config['nsn_season']
-idx = np.abs(config['z']-config['zcomp']) < 1.e-5
-print(config[idx])
-print(np.sum(config[idx]['nsn_survey']))
-print(np.unique(config['z']))
+print(res)
+"""
