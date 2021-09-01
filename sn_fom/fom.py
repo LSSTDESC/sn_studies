@@ -10,17 +10,15 @@ from scipy.interpolate import interp1d
 from scipy.integrate import quad
 from scipy import optimize
 from sn_tools.sn_calcFast import faster_inverse
-from sn_fom.nsn_scenario import NSN_config
+from sn_fom.nsn_scenario import NSN_config, nsn_bin
 
 
 def update_config(fields, config, zcomp):
 
-    conf = np.copy(config)
-    idx = np.in1d(conf['fieldName'], fields)
-    conf[idx]['zcomp'] = zcomp
+    idx = config['fieldName'].isin(fields)
+    config.loc[idx, 'zcomp'] = zcomp
 
-    print('hello', conf[idx], zcomp)
-    return conf
+    return config
 
 
 def getSN(fDir, dbName, tagprod, zlim):
@@ -33,6 +31,7 @@ def getSN(fDir, dbName, tagprod, zlim):
     data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
         'healpixID', 'season'])
 
+    """
     data = select(data)
     idx = data['z']-data['zcomp'] <= 0.
     # idx &= data['z'] >= 0.1
@@ -40,10 +39,45 @@ def getSN(fDir, dbName, tagprod, zlim):
     data = data[idx].copy()
 
     # data = data[:100]
-
+    """
     print('Number of SN', len(data))
 
     return data
+
+
+def selSN(sn_data, nsn_per_bin):
+    """
+    Method to select a number of simulated SN according to the expected nsn_per_bin
+
+    Parameters
+    ---------------
+    sn_data: astropy table
+      simulated sn
+    nsn_per_bin: pandas df
+      df with the expected number of sn per bin
+
+    Returns
+    -----------
+    selected data
+    """
+
+    zcomp = np.unique(sn_data['zcomp']).item()
+    zcomp = 0.9
+    zstep = 0.05
+    zvals = np.arange(0, zcomp+zstep, 0.05).tolist()
+
+    zvals[0] = 0.01
+    zvals[-1] = zcomp
+
+    sel_data = select(sn_data)
+    for i in range(len(zvals)-1):
+        zm = np.round(zvals[i], 2)
+        zp = np.round(zvals[i+1], 2)
+        ida = sn_data['z'] >= zm
+        ida &= sn_data['z'] < zp
+        idb = np.abs(nsn_per_bin['z']-zp) < 1.e-5
+        nsn_expected = nsn_per_bin[idb]['nsn_survey'].values[0]
+        print(zp, len(sn_data[ida]), int(nsn_expected))
 
 
 def loadData(dirFile, dbName, tagprod):
@@ -652,7 +686,7 @@ fileDir = opts.fileDir
 dbName = opts.dbName
 
 
-nseasons = 2
+nseasons = 10
 max_season_length = 180.
 zcomp = 0.8
 survey_area = 9.6
@@ -666,29 +700,38 @@ for field in fields:
     r.append((field, zcomp, max_season_length,
               nfields[field], survey_area, nseasons))
 
-config = np.rec.fromrecords(
-    r, names=['fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
+config = pd.DataFrame(r, columns=[
+                      'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
+# config = np.rec.fromrecords(
+#    r, names=['fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
 
 # get redshift completeness and apply it to config
 tt = zcomp_pixels(fileDir, dbName, 'faintSN')
 zcomp = tt()
-config = update_config(['COSMOS', 'XMM-LSS'], config,
-                       np.round(zcomp['zcomp'][0], 2))
+config = update_config(fields, config,
+                       np.round(0.9, 2))
 print(config)
-print(test)
-
 
 # get number of supernovae
 nsn_scen = NSN_config(config)
 print('total number of SN', nsn_scen.nsn_tot())
+nsn_per_bin = nsn_bin(nsn_scen.data)
+print(nsn_per_bin, nsn_per_bin['nsn_survey'].sum())
 
-# get SN data
+# get SN from simu
 data_sn = getSN(fileDir, dbName, 'allSN', zcomp)
 
+data_sn = selSN(data_sn, nsn_per_bin)
+
+print(test)
 
 fit = FitCosmo(data_sn)
 
 print(test)
+
+
+print(test)
+
 
 fom = FoM(fileDir, dbName, 'allSN', zcomp)
 fom.plot_sn_vars()
