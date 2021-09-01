@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
-import numpy.lib.recfunctions as rf
 
 
 class Mod_z:
@@ -163,21 +162,30 @@ class SeasonLength:
 
 
         """
-        r = []
-        for fieldName in config['fieldName']:
-            idx = config['fieldName'] == fieldName
-            sel = config[idx]
-            zcomp = sel['zcomp'].item()
-            max_season_length = sel['max_season_length'].item()
-            # get the number of visits
-            nvisits = self.visit_zlim[cadence](zcomp).item()
-            season_length = self.nvisits_seasonlength[fieldName](nvisits)
-            season_length = np.min([season_length, max_season_length])
-            r.append(np.round(season_length, 1))
 
-        res = rf.append_fields(config, 'season_length', r)
-
+        res = config.groupby(['fieldName', 'zcomp', 'nseasons', 'max_season_length',
+                              'survey_area', 'nfields']).apply(lambda x: self.calc_sl(x, cadence)).reset_index()
         return res
+
+    def calc_sl(self, grp, cadence):
+        """
+        Method to estimate the season length
+
+        Parameters
+        ---------------
+        grp: pandas group
+
+        """
+        vals = grp.name
+        fieldName = vals[0]
+        zcomp = vals[1]
+        max_season_length = vals[3]
+        # get the number of visits
+        nvisits = self.visit_zlim[cadence](zcomp).item()
+        season_length = self.nvisits_seasonlength[fieldName](nvisits)
+        season_length = np.min([season_length, max_season_length])
+
+        return pd.DataFrame({'season_length': [season_length]})
 
 
 class NSN_scenario:
@@ -203,7 +211,6 @@ class NSN_scenario:
             idx = config['fieldName'] == fieldName
             sel = config[idx]
             tb = self.calc_nsn(sel)
-            tb = pd.DataFrame(np.copy(tb))
             if res is None:
                 res = tb
             else:
@@ -227,6 +234,7 @@ class NSN_scenario:
 
         zvals = np.arange(zmin, zcomp+zstep, zstep).tolist()
 
+        zvals[-1] = zcomp
         r = [(0.01, 0.)]
         for z in zvals:
             zzmax = np.round(z, 2)
@@ -239,14 +247,14 @@ class NSN_scenario:
             nsn = np.round(np.cumsum(nsn)[-1], 4)
             r.append((zzmax, nsn))
 
-        res = np.rec.fromrecords(r, names=['z', 'nsn_season'])
+        res = pd.DataFrame(r, columns=['z', 'nsn_season'])
 
-        res = rf.append_fields(res, 'fieldName', [fieldName]*len(res))
-        res = rf.append_fields(res, 'zcomp', [zcomp]*len(res))
-        res = rf.append_fields(res, 'season_length', [season_length]*len(res))
-        res = rf.append_fields(res, 'survey_area', [area]*len(res))
-        res = rf.append_fields(res, 'nseasons', [nseasons]*len(res))
-        res = rf.append_fields(res, 'nfields', [nfields]*len(res))
+        res['fieldName'] = fieldName
+        res['zcomp'] = zcomp
+        res['season_length'] = season_length
+        res['survey_area'] = area
+        res['nseasons'] = nseasons
+        res['nfields'] = nfields
 
         return res
 
@@ -273,10 +281,41 @@ class NSN_config:
         self.data = config
 
     def nsn_tot(self):
+        """
+        Method to estimate the total number of supernovae
 
+        Returns
+        -----------
+        the total number of supernovae
+        """
         idx = np.abs(self.data['z']-self.data['zcomp']) < 1.e-5
 
         return np.sum(self.data[idx]['nsn_survey'])
+
+
+def nsn_bin(nsn_scen):
+    """
+    Function to estimate the total number of SN per bin
+
+    Parameters
+    ---------------
+    nsn_scen: record array
+      array with the number of SN
+
+    Returns
+    -----------
+    array with the total number of supernovae
+
+    """
+
+    print(nsn_scen)
+    # df = pd.DataFrame(np.copy(nsn_scen))
+
+    nsn_scen = nsn_scen.sort_values(by=['z'])
+    df = nsn_scen.groupby(['fieldName']).apply(lambda x: pd.DataFrame(
+        {'z': x['z'][1:], 'nsn_survey': np.diff(x['nsn_survey'])})).reset_index()
+
+    return df.groupby(['z']).sum().reset_index()
 
 
 """
