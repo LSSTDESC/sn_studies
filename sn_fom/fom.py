@@ -62,7 +62,7 @@ def selSN(sn_data, nsn_per_bin):
     """
 
     zcomp = np.unique(sn_data['zcomp']).item()
-    zcomp = 0.9
+    zcomp = np.round(zcomp, 2)
     zstep = 0.05
     zvals = np.arange(0, zcomp+zstep, 0.05).tolist()
 
@@ -70,14 +70,24 @@ def selSN(sn_data, nsn_per_bin):
     zvals[-1] = zcomp
 
     sel_data = select(sn_data)
+    out_data = pd.DataFrame()
     for i in range(len(zvals)-1):
         zm = np.round(zvals[i], 2)
         zp = np.round(zvals[i+1], 2)
         ida = sn_data['z'] >= zm
         ida &= sn_data['z'] < zp
+        idc = sel_data['z'] >= zm
+        idc &= sel_data['z'] < zp
         idb = np.abs(nsn_per_bin['z']-zp) < 1.e-5
-        nsn_expected = nsn_per_bin[idb]['nsn_survey'].values[0]
-        print(zp, len(sn_data[ida]), int(nsn_expected))
+        selz = nsn_per_bin[idb]
+        nsn_expected = int(selz['nsn_survey'].values[0])
+        nsn_simu = len(sn_data[ida])
+        nsn_sel = len(sel_data[idc])
+        nsn_choose = int(nsn_sel/nsn_simu*nsn_expected)
+        print(zp, nsn_expected, nsn_simu, nsn_sel, nsn_choose)
+        out_data = pd.concat((out_data, sel_data[idc].sample(nsn_choose)))
+
+    return out_data
 
 
 def loadData(dirFile, dbName, tagprod):
@@ -106,7 +116,10 @@ def loadData(dirFile, dbName, tagprod):
     # load the files
     params = dict(zip(['objtype'], ['astropyTable']))
 
-    return multiproc(fis, params, loopStack_params, 4).to_pandas()
+    res = multiproc(fis, params, loopStack_params, 4).to_pandas()
+    res['fitstatus'] = res['fitstatus'].str.decode('utf-8')
+
+    return res
 
 
 def select(dd):
@@ -204,11 +217,14 @@ class zcomp_pixels:
         zcomp095: float
         """
 
+        """
         idxb = grp['fitstatus'] == 'fitok'
         idxb &= np.sqrt(grp['Cov_colorcolor']) <= 0.04
         selb = grp[idxb].to_records(index=False)
+        """
+        selb = select(grp).to_records(index=False)
         selb.sort(order=['z'])
-
+        print('after sel', len(selb))
         if len(selb) >= 2:
             norm = np.cumsum(selb['z'])[-1]
             zlim = interp1d(
@@ -360,7 +376,7 @@ class FoM(CosmoDist):
         # select data according to (zlim, season)
 
         data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
-                          'healpixID', 'season'])
+            'healpixID', 'season'])
 
         self.data_all = data
 
@@ -686,30 +702,32 @@ fileDir = opts.fileDir
 dbName = opts.dbName
 
 
-nseasons = 10
+nseasons = 2
 max_season_length = 180.
-zcomp = 0.8
 survey_area = 9.6
 fields = ['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS']
 nfields = dict(zip(fields, [1, 1, 1, 1, 2]))
+zcomp = dict(zip(fields, [0.9, 0.9, 0.7, 0.7, 0.7]))
 
 # get scenario
 r = []
 
 for field in fields:
-    r.append((field, zcomp, max_season_length,
+    r.append((field, zcomp[field], max_season_length,
               nfields[field], survey_area, nseasons))
 
 config = pd.DataFrame(r, columns=[
-                      'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
+    'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
 # config = np.rec.fromrecords(
 #    r, names=['fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
 
 # get redshift completeness and apply it to config
 tt = zcomp_pixels(fileDir, dbName, 'faintSN')
 zcomp = tt()
+print('redshift completeness', zcomp)
+
 config = update_config(fields, config,
-                       np.round(0.9, 2))
+                       np.round(zcomp['zcomp'][0], 2))
 print(config)
 
 # get number of supernovae
@@ -723,12 +741,9 @@ data_sn = getSN(fileDir, dbName, 'allSN', zcomp)
 
 data_sn = selSN(data_sn, nsn_per_bin)
 
-print(test)
+print(len(data_sn), data_sn.columns)
 
 fit = FitCosmo(data_sn)
-
-print(test)
-
 
 print(test)
 
