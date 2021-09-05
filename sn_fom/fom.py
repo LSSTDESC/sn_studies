@@ -117,7 +117,7 @@ def loadData(dirFile, dbName, tagprod):
     params = dict(zip(['objtype'], ['astropyTable']))
 
     res = multiproc(fis, params, loopStack_params, 4).to_pandas()
-    res['fitstatus'] = res['fitstatus'].str.decode('utf-8')
+    #res['fitstatus'] = res['fitstatus'].str.decode('utf-8')
 
     return res
 
@@ -222,6 +222,7 @@ class zcomp_pixels:
         idxb &= np.sqrt(grp['Cov_colorcolor']) <= 0.04
         selb = grp[idxb].to_records(index=False)
         """
+        print(np.unique(grp['fitstatus']))
         selb = select(grp).to_records(index=False)
         selb.sort(order=['z'])
         print('after sel', len(selb))
@@ -702,7 +703,7 @@ fileDir = opts.fileDir
 dbName = opts.dbName
 
 
-nseasons = 2
+nseasons = 10
 max_season_length = 180.
 survey_area = 9.6
 fields = ['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS']
