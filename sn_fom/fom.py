@@ -11,6 +11,7 @@ from scipy.integrate import quad
 from scipy import optimize
 from sn_tools.sn_calcFast import faster_inverse
 from sn_fom.nsn_scenario import NSN_config, nsn_bin
+import time
 
 
 def update_config(fields, config, zcomp):
@@ -84,7 +85,12 @@ def selSN(sn_data, nsn_per_bin):
         nsn_simu = len(sn_data[ida])
         nsn_sel = len(sel_data[idc])
         nsn_choose = int(nsn_sel/nsn_simu*nsn_expected)
+        """
+        if nsn_choose == 0:
+            nsn_choose = 10
         print(zp, nsn_expected, nsn_simu, nsn_sel, nsn_choose)
+        nsn_choose = nsn_sel
+        """
         out_data = pd.concat((out_data, sel_data[idc].sample(nsn_choose)))
 
     return out_data
@@ -117,7 +123,7 @@ def loadData(dirFile, dbName, tagprod):
     params = dict(zip(['objtype'], ['astropyTable']))
 
     res = multiproc(fis, params, loopStack_params, 4).to_pandas()
-    #res['fitstatus'] = res['fitstatus'].str.decode('utf-8')
+    # res['fitstatus'] = res['fitstatus'].str.decode('utf-8')
 
     return res
 
@@ -308,10 +314,10 @@ class CosmoDist:
         if (hasattr(z, '__iter__')):
             s = np.zeros(len(z))
             for i, t in enumerate(z):
-                s[i] = (1+t)*quad(integrand, 0, t)[0]
+                s[i] = (1+t)*quad(integrand, 0.01, t)[0]
             return s
         else:
-            return (1+z)*quad(integrand, 0, z)[0]
+            return (1+z)*quad(integrand, 0.01, z)[0]
 
     def mu(self, z, Om=0.3, w0=-1.0, wa=0.0):
         """
@@ -559,20 +565,38 @@ class FitCosmo(CosmoDist):
         print('Number of SN for fit', len(data))
         # print set([d[name]['idr.subset'] for name in d.keys()]
 
+        print(data.columns)
         self.Z = data['z_fit']
         self.Mb = data['mbfit']
         self.Mber = np.sqrt(data['Cov_mbmb'])
         self.gx1 = data['Cov_x1x1']
         self.gxc = data['Cov_colorcolor']
         self.cov1 = -2.5*data['Cov_x0x1'] / \
-            (data['x0']*np.log(10))
+            (data['x0_fit']*np.log(10))
+        # self.cov1 = data['Cov_x1mb']
         self.cov2 = -2.5*data['Cov_x0color'] / \
-            (data['x0']*np.log(10))
+            (data['x0_fit']*np.log(10))
+        # self.cov2 = data['Cov_colormb']
         self.cov3 = data['Cov_x1color']
         self.sigZ = data['z_fit']/(1.e5*data['z_fit'])
         self.X1 = data['x1_fit']
         self.X2 = data['color_fit']
+        """
+        data['sigma_mu_recalc'] = np.sqrt(self.sigmI(0.14, 3.1))
+        import matplotlib.pyplot as plt
+        plt.plot(data['z_fit'], data['sigma_mu'], 'ko')
+        plt.plot(data['z_fit'], data['sigma_mu_recalc'], 'ro')
+        plt.show()
+        """
 
+    def __call__(self):
+        """
+        Method to perform the cosmological fit
+
+
+        """
+
+        # initial parameter values
         gzero = 0.273409368886
         gzero = 0.
         ol = 0.84943991855238044
@@ -583,37 +607,72 @@ class FitCosmo(CosmoDist):
         xi1 = -0.13514318369819331
         xi2 = 1.8706300018097486
 
+        # first estimate of Mb
         mu = self.mu(self.Z, Om, w0, wa)
 
         mean = np.sum((self.Mb-mu)/self.Mber**2 / np.sum(1/self.Mber**2))
         print(mean)
 
+        #
         self.sigZ = np.sqrt(self.sigZ**2+1.e-6)
 
-        # gzero = self.zfinal2(self.Mb, self.Z, self.X1, self.X2, self.sigZ)
-
-        # print('Resultats 1', ol, m, xi1, xi2, gzero)
-
-        """
-        om, w0, wa, m, xi1, xi2 = self.zfinal1(
-            self.Mb, self.Z, gzero, self.X1, self.X2, self.sigZ)
-        """
+        time_ref = time.time()
+       # the fit is done here
         res = self.zfinal1(
             self.Mb, self.Z, gzero, self.X1, self.X2, self.sigZ)
 
-        errors = np.sqrt(np.diag(res.hess_inv))
-        print('Resultats', res.x, errors, 1./(errors[1]*errors[2]))
-        # print('Resultats', om, w0, wa, m, xi1, xi2)
+        print('after fit', time.time()-time_ref)
+        print(res.x)
+        # get the covariance matrix
+        covmat = res.hess_inv
+        print(np.sqrt(np.diag(covmat)))
 
-        om = res.x[0]
-        w0 = res.x[1]
-        wa = res.x[2]
-        m = res.x[3]
-        xi1 = res.x[4]
-        xi2 = res.x[5]
+        # Extract the parameters and copy in a dict
+        params = {}
 
-        self.plot_hubble(gzero, om, w0, wa, m, xi1, xi2)
-        plt.show()
+        parNames = ['Om', 'w0', 'wa', 'M', 'alpha', 'beta']
+
+        for i, vv in enumerate(parNames):
+            params[vv] = [res.x[i]]
+            for j, pp in enumerate(parNames):
+                if j >= i:
+                    nn = 'Cov_{}_{}'.format(vv, pp)
+                    params[nn] = [covmat[i][j]]
+
+        fit_result = pd.DataFrame.from_dict(params)
+
+        return fit_result
+
+    def FoM(self, sigma_w0, sigma_wa, sigma_w0_wa, coeff_CL=6.17):
+        """
+        Method to estimate the Figure of Merit (FoM)
+        It is inversely proportional to the area of the error ellipse in the w0-wa plane
+
+        Parameters
+        ---------------
+        sigma_w0: float
+          w0 error
+        sigma_wa: float
+          wa error
+        sigma_w0_wa: float
+          covariance (w0,wa)
+        coeff_CL: float, opt
+          confidence level parameter for the ellipse area (default: 6.17=>95% C.L.)
+
+        Returns
+        ----------
+        FoM: the figure of Merit
+        rho: correlation parameter (w0,wa)
+
+
+        """
+
+        rho = sigma_w0_wa/(sigma_w0*sigma_wa)
+        # get ellipse parameters
+        a, b = self.ellipse_axis(sigma_w0, sigma_wa, sigma_w0_wa)
+        area = coeff_CL*a*b
+
+        return 1./area, rho
 
     def luminosity_distance(self, Z, Ol):
         """ Returns the product of H0 and D_l, the luminosity distance
@@ -653,14 +712,16 @@ class FitCosmo(CosmoDist):
 
     def sigmI(self, Xi1, Xi2):
 
-        return self.Mber**2+(Xi1**2)*self.gx1+(Xi2**2)*self.gxc-2*Xi1*self.cov1-2*Xi2*self.cov2+2*Xi1*Xi2*self.cov3
+        # return self.Mber**2+(Xi1**2)*self.gx1+(Xi2**2)*self.gxc-2*Xi1*self.cov1-2*Xi2*self.cov2+2*Xi1*Xi2*self.cov3
+        return self.Mber**2+(Xi1**2)*self.gx1+(Xi2**2)*self.gxc+2*Xi1*self.cov1-2*Xi2*self.cov2-2*Xi1*Xi2*self.cov3
 
     def sigMu(self, Ol, Z, sigZ):
         return self.derivate2(Z, Ol)*sigZ
 
     def zchii2(self, tup, Mb, Z, gzero, X1, X2, sigZ):
         Om, w0, wa, M, Xi1, Xi2 = tup
-        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M-Xi1*X1-Xi2*X2)**2/(self.sigmI(Xi1, Xi2)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
+        # return np.sum((Mb-self.mu(Z, Om, w0, wa)-M-Xi1*X1-Xi2*X2)**2/(self.sigmI(Xi1, Xi2)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
+        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+Xi1*X1-Xi2*X2)**2/(self.sigmI(Xi1, Xi2)))
 
     def zfinal1(self, Mb, Z, gzero, X1, X2, sigZ):
         return optimize.minimize(self.zchii2, (0.7, -1.0, 0., -19, -0.5, 1.2), args=(Mb, Z, gzero, X1, X2, sigZ))
@@ -679,6 +740,16 @@ class FitCosmo(CosmoDist):
         val1 = coeff/(1+Z)
         val2 = coeff*(1+Z)/dl*(integrand)
         return val1+val2
+
+    def ellipse_axis(self, sigx, sigy, sig_xy):
+        comm_a = 0.5*(sigx**2+sigy**2)
+        comm_b = 0.25*(sigx**2-sigy**2)**2-sig_xy**2
+        a_sq = comm_a+np.sqrt(comm_b)
+        b_sq = comm_a-np.sqrt(comm_b)
+
+        print('ellipse', a_sq, b_sq)
+
+        return np.sqrt(a_sq), np.sqrt(b_sq)
 
     def plot_hubble(self, gzero, Om, w0, wa, M, Xi1, Xi2):
         plt.errorbar(self.Z, self.Mb-Xi1*self.X1-Xi2*self.X2,
@@ -703,10 +774,11 @@ fileDir = opts.fileDir
 dbName = opts.dbName
 
 
-nseasons = 10
+nseasons = 2
 max_season_length = 180.
 survey_area = 9.6
 fields = ['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS']
+# fields = ['COSMOS']
 nfields = dict(zip(fields, [1, 1, 1, 1, 2]))
 zcomp = dict(zip(fields, [0.9, 0.9, 0.7, 0.7, 0.7]))
 
@@ -744,7 +816,33 @@ data_sn = selSN(data_sn, nsn_per_bin)
 
 print(len(data_sn), data_sn.columns)
 
+# FitCosmo instance
 fit = FitCosmo(data_sn)
+
+# make the fit and get the parameters
+params_fit = fit()
+
+print('Parameters from the fit', params_fit)
+# get FoM
+sigma_w0 = np.sqrt(params_fit['Cov_w0_w0'].values[0])
+sigma_wa = np.sqrt(params_fit['Cov_wa_wa'].values[0])
+sigma_w0_wa = params_fit['Cov_w0_wa'].values[0]
+
+fom, rho = fit.FoM(sigma_w0, sigma_wa, sigma_w0_wa)
+
+print('FoM', fom, 'rho', rho)
+
+# plot the result
+Om = params_fit['Om'].values[0]
+w0 = params_fit['w0'].values[0]
+wa = params_fit['wa'].values[0]
+M = params_fit['M'].values[0]
+alpha = params_fit['alpha'].values[0]
+beta = params_fit['beta'].values[0]
+
+fit.plot_hubble(0., Om, w0, wa, M, alpha, beta)
+
+plt.show()
 
 print(test)
 
@@ -763,7 +861,7 @@ Mb = -19.039
 
 
 h = 1.e-8
-varFish = ['dOm', 'dw0', 'dalpha', 'dbeta', 'dMb']
+varFish = ['dOm', 'dw0', 'dwa', 'dalpha', 'dbeta', 'dMb']
 parNames = ['Om', 'w0', 'wa', 'alpha', 'beta', 'Mb']
 parameters = dict(zip(parNames, [Om, w0, wa, alpha, beta, Mb]))
 epsilon = dict(zip(parNames, [0.]*len(parNames)))
