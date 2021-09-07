@@ -12,6 +12,7 @@ from scipy import optimize
 from sn_tools.sn_calcFast import faster_inverse
 from sn_fom.nsn_scenario import NSN_config, nsn_bin
 import time
+from astropy.table import Table, vstack
 
 
 def update_config(fields, config, zcomp):
@@ -22,7 +23,7 @@ def update_config(fields, config, zcomp):
     return config
 
 
-def getSN(fDir, dbName, tagprod, zlim):
+def loadSN(fDir, dbName, tagprod, zlim):
 
     # load data
     data = loadData(fDir, dbName, tagprod)
@@ -41,7 +42,7 @@ def getSN(fDir, dbName, tagprod, zlim):
 
     # data = data[:100]
     """
-    print('Number of SN', len(data))
+    print('Number of SN here', len(data))
 
     return data
 
@@ -91,7 +92,17 @@ def selSN(sn_data, nsn_per_bin):
         print(zp, nsn_expected, nsn_simu, nsn_sel, nsn_choose)
         nsn_choose = nsn_sel
         """
-        out_data = pd.concat((out_data, sel_data[idc].sample(nsn_choose)))
+        if nsn_choose > 0:
+            selected_data = pd.DataFrame(sel_data[idc])
+            selected_data['inum'] = selected_data.reset_index().index
+            np.random.seed(0)
+            icc = np.random.choice(100, 1)[0]
+            for ip in range(icc):
+                choice = np.random.choice(len(selected_data), nsn_choose)
+            print('choice', choice, len(selected_data), nsn_choose)
+            print(selected_data)
+            io = selected_data['inum'].isin(choice)
+            out_data = pd.concat((out_data, selected_data[io]))
 
     return out_data
 
@@ -314,10 +325,10 @@ class CosmoDist:
         if (hasattr(z, '__iter__')):
             s = np.zeros(len(z))
             for i, t in enumerate(z):
-                s[i] = (1+t)*quad(integrand, 0.01, t)[0]
+                s[i] = (1+t)*quad(integrand, 0, t)[0]
             return s
         else:
-            return (1+z)*quad(integrand, 0.01, z)[0]
+            return (1+z)*quad(integrand, 0, z)[0]
 
     def mu(self, z, Om=0.3, w0=-1.0, wa=0.0):
         """
@@ -643,37 +654,6 @@ class FitCosmo(CosmoDist):
 
         return fit_result
 
-    def FoM(self, sigma_w0, sigma_wa, sigma_w0_wa, coeff_CL=6.17):
-        """
-        Method to estimate the Figure of Merit (FoM)
-        It is inversely proportional to the area of the error ellipse in the w0-wa plane
-
-        Parameters
-        ---------------
-        sigma_w0: float
-          w0 error
-        sigma_wa: float
-          wa error
-        sigma_w0_wa: float
-          covariance (w0,wa)
-        coeff_CL: float, opt
-          confidence level parameter for the ellipse area (default: 6.17=>95% C.L.)
-
-        Returns
-        ----------
-        FoM: the figure of Merit
-        rho: correlation parameter (w0,wa)
-
-
-        """
-
-        rho = sigma_w0_wa/(sigma_w0*sigma_wa)
-        # get ellipse parameters
-        a, b = self.ellipse_axis(sigma_w0, sigma_wa, sigma_w0_wa)
-        area = coeff_CL*a*b
-
-        return 1./area, rho
-
     def luminosity_distance(self, Z, Ol):
         """ Returns the product of H0 and D_l, the luminosity distance
         Z : range of redshifts
@@ -710,21 +690,21 @@ class FitCosmo(CosmoDist):
             plt.plot(z, r+offset, 'x')
         plt.show()
 
-    def sigmI(self, Xi1, Xi2):
+    def sigmI(self, alpha, beta):
 
         # return self.Mber**2+(Xi1**2)*self.gx1+(Xi2**2)*self.gxc-2*Xi1*self.cov1-2*Xi2*self.cov2+2*Xi1*Xi2*self.cov3
-        return self.Mber**2+(Xi1**2)*self.gx1+(Xi2**2)*self.gxc+2*Xi1*self.cov1-2*Xi2*self.cov2-2*Xi1*Xi2*self.cov3
+        return self.Mber**2+(alpha**2)*self.gx1+(beta**2)*self.gxc+2*alpha*self.cov1-2*beta*self.cov2-2*alpha*beta*self.cov3
 
     def sigMu(self, Ol, Z, sigZ):
         return self.derivate2(Z, Ol)*sigZ
 
-    def zchii2(self, tup, Mb, Z, gzero, X1, X2, sigZ):
-        Om, w0, wa, M, Xi1, Xi2 = tup
-        # return np.sum((Mb-self.mu(Z, Om, w0, wa)-M-Xi1*X1-Xi2*X2)**2/(self.sigmI(Xi1, Xi2)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
-        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+Xi1*X1-Xi2*X2)**2/(self.sigmI(Xi1, Xi2)))
+    def zchii2(self, tup, Mb, Z, gzero, x1, color, sigZ):
+        Om, w0, wa, M, alpha, beta = tup
+        # return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
+        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)))
 
-    def zfinal1(self, Mb, Z, gzero, X1, X2, sigZ):
-        return optimize.minimize(self.zchii2, (0.7, -1.0, 0., -19, -0.5, 1.2), args=(Mb, Z, gzero, X1, X2, sigZ))
+    def zfinal1(self, Mb, Z, gzero, x1, color, sigZ):
+        return optimize.minimize(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1), args=(Mb, Z, gzero, x1, color, sigZ))
 
     def zchi2ndf(self, gzero, Z, Mb, X1, X2, sigZ):
         om, w0, wa, m, xi1, xi2 = self.zfinal1(Mb, Z, gzero, X1, X2, sigZ)
@@ -741,22 +721,192 @@ class FitCosmo(CosmoDist):
         val2 = coeff*(1+Z)/dl*(integrand)
         return val1+val2
 
-    def ellipse_axis(self, sigx, sigy, sig_xy):
-        comm_a = 0.5*(sigx**2+sigy**2)
-        comm_b = 0.25*(sigx**2-sigy**2)**2-sig_xy**2
-        a_sq = comm_a+np.sqrt(comm_b)
-        b_sq = comm_a-np.sqrt(comm_b)
-
-        print('ellipse', a_sq, b_sq)
-
-        return np.sqrt(a_sq), np.sqrt(b_sq)
-
     def plot_hubble(self, gzero, Om, w0, wa, M, Xi1, Xi2):
-        plt.errorbar(self.Z, self.Mb-Xi1*self.X1-Xi2*self.X2,
+        plt.errorbar(self.Z, self.Mb+Xi1*self.X1-Xi2*self.X2,
                      yerr=np.sqrt(self.sigmI(Xi1, Xi2)+gzero**2), xerr=None, fmt='o')
         z = np.arange(0.001, 1., 0.001)
         r = self.mu(z, Om, w0, wa)
         plt.plot(z, r+M, 'x')
+
+
+def FoM(sigma_w0, sigma_wa, sigma_w0_wa, coeff_CL=6.17):
+    """
+    Function to estimate the Figure of Merit (FoM)
+    It is inversely proportional to the area of the error ellipse in the w0-wa plane
+
+    Parameters
+    ---------------
+    sigma_w0: float
+      w0 error
+    sigma_wa: float
+      wa error
+    sigma_w0_wa: float
+      covariance (w0,wa)
+    coeff_CL: float, opt
+      confidence level parameter for the ellipse area (default: 6.17=>95% C.L.)
+
+    Returns
+    ----------
+    FoM: the figure of Merit
+    rho: correlation parameter (w0,wa)
+
+
+    """
+
+    rho = sigma_w0_wa/(sigma_w0*sigma_wa)
+    # get ellipse parameters
+    a, b = ellipse_axis(sigma_w0, sigma_wa, sigma_w0_wa)
+    area = coeff_CL*a*b
+
+    return 1./area, rho
+
+
+def ellipse_axis(sigx, sigy, sigxy):
+    """
+    Function to estimate ellipse axis
+
+    Parameters
+    ---------------
+    sigx: float
+      sigma_x
+    sig_y: float
+      sigma_y
+    sigxy: float
+      sigma_xy correlation
+
+    Returns
+    ----------
+    (a,b) The two ellipse axis
+
+    """
+
+    comm_a = 0.5*(sigx**2+sigy**2)
+    comm_b = 0.25*(sigx**2-sigy**2)**2-sigxy**2
+    a_sq = comm_a+np.sqrt(comm_b)
+    b_sq = comm_a-np.sqrt(comm_b)
+
+    print('ellipse', sigx, sigy, sigxy, comm_a, comm_b)
+
+    return np.sqrt(a_sq), np.sqrt(b_sq)
+
+
+def getSN(fileDir, dbName, config, fields):
+
+    tt = zcomp_pixels(fileDir, dbName, 'faintSN')
+    zcomp = tt()
+    print('redshift completeness', zcomp)
+
+    config = update_config(fields, config,
+                           np.round(zcomp['zcomp'][0], 2))
+    print('config updated', config)
+
+    # get number of supernovae
+    nsn_scen = NSN_config(config)
+    print('total number of SN', nsn_scen.nsn_tot())
+    nsn_per_bin = nsn_bin(nsn_scen.data)
+    print(nsn_per_bin, nsn_per_bin['nsn_survey'].sum())
+
+    # get SN from simu
+    data_sn = loadSN(fileDir, dbName, 'allSN', zcomp)
+
+    # select according to nsn_per_bin
+    data_sn = selSN(data_sn, nsn_per_bin)
+
+    print(len(data_sn), type(data_sn))
+
+    return data_sn
+
+
+def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'], nseasons=2, max_season_length=180., survey_area=9.6):
+
+    # fields = ['COSMOS']
+    nfields = dict(zip(fields, [1, 1, 1, 1, 2]))
+    zcomp = dict(zip(fields, [0.9, 0.9, 0.7, 0.7, 0.7]))
+
+    # get scenario
+    r = []
+
+    for field in fields:
+        r.append((field, zcomp[field], max_season_length,
+                  nfields[field], survey_area, nseasons))
+
+    config = pd.DataFrame(r, columns=[
+        'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
+
+    return config
+
+
+def fit_SN(fileDir, dbNames, config, saveSN=''):
+    data_sn = pd.DataFrame()
+    for i, dbName in enumerate(dbNames):
+        fields_to_process = fields[i].split(',')
+        idx = config['fieldName'].isin(fields_to_process)
+        dd = getSN(fileDir, dbName, config[idx], fields_to_process)
+        data_sn = pd.concat((data_sn, dd))
+        print('SN inter', dbName, len(dd))
+
+    if saveSN != '':
+        data_sn.to_hdf(saveSN, key='sn')
+    # FitCosmo instance
+    fit = FitCosmo(data_sn)
+
+    # make the fit and get the parameters
+    params_fit = fit()
+
+    return params_fit
+
+
+def multifit(index, params, j=0, output_q=None):
+
+    fileDir = params['fileDir']
+    dbNames = params['dbNames']
+    config = params['config']
+
+    params_fit = pd.DataFrame()
+
+    for i in index:
+        saveSN = 'SN_{}.hdf5'.format(i)
+        fitpar = fit_SN(fileDir, dbNames, config, saveSN=saveSN)
+        params_fit = pd.concat((params_fit, fitpar))
+
+    if output_q is not None:
+        return output_q.put({j: params_fit})
+    else:
+        return params_fit
+
+
+class plotStat:
+
+    def __init__(self, params):
+
+        self.params = params
+
+    def plotFoM(self):
+
+        io = -1
+        r = []
+        for index, row in self.params.iterrows():
+            io += 1
+            fom, rho = self.getFoM(row)
+            r.append((io, fom, rho))
+
+        res = np.rec.fromrecords(r, names=['iter', 'FoM', 'correl'])
+        print(res)
+
+        fig, ax = plt.subplots()
+        ax.plot(res['iter'], res['FoM'])
+        plt.show()
+
+    def getFoM(self, params_fit):
+
+        # get FoM
+        sigma_w0 = np.sqrt(params_fit['Cov_w0_w0'])
+        sigma_wa = np.sqrt(params_fit['Cov_wa_wa'])
+        sigma_w0_wa = params_fit['Cov_w0_wa']
+
+        fom, rho = FoM(sigma_w0, sigma_wa, sigma_w0_wa)
+
+        return fom, rho
 
 
 parser = OptionParser(
@@ -767,70 +917,40 @@ parser.add_option("--fileDir", type="str",
 parser.add_option("--dbName", type="str",
                   default='descddf_v1.5_10yrs',
                   help="file directory [%default]")
+parser.add_option("--fields", type="str",
+                  default='COSMOS, XMM-LSS, ELAIS, CDFS, ADFS',
+                  help="file directory [%default]")
+parser.add_option("--nproc", type=int,
+                  default=4,
+                  help="number of procs for multiprocessing  [%default]")
 
 opts, args = parser.parse_args()
 
 fileDir = opts.fileDir
-dbName = opts.dbName
+dbNames = opts.dbName.split('/')
+fields = opts.fields.split('/')
+nproc = opts.nproc
+print('hello dbNames', dbNames, fields)
+
+# get default configuration file
+config = getconfig()
+
+ffi = range(4)
+params = {}
+params['fileDir'] = fileDir
+params['dbNames'] = dbNames
+params['config'] = config
+params_fit = multiproc(ffi, params, multifit, nproc)
+
+print(params_fit)
 
 
-nseasons = 2
-max_season_length = 180.
-survey_area = 9.6
-fields = ['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS']
-# fields = ['COSMOS']
-nfields = dict(zip(fields, [1, 1, 1, 1, 2]))
-zcomp = dict(zip(fields, [0.9, 0.9, 0.7, 0.7, 0.7]))
+plots = plotStat(params_fit)
 
-# get scenario
-r = []
+plots.plotFoM()
 
-for field in fields:
-    r.append((field, zcomp[field], max_season_length,
-              nfields[field], survey_area, nseasons))
+print(test)
 
-config = pd.DataFrame(r, columns=[
-    'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
-# config = np.rec.fromrecords(
-#    r, names=['fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
-
-# get redshift completeness and apply it to config
-tt = zcomp_pixels(fileDir, dbName, 'faintSN')
-zcomp = tt()
-print('redshift completeness', zcomp)
-
-config = update_config(fields, config,
-                       np.round(zcomp['zcomp'][0], 2))
-print(config)
-
-# get number of supernovae
-nsn_scen = NSN_config(config)
-print('total number of SN', nsn_scen.nsn_tot())
-nsn_per_bin = nsn_bin(nsn_scen.data)
-print(nsn_per_bin, nsn_per_bin['nsn_survey'].sum())
-
-# get SN from simu
-data_sn = getSN(fileDir, dbName, 'allSN', zcomp)
-
-data_sn = selSN(data_sn, nsn_per_bin)
-
-print(len(data_sn), data_sn.columns)
-
-# FitCosmo instance
-fit = FitCosmo(data_sn)
-
-# make the fit and get the parameters
-params_fit = fit()
-
-print('Parameters from the fit', params_fit)
-# get FoM
-sigma_w0 = np.sqrt(params_fit['Cov_w0_w0'].values[0])
-sigma_wa = np.sqrt(params_fit['Cov_wa_wa'].values[0])
-sigma_w0_wa = params_fit['Cov_w0_wa'].values[0]
-
-fom, rho = fit.FoM(sigma_w0, sigma_wa, sigma_w0_wa)
-
-print('FoM', fom, 'rho', rho)
 
 # plot the result
 Om = params_fit['Om'].values[0]
@@ -843,8 +963,6 @@ beta = params_fit['beta'].values[0]
 fit.plot_hubble(0., Om, w0, wa, M, alpha, beta)
 
 plt.show()
-
-print(test)
 
 
 fom = FoM(fileDir, dbName, 'allSN', zcomp)
