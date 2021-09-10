@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 filtercolors = dict(zip('ugrizy', ['b', 'c', 'g', 'y', 'r', 'm']))
 plt.rcParams['xtick.labelsize'] = 15

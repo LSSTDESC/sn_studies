@@ -2,8 +2,7 @@ from sn_fom.cosmo_fit import zcomp_pixels, FitCosmo
 from sn_fom.utils import loadSN, selSN, update_config
 from sn_fom.nsn_scenario import NSN_config, nsn_bin
 import pandas as pd
-import numpy as np
-
+from . import np
 
 def fit_SN(fileDir, dbNames, config, fields, saveSN=''):
     data_sn = pd.DataFrame()
@@ -14,14 +13,17 @@ def fit_SN(fileDir, dbNames, config, fields, saveSN=''):
         data_sn = pd.concat((data_sn, dd))
         print('SN inter', dbName, len(dd))
 
+    SNID = ''
     if saveSN != '':
+        SNID = saveSN.split('.hdf5')[0]
         data_sn.to_hdf(saveSN, key='sn')
     # FitCosmo instance
     fit = FitCosmo(data_sn)
 
     # make the fit and get the parameters
     params_fit = fit()
-
+    if SNID != '':
+        params_fit['SNID'] = SNID
     return params_fit
 
 

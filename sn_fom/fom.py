@@ -1,10 +1,12 @@
 import numpy as np
+#from . import np
 from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
 from sn_fom.steps import multifit
-from sn_fom.plot import plotStat
+from sn_fom.plot import plotStat, plotHubbleResiduals
 from sn_fom.utils import getconfig
-import time
+import os
+import pandas as pd
 
 parser = OptionParser(
     description='Estimate zlim from simulation+fit data')
@@ -29,24 +31,50 @@ fields = opts.fields.split('/')
 nproc = opts.nproc
 print('hello dbNames', dbNames, fields)
 
-# get default configuration file
-config = getconfig()
-
-ffi = range(4)
-params = {}
-params['fileDir'] = fileDir
-params['dbNames'] = dbNames
-params['config'] = config
-params['fields'] = fields
-params_fit = multiproc(ffi, params, multifit, nproc)
-
-print(params_fit)
 
 
+fitparName = 'FitParams.hdf5'
+if not os.path.isfile(fitparName):
+    # get default configuration file
+    config = getconfig()
+
+    ffi = range(10)
+    params = {}
+    params['fileDir'] = fileDir
+    params['dbNames'] = dbNames
+    params['config'] = config
+    params['fields'] = fields
+    params_fit = multiproc(ffi, params, multifit, nproc)
+
+    print(params_fit)
+
+    params_fit.to_hdf(fitparName, key='fitparams')
+
+params_fit = pd.read_hdf(fitparName)
+
+
+"""
+# plot FoMs here
 plots = plotStat(params_fit)
 
 plots.plotFoM()
+"""
+print(params_fit['SNID'])
 
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+for i,row in params_fit.iterrows():
+    snName = '{}.hdf5'.format(row['SNID'])
+    
+    plotresi = plotHubbleResiduals(row,snName)
+    plotresi.plots()
+    
+    data = pd.read_hdf(snName)
+    print(data.columns)
+    #ax.hist(np.sqrt(data['Cov_colorcolor']),histtype='step')
+    ax.plot(data['z'], np.sqrt(data['Cov_colorcolor']),marker='.',lineStyle='None')
+    plt.show()
+    
 print(test)
 
 

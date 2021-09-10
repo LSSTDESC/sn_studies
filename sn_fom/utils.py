@@ -85,10 +85,7 @@ def selSN(sn_data, nsn_per_bin):
         if nsn_choose > 0:
             selected_data = pd.DataFrame(sel_data[idc])
             selected_data['inum'] = selected_data.reset_index().index
-            np.random.seed(0)
-            icc = np.random.choice(100, 1)[0]
-            for ip in range(icc):
-                choice = np.random.choice(len(selected_data), nsn_choose)
+            choice = np.random.choice(len(selected_data), nsn_choose)
             print('choice', choice, len(selected_data), nsn_choose)
             print(selected_data)
             io = selected_data['inum'].isin(choice)

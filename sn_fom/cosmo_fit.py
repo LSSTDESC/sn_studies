@@ -1,5 +1,5 @@
 from sn_fom.utils import loadSN, loadData, select, selSN
-import numpy as np
+from . import np
 from sn_tools.sn_utils import multiproc
 from scipy.interpolate import interp1d
 from scipy.integrate import quad
@@ -437,9 +437,10 @@ class FitCosmo(CosmoDist):
             (data['x0_fit']*np.log(10))
         # self.cov2 = data['Cov_colormb']
         self.cov3 = data['Cov_x1color']
-        self.sigZ = data['z_fit']/(1.e5*data['z_fit'])
+        self.sigZ = 1.e-3*data['z_fit']
         self.X1 = data['x1_fit']
         self.X2 = data['color_fit']
+        self.ndf = len(data)-5
         """
         data['sigma_mu_recalc'] = np.sqrt(self.sigmI(0.14, 3.1))
         import matplotlib.pyplot as plt
@@ -473,12 +474,12 @@ class FitCosmo(CosmoDist):
         print(mean)
 
         #
-        self.sigZ = np.sqrt(self.sigZ**2+1.e-6)
+        self.sigZ = 5*self.sigZ/(self.Z*np.log(10))
 
         time_ref = time.time()
        # the fit is done here
         res = self.zfinal1(
-            self.Mb, self.Z, gzero, self.X1, self.X2, self.sigZ)
+            self.Mb, self.Z, self.X1, self.X2, self.sigZ)
 
         print('after fit', time.time()-time_ref)
         print(res.x)
@@ -498,6 +499,13 @@ class FitCosmo(CosmoDist):
                     nn = 'Cov_{}_{}'.format(vv, pp)
                     params[nn] = [covmat[i][j]]
 
+        tup = (params['Om'][0],params['w0'][0],
+               params['wa'][0], params['M'][0],
+               params['alpha'][0], params['beta'][0])
+        print('hhh',tup)
+        chi2 = self.zchii2(tup, self.Mb, self.Z, self.X1, self.X2, self.sigZ)/self.ndf
+        params['chi2' ] = [chi2]
+        
         fit_result = pd.DataFrame.from_dict(params)
 
         return fit_result
@@ -546,13 +554,13 @@ class FitCosmo(CosmoDist):
     def sigMu(self, Ol, Z, sigZ):
         return self.derivate2(Z, Ol)*sigZ
 
-    def zchii2(self, tup, Mb, Z, gzero, x1, color, sigZ):
+    def zchii2(self, tup, Mb, Z, x1, color, sigZ):
         Om, w0, wa, M, alpha, beta = tup
         # return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
-        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)))
+        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+sigZ**2))
 
-    def zfinal1(self, Mb, Z, gzero, x1, color, sigZ):
-        return optimize.minimize(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1), args=(Mb, Z, gzero, x1, color, sigZ))
+    def zfinal1(self, Mb, Z, x1, color, sigZ):
+        return optimize.minimize(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1), args=(Mb, Z, x1, color, sigZ))
 
     def zchi2ndf(self, gzero, Z, Mb, X1, X2, sigZ):
         om, w0, wa, m, xi1, xi2 = self.zfinal1(Mb, Z, gzero, X1, X2, sigZ)

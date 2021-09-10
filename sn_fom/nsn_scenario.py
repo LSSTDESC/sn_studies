@@ -1,7 +1,7 @@
-import numpy as np
+#import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
-
+from . import np
 
 class Mod_z:
     """
