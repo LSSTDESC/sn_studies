@@ -1,11 +1,12 @@
 from sn_fom.cosmo_fit import zcomp_pixels, FitCosmo
-from sn_fom.utils import loadSN, selSN, update_config
+from sn_fom.utils import loadSN, selSN, update_config, getDist
 from sn_fom.nsn_scenario import NSN_config, nsn_bin
 import pandas as pd
 from . import np
 
 def fit_SN(fileDir, dbNames, config, fields, saveSN=''):
     data_sn = pd.DataFrame()
+    
     for i, dbName in enumerate(dbNames):
         fields_to_process = fields[i].split(',')
         idx = config['fieldName'].isin(fields_to_process)
@@ -35,7 +36,7 @@ def multifit(index, params, j=0, output_q=None):
     fields = params['fields']
 
     params_fit = pd.DataFrame()
-
+    np.random.seed(123456+j)
     for i in index:
         saveSN = 'SN_{}.hdf5'.format(i)
         fitpar = fit_SN(fileDir, dbNames, config, fields, saveSN=saveSN)
@@ -66,8 +67,11 @@ def getSN(fileDir, dbName, config, fields):
     # get SN from simu
     data_sn = loadSN(fileDir, dbName, 'allSN', zcomp)
 
+    #load x1_c distrib
+    x1_color = getDist()
+    
     # select according to nsn_per_bin
-    data_sn = selSN(data_sn, nsn_per_bin)
+    data_sn = selSN(data_sn, nsn_per_bin,x1_color)
 
     print(len(data_sn), type(data_sn))
 

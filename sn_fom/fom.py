@@ -3,8 +3,9 @@ import numpy as np
 from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
 from sn_fom.steps import multifit
-from sn_fom.plot import plotStat, plotHubbleResiduals
+from sn_fom.plot import plotStat, plotHubbleResiduals,binned_data
 from sn_fom.utils import getconfig
+from sn_fom.cosmo_fit import Sigma_Fisher
 import os
 import pandas as pd
 
@@ -38,7 +39,7 @@ if not os.path.isfile(fitparName):
     # get default configuration file
     config = getconfig()
 
-    ffi = range(10)
+    ffi = range(16)
     params = {}
     params['fileDir'] = fileDir
     params['dbNames'] = dbNames
@@ -59,22 +60,48 @@ plots = plotStat(params_fit)
 
 plots.plotFoM()
 """
-print(params_fit['SNID'])
+print(params_fit.columns)
+print(params_fit[['SNID','M']])
+Om = 0.3
+w0 = -1.0
+wa = 0.0
+alpha = 0.13
+beta = 3.1
+M = -19.045
 
+params=dict(zip(['M', 'alpha', 'beta', 'Om','w0','wa'],[M, alpha, beta, Om,w0,wa]))
+#params=dict(zip(['Om','w0','wa'],[Om,w0,wa]))
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
+"""
+figb, axb = plt.subplots()
+for i,row in params_fit.iterrows():
+    ax.plot(row['SNID'],np.sqrt(row['Cov_w0_w0']),'ko')
+    axb.plot(row['SNID'],np.sqrt(row['Cov_wa_wa']),'ko')
+plt.show()
+"""
 for i,row in params_fit.iterrows():
     snName = '{}.hdf5'.format(row['SNID'])
     
     plotresi = plotHubbleResiduals(row,snName)
     plotresi.plots()
-    
-    data = pd.read_hdf(snName)
-    print(data.columns)
-    #ax.hist(np.sqrt(data['Cov_colorcolor']),histtype='step')
-    ax.plot(data['z'], np.sqrt(data['Cov_colorcolor']),marker='.',lineStyle='None')
     plt.show()
-    
+    """
+    data = pd.read_hdf(snName)
+    print('NSN',len(data),data.columns)
+    data['sigma_mu'] = data['Cov_mbmb']+alpha**2*data['Cov_x1x1']+beta**2*data['Cov_colorcolor']+2*alpha*data['Cov_x1mb']-2.*beta*data['Cov_colormb']-2.*alpha*beta*data['Cov_x1color']
+    data['sigma_mu'] = np.sqrt(data['sigma_mu'])
+    data['mu'] = -M+data['mbfit']+alpha*data['x1_fit']-beta*data['color_fit']
+    sig = Sigma_Fisher(data, params=params)
+    sig()
+    print(row)
+    """
+    """
+    #ax.hist(np.sqrt(data['Cov_colorcolor']),histtype='step')
+    plot_centers, plot_values, error_values = binned_data(0.005,0.905,data, 19,vary='mu',erry='')
+    ax.plot(plot_centers, plot_values,marker='.',lineStyle='None')
+    plt.show()
+    """
 print(test)
 
 

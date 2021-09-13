@@ -7,7 +7,8 @@ from scipy import optimize
 from sn_tools.sn_calcFast import faster_inverse
 import pandas as pd
 import time
-
+import copy
+import scipy.linalg as la
 
 class zcomp_pixels:
     """
@@ -152,7 +153,7 @@ class CosmoDist:
 
         Parameters
         ---------------
-        z: float
+      z: float
            redshift
         Om: float, opt
           Omega_m parameter (default: 0.3)
@@ -173,10 +174,10 @@ class CosmoDist:
         if (hasattr(z, '__iter__')):
             s = np.zeros(len(z))
             for i, t in enumerate(z):
-                s[i] = (1+t)*quad(integrand, 0, t)[0]
+                s[i] = (1+t)*quad(integrand, 0, t,limit=100)[0]
             return s
         else:
-            return (1+z)*quad(integrand, 0, z)[0]
+            return (1+z)*quad(integrand, 0, z,limit=100)[0]
 
     def mu(self, z, Om=0.3, w0=-1.0, wa=0.0):
         """
@@ -432,10 +433,10 @@ class FitCosmo(CosmoDist):
         self.gxc = data['Cov_colorcolor']
         self.cov1 = -2.5*data['Cov_x0x1'] / \
             (data['x0_fit']*np.log(10))
-        # self.cov1 = data['Cov_x1mb']
+        self.cov1 = data['Cov_x1mb']
         self.cov2 = -2.5*data['Cov_x0color'] / \
             (data['x0_fit']*np.log(10))
-        # self.cov2 = data['Cov_colormb']
+        self.cov2 = data['Cov_colormb']
         self.cov3 = data['Cov_x1color']
         self.sigZ = 1.e-3*data['z_fit']
         self.X1 = data['x1_fit']
@@ -485,6 +486,7 @@ class FitCosmo(CosmoDist):
         print(res.x)
         # get the covariance matrix
         covmat = res.hess_inv
+        #covmat = res.jac
         print(np.sqrt(np.diag(covmat)))
 
         # Extract the parameters and copy in a dict
@@ -557,11 +559,11 @@ class FitCosmo(CosmoDist):
     def zchii2(self, tup, Mb, Z, x1, color, sigZ):
         Om, w0, wa, M, alpha, beta = tup
         # return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
-        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+sigZ**2))
+        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)))
 
     def zfinal1(self, Mb, Z, x1, color, sigZ):
-        return optimize.minimize(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1), args=(Mb, Z, x1, color, sigZ))
-
+        return optimize.minimize(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1), args=(Mb, Z, x1, color, sigZ),method='BFGS')
+        #return optimize.least_squares(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1), args=(Mb, Z, x1, color, sigZ))
     def zchi2ndf(self, gzero, Z, Mb, X1, X2, sigZ):
         om, w0, wa, m, xi1, xi2 = self.zfinal1(Mb, Z, gzero, X1, X2, sigZ)
         return self.zchii2((om, w0, wa, m, xi1, xi2), Mb, Z, gzero, X1, X2, sigZ)-119
@@ -583,3 +585,84 @@ class FitCosmo(CosmoDist):
         z = np.arange(0.001, 1., 0.001)
         r = self.mu(z, Om, w0, wa)
         plt.plot(z, r+M, 'x')
+
+class Sigma_Fisher(CosmoDist):
+    """"
+    class to estimate error parameters using Fisher matrices
+
+    """
+    def __init__(self, data,
+                 params=dict(zip(['M', 'alpha', 'beta', 'Om','w0','wa'],[-19.,0.13,3.1,0.3,-1.0,0.0])), H0=72, c=299792.458):
+        super().__init__(H0, c)
+
+        self.Mb = data['mbfit']
+        self.x1 = data['x1_fit']
+        self.color = data['color_fit']
+        self.Z = data['z_fit']
+        self.data = data
+        # fit parameters
+        self.params = params
+
+    def __call__(self):
+
+        # get Fisher matrix
+        A = self.matFisher()
+        detmat = np.linalg.det(A)
+        res = None
+        #if detmat > 0:
+            # invert this matrix
+        #b = np.identity(A.shape[1], dtype=A.dtype)
+            # u, piv, x, info = lapack.dgesv(A, b)
+        if (np.linalg.det(A)):
+            res = np.linalg.inv(A)
+        print('Cov from Fisher',res)
+         
+         
+    def matFisher(self):
+
+        parName = list(self.params.keys())
+        #parName = ['Om','w0','wa']
+        nparams = len(parName)
+
+        # get derivatives
+        deriv = self.derivative_chi2(parName)
+        
+        # fill the Fisher matrix
+        Fisher_Matrix = np.zeros((nparams,nparams))
+        
+        for ia, vala in enumerate(parName):
+            for jb, valb in enumerate(parName):
+                #if jb >= ia:
+                Fisher_Matrix [ia, jb] = 0.5*deriv[vala]*deriv[valb] 
+   
+        #Fisher_Matrix = Fisher_Matrix + np.triu(Fisher_Matrix, 1).T
+
+        return Fisher_Matrix
+
+    def derivative_chi2(self, parName):
+        pp_p = copy.deepcopy(self.params)
+        pp_m = copy.deepcopy(self.params)
+        deriv = {}
+        h = 1.e-8
+        for name in parName:
+            pp_p[name] += h
+            pp_m[name] -=h 
+            deriv[name] = (self.chi2(pp_p)-self.chi2(pp_m))/(2*h)
+            pp_p[name] -=h
+            pp_m[name] +=h
+        return deriv
+        
+    def chi2(self, param):
+
+        M = param['M']
+        alpha = param['alpha']
+        beta = param['beta']
+        Om = param['Om']
+        w0 = param['w0']
+        wa = param['wa']
+        #print('in chi2',M, alpha, beta, Om, w0, wa)
+        return np.sum((self.Mb-self.mu(self.Z, Om, w0, wa)-M+alpha*self.x1-beta*self.color)**2/self.sigmasq(alpha,beta))
+
+    def sigmasq(self, alpha, beta):
+        
+        return self.data['Cov_mbmb']+(alpha**2)*self.data['Cov_x1x1']+(beta**2)*self.data['Cov_colorcolor']+2*alpha*self.data['Cov_x1mb']-2.*beta*self.data['Cov_colormb']-2.*alpha*beta*self.data['Cov_x1color']

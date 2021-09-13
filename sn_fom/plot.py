@@ -333,3 +333,46 @@ class plotHubbleResiduals(CosmoDist):
 
         return plot_centers, plot_values, error_values, residuals
 
+def binned_data(zmin, zmax, data, nbins, vary='mu', erry='sigma_mu'):
+    """
+    Method to transform a set of data to binned data
+    
+    Parameters
+    ---------------
+    zmin: float
+        min redshift
+    zmax: float
+        max redshift
+    data: pandas df
+        data to be binned
+    vary: str, opt
+        y-axis variable (default: mu)
+    erry: str, opt
+        y-axis var error (default: sigma_mu)
+
+    Returns
+    -----------
+    x, y, yerr:
+    x : redshift centers
+    y: weighted mean of distance modulus
+    yerr: distance modulus error
+
+    """
+
+    bins = np.linspace(zmin, zmax, nbins)
+    if zmin < 1.e-8:
+        bins[0] = 0.01
+    group = data.groupby(pd.cut(data.z, bins))
+    plot_centers = (bins[:-1] + bins[1:])/2
+    plot_values = group[vary].mean()
+    
+    # plot_values = group.apply(lambda x: np.sum(
+    #    x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
+    print('plot values',plot_values)
+    error_values = None
+    if erry != '':
+        error_values = group.apply(
+            lambda x: 1./np.sqrt(np.sum(1./x[erry]**2)))
+        print('error', error_values)
+
+    return plot_centers, plot_values, error_values
