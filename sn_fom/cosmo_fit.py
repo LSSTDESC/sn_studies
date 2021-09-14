@@ -479,9 +479,10 @@ class FitCosmo(CosmoDist):
 
         time_ref = time.time()
        # the fit is done here
-        res = self.zfinal1(
-            self.Mb, self.Z, self.X1, self.X2, self.sigZ)
-
+        #res = self.zfinal1(
+        #    self.Mb, self.Z, self.X1, self.X2, self.sigZ)
+        res = self.zfinal1_nowa(
+            self.Mb, self.Z, self.X1, self.X2, self.sigZ,wa)
         print('after fit', time.time()-time_ref)
         print(res.x)
         # get the covariance matrix
@@ -493,7 +494,8 @@ class FitCosmo(CosmoDist):
         params = {}
 
         parNames = ['Om', 'w0', 'wa', 'M', 'alpha', 'beta']
-
+        parNames = ['Om', 'w0', 'M', 'alpha', 'beta']
+        
         for i, vv in enumerate(parNames):
             params[vv] = [res.x[i]]
             for j, pp in enumerate(parNames):
@@ -501,11 +503,13 @@ class FitCosmo(CosmoDist):
                     nn = 'Cov_{}_{}'.format(vv, pp)
                     params[nn] = [covmat[i][j]]
 
-        tup = (params['Om'][0],params['w0'][0],
-               params['wa'][0], params['M'][0],
-               params['alpha'][0], params['beta'][0])
+        tup = []
+        for pp in parNames:
+            tup.append(params[pp][0])
+    
         print('hhh',tup)
-        chi2 = self.zchii2(tup, self.Mb, self.Z, self.X1, self.X2, self.sigZ)/self.ndf
+        #chi2 = self.zchii2(tuple(tup), self.Mb, self.Z, self.X1, self.X2, self.sigZ)/self.ndf
+        chi2 = self.zchii2_nowa(tuple(tup), self.Mb, self.Z, self.X1, self.X2, self.sigZ,w0)/self.ndf
         params['chi2' ] = [chi2]
         
         fit_result = pd.DataFrame.from_dict(params)
@@ -558,12 +562,19 @@ class FitCosmo(CosmoDist):
 
     def zchii2(self, tup, Mb, Z, x1, color, sigZ):
         Om, w0, wa, M, alpha, beta = tup
-        # return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
-        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)))
+        #return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
+        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+sigZ**2))
 
+    def zchii2_nowa(self, tup, Mb, Z, x1, color, sigZ,wa):
+        Om, w0, M, alpha, beta = tup
+        #return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
+        return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)))
     def zfinal1(self, Mb, Z, x1, color, sigZ):
         return optimize.minimize(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1), args=(Mb, Z, x1, color, sigZ),method='BFGS')
         #return optimize.least_squares(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1), args=(Mb, Z, x1, color, sigZ))
+    def zfinal1_nowa(self, Mb, Z, x1, color, sigZ,wa):
+        return optimize.minimize(self.zchii2_nowa, (0.3, -1.0, -19., 0.13, 3.1), args=(Mb, Z, x1, color, sigZ,wa),method='BFGS')
+        #return optimize.least_squares(self.zchii2_nowa, (0.3, -1.0, -19., 0.13, 3.1), args=(Mb, Z, x1, color, sigZ,wa))  
     def zchi2ndf(self, gzero, Z, Mb, X1, X2, sigZ):
         om, w0, wa, m, xi1, xi2 = self.zfinal1(Mb, Z, gzero, X1, X2, sigZ)
         return self.zchii2((om, w0, wa, m, xi1, xi2), Mb, Z, gzero, X1, X2, sigZ)-119
@@ -592,16 +603,31 @@ class Sigma_Fisher(CosmoDist):
 
     """
     def __init__(self, data,
-                 params=dict(zip(['M', 'alpha', 'beta', 'Om','w0','wa'],[-19.,0.13,3.1,0.3,-1.0,0.0])), H0=72, c=299792.458):
+                 params=dict(zip(['M', 'alpha', 'beta', 'Om','w0','wa'],[-19.,0.13,3.1,0.3,-1.0,0.0])),
+                 params_Fisher=['M', 'alpha', 'beta', 'Om','w0'],
+                 H0=72, c=299792.458):
         super().__init__(H0, c)
 
         self.Mb = data['mbfit']
-        self.x1 = data['x1_fit']
-        self.color = data['color_fit']
-        self.Z = data['z_fit']
-        self.data = data
+        self.Z = data['z']
+        self.Mber = np.sqrt(data['Cov_mbmb'])
+        self.gx1 = data['Cov_x1x1']
+        self.gxc = data['Cov_colorcolor']
+        self.cov1 = -2.5*data['Cov_x0x1'] / \
+            (data['x0_fit']*np.log(10))
+        self.cov1 = data['Cov_x1mb']
+        self.cov2 = -2.5*data['Cov_x0color'] / \
+            (data['x0_fit']*np.log(10))
+        self.cov2 = data['Cov_colormb']
+        self.cov3 = data['Cov_x1color']
+        self.sigZ = 1.e-3*data['z_fit']
+        self.X1 = data['x1_fit']
+        self.X2 = data['color_fit']
+        self.sigZ = 5*self.sigZ/(self.Z*np.log(10))
+        #self.data = data
         # fit parameters
         self.params = params
+        self.params_Fisher = params_Fisher
 
     def __call__(self):
 
@@ -615,26 +641,36 @@ class Sigma_Fisher(CosmoDist):
             # u, piv, x, info = lapack.dgesv(A, b)
         if (np.linalg.det(A)):
             res = np.linalg.inv(A)
-        print('Cov from Fisher',res)
+            print('Cov from Fisher',np.sqrt(np.diag(res)))
          
          
     def matFisher(self):
 
-        parName = list(self.params.keys())
+        parName = self.params_Fisher
         #parName = ['Om','w0','wa']
         nparams = len(parName)
 
         # get derivatives
-        deriv = self.derivative_chi2(parName)
-        
+        #deriv = self.derivative_chi2(parName)
         # fill the Fisher matrix
         Fisher_Matrix = np.zeros((nparams,nparams))
         
         for ia, vala in enumerate(parName):
             for jb, valb in enumerate(parName):
                 #if jb >= ia:
-                Fisher_Matrix [ia, jb] = 0.5*deriv[vala]*deriv[valb] 
-   
+                deriv = 0
+                if vala == valb:
+                    deriv = self.derivative_chi2_same(vala)
+                else:
+                    deriv = self.derivative_chi2_mix(vala,valb)
+                print('hello',ia,jb,vala,valb,deriv)    
+                Fisher_Matrix [ia, jb] = 0.5*deriv
+        """
+        for ia, vala in enumerate(parName):
+            for jb, valb in enumerate(parName):
+                Fisher_Matrix [ia, jb] = 0.5*deriv[vala]*deriv[valb]
+        """
+
         #Fisher_Matrix = Fisher_Matrix + np.triu(Fisher_Matrix, 1).T
 
         return Fisher_Matrix
@@ -643,7 +679,8 @@ class Sigma_Fisher(CosmoDist):
         pp_p = copy.deepcopy(self.params)
         pp_m = copy.deepcopy(self.params)
         deriv = {}
-        h = 1.e-8
+        h = 1.e-1
+        chi2_ref = self.chi2(self.params)
         for name in parName:
             pp_p[name] += h
             pp_m[name] -=h 
@@ -651,6 +688,57 @@ class Sigma_Fisher(CosmoDist):
             pp_p[name] -=h
             pp_m[name] +=h
         return deriv
+
+    def derivative_chi2_same(self, parName):
+        pp_p = copy.deepcopy(self.params)
+        pp_m = copy.deepcopy(self.params)
+        h = 1.e-5
+        pp_p[parName] += h
+        pp_m[parName] -= h
+
+        deriv = (self.chi2(pp_p)-2.*self.chi2(self.params)+self.chi2(pp_m))/(h**2)
+
+        pp_p[parName] -= h
+        pp_m[parName] += h
+        return deriv
+
+    def derivative_chi2_mix(self, parName1, parName2):
+        pp_pp = copy.deepcopy(self.params)
+        pp_mp = copy.deepcopy(self.params)
+        pp_pm = copy.deepcopy(self.params)
+        pp_mm = copy.deepcopy(self.params)
+        h = 1.e-5
+        pp_pp[parName1] += h
+        pp_pp[parName2] += h
+
+        pp_mp[parName1] -= h
+        pp_mp[parName2] += h
+
+        pp_pm[parName1] += h
+        pp_pm[parName2] -= h
+
+        pp_mm[parName1] -= h
+        pp_mm[parName2] -= h
+       
+
+        deriv = (self.chi2(pp_pp)-self.chi2(pp_mp)-self.chi2(pp_pm)+self.chi2(pp_mm))/(4*h*h)
+        #deriv = (self.chi2(pp_pp)-self.chi2(self.params)-self.chi2(pp_pm)+self.chi2(pp_mm))/h**2
+
+        pp_pp[parName1] -= h
+        pp_pp[parName2] -= h
+
+        pp_mp[parName1] += h
+        pp_mp[parName2] -= h
+
+        pp_pm[parName1] -= h
+        pp_pm[parName2] += h
+
+        pp_mm[parName1] += h
+        pp_mm[parName2] += h
+
+        
+        return deriv            
+                 
         
     def chi2(self, param):
 
@@ -660,9 +748,9 @@ class Sigma_Fisher(CosmoDist):
         Om = param['Om']
         w0 = param['w0']
         wa = param['wa']
-        #print('in chi2',M, alpha, beta, Om, w0, wa)
-        return np.sum((self.Mb-self.mu(self.Z, Om, w0, wa)-M+alpha*self.x1-beta*self.color)**2/self.sigmasq(alpha,beta))
+        #print('in chi2',M, alpha, beta, Om, w0, wa,np.sum(self.sigmasq(alpha,beta)))
+        return np.sum((self.Mb-M+alpha*self.X1-beta*self.X2-self.mu(self.Z, Om, w0, wa))**2/(self.sigmasq(alpha,beta)))
 
     def sigmasq(self, alpha, beta):
         
-        return self.data['Cov_mbmb']+(alpha**2)*self.data['Cov_x1x1']+(beta**2)*self.data['Cov_colorcolor']+2*alpha*self.data['Cov_x1mb']-2.*beta*self.data['Cov_colormb']-2.*alpha*beta*self.data['Cov_x1color']
+        return self.Mber**2+(alpha**2)*self.gx1+(beta**2)*self.gxc+2*alpha*self.cov1-2*beta*self.cov2-2*alpha*beta*self.cov3

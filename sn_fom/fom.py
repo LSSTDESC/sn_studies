@@ -3,7 +3,7 @@ import numpy as np
 from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
 from sn_fom.steps import multifit
-from sn_fom.plot import plotStat, plotHubbleResiduals,binned_data
+from sn_fom.plot import plotStat, plotHubbleResiduals,binned_data, plotFitRes
 from sn_fom.utils import getconfig
 from sn_fom.cosmo_fit import Sigma_Fisher
 import os
@@ -39,7 +39,7 @@ if not os.path.isfile(fitparName):
     # get default configuration file
     config = getconfig()
 
-    ffi = range(16)
+    ffi = range(8)
     params = {}
     params['fileDir'] = fileDir
     params['dbNames'] = dbNames
@@ -71,6 +71,7 @@ M = -19.045
 
 params=dict(zip(['M', 'alpha', 'beta', 'Om','w0','wa'],[M, alpha, beta, Om,w0,wa]))
 #params=dict(zip(['Om','w0','wa'],[Om,w0,wa]))
+plotFitRes(params_fit)
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
 """
@@ -85,8 +86,8 @@ for i,row in params_fit.iterrows():
     
     plotresi = plotHubbleResiduals(row,snName)
     plotresi.plots()
-    plt.show()
-    """
+   
+    
     data = pd.read_hdf(snName)
     print('NSN',len(data),data.columns)
     data['sigma_mu'] = data['Cov_mbmb']+alpha**2*data['Cov_x1x1']+beta**2*data['Cov_colorcolor']+2*alpha*data['Cov_x1mb']-2.*beta*data['Cov_colormb']-2.*alpha*beta*data['Cov_x1color']
@@ -94,8 +95,10 @@ for i,row in params_fit.iterrows():
     data['mu'] = -M+data['mbfit']+alpha*data['x1_fit']-beta*data['color_fit']
     sig = Sigma_Fisher(data, params=params)
     sig()
-    print(row)
-    """
+    for pp in ['M','alpha','beta','Om','w0']:
+        print(pp, np.sqrt(row['Cov_{}_{}'.format(pp,pp)]))
+    #print(row)
+    plt.show()
     """
     #ax.hist(np.sqrt(data['Cov_colorcolor']),histtype='step')
     plot_centers, plot_values, error_values = binned_data(0.005,0.905,data, 19,vary='mu',erry='')

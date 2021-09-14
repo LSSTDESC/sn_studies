@@ -125,7 +125,7 @@ class plotHubbleResiduals(CosmoDist):
 
     """
 
-    def __init__(self, fitparams, fichName, H0=72, c=299792.458, rescale_factor=1):
+    def __init__(self, fitparams, fichName, H0=72, c=299792.458, rescale_factor=1, var_FoM = ['Om','w0']):
         super().__init__(H0, c)
 
         #load SN
@@ -136,12 +136,12 @@ class plotHubbleResiduals(CosmoDist):
         self.Mber = np.sqrt(data['Cov_mbmb'])
         self.gx1 = data['Cov_x1x1']
         self.gxc = data['Cov_colorcolor']
-        self.cov1 = -2.5*data['Cov_x0x1'] / \
-            (data['x0_fit']*np.log(10))
-        # self.cov1 = data['Cov_x1mb']
-        self.cov2 = -2.5*data['Cov_x0color'] / \
-            (data['x0_fit']*np.log(10))
-        # self.cov2 = data['Cov_colormb']
+        #self.cov1 = -2.5*data['Cov_x0x1'] / \
+        #    (data['x0_fit']*np.log(10))
+        self.cov1 = data['Cov_x1mb']
+        #self.cov2 = -2.5*data['Cov_x0color'] / \
+        #    (data['x0_fit']*np.log(10))
+        self.cov2 = data['Cov_colormb']
         self.cov3 = data['Cov_x1color']
         self.sigZ = data['z_fit']/(1.e5*data['z_fit'])
         self.X1 = data['x1_fit']
@@ -153,23 +153,43 @@ class plotHubbleResiduals(CosmoDist):
         print(fitparams)
         self.Om = fitparams['Om']
         self.w0 = fitparams['w0']
-        self.wa = fitparams['wa']
+        #self.wa = fitparams['wa']
+        self.wa = 0.0
         self.alpha =fitparams['alpha']
         self.beta =fitparams['beta']
         self.M = fitparams['M']
+        """
         self.sigma_w0 = np.sqrt(fitparams['Cov_w0_w0'])
         self.sigma_wa = np.sqrt(fitparams['Cov_wa_wa'])
         self.sigma_w0_wa = fitparams['Cov_w0_wa']
+        """
+        vara = var_FoM[0]
+        sig_vara = 'Cov_{}_{}'.format(vara,vara)
+        varb = var_FoM[1]
+        sig_varb = 'Cov_{}_{}'.format(varb,varb)
+        sig_vara_varb = 'Cov_{}_{}'.format(vara,varb)
+        self.sigma_a= np.sqrt(fitparams[sig_vara])
+        self.sigma_b = np.sqrt(fitparams[sig_varb])
+        self.sigma_a_b = fitparams[sig_vara_varb]
         self.chi2 = fitparams['chi2']
+
+        self.lega = '$\Omega_m$'+' = {}'.format(np.round(fitparams[vara],3))
+        self.lega += '$\pm $'+'{}'.format(np.round(self.sigma_a,3))
+        self.legb = '$w$'+' = {}'.format(np.round(fitparams[varb],3))
+        self.legb += '$\pm $'+'{}'.format(np.round(self.sigma_b,3))                                
+                                          
 
     def plots(self):
 
-        FoM_val, rho = FoM(self.sigma_w0,self.sigma_wa,self.sigma_w0_wa)
+        FoM_val, rho = FoM(self.sigma_a,self.sigma_b,self.sigma_a_b)
         fig = plt.figure(figsize=(12,8))
         ttit = 'FoM (95%)  = {} \n'.format(np.round(FoM_val,2))
+        ttit += '{} {}'.format(self.lega,self.legb)
+        """
         ttit += '$\sigma_{w_0}$'+'= {}'.format(np.round(self.sigma_w0,3))
         ttit += '$\sigma_{w_a}$'+'= {}'.format(np.round(self.sigma_wa,3))
-        ttit += '$\chi^2/ndf$'+' = {}'.format(np.round(self.chi2,5))
+        """
+        ttit += ' $\chi^2/ndf$'+' = {}'.format(np.round(self.chi2,5))
         fig.suptitle(ttit)
         
         ax = fig.add_axes((.1, .3, .8, .6))
@@ -376,3 +396,35 @@ def binned_data(zmin, zmax, data, nbins, vary='mu', erry='sigma_mu'):
         print('error', error_values)
 
     return plot_centers, plot_values, error_values
+
+def plotFitRes(data):
+    """
+    Function to plot fit results
+
+    Parameters
+    ---------------
+    data: pandas df
+      data to plot
+    """
+
+    # get the FoM
+    var_a = 'Om'
+    var_b = 'w0'
+    Cov_a = 'Cov_{}_{}'.format(var_a,var_a)
+    Cov_b = 'Cov_{}_{}'.format(var_b,var_b)
+    Cov_a_b = 'Cov_{}_{}'.format(var_a,var_b)
+    sigma_a = 'sigma_{}'.format(var_a)
+    sigma_b = 'sigma_{}'.format(var_b)
+    data[sigma_a] = np.sqrt(data[Cov_a])
+    data[sigma_b] = np.sqrt(data[Cov_b])
+    
+    data['FoM'] = data.apply(lambda x: FoM(x[sigma_a], x[sigma_b], x[Cov_a_b])[0], axis=1)
+    fig, ax = plt.subplots(ncols=2, nrows=2)
+    
+    ax[0,0].hist(data[sigma_a], histtype='step')
+    ax[0,1].hist(data[sigma_b], histtype='step')
+    ax[1,0].hist(data['FoM'], histtype='step')
+
+    print('medians',data[[sigma_a,sigma_b,'FoM']].median())
+    
+    plt.show()
