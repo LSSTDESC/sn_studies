@@ -420,10 +420,12 @@ def plotFitRes(data):
     
     data['FoM'] = data.apply(lambda x: FoM(x[sigma_a], x[sigma_b], x[Cov_a_b])[0], axis=1)
     fig, ax = plt.subplots(ncols=2, nrows=2)
+    idx = data['FoM']< 20000
+    sel = data[idx]
+    ax[0,0].hist(sel[sigma_a], histtype='step',bins=100)
+    ax[0,1].hist(sel[sigma_b], histtype='step',bins=100)
     
-    ax[0,0].hist(data[sigma_a], histtype='step')
-    ax[0,1].hist(data[sigma_b], histtype='step')
-    ax[1,0].hist(data['FoM'], histtype='step')
+    ax[1,0].hist(sel['FoM'], histtype='step',bins=50)
 
     print('medians',data[[sigma_a,sigma_b,'FoM']].median())
     

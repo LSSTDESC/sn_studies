@@ -39,7 +39,7 @@ if not os.path.isfile(fitparName):
     # get default configuration file
     config = getconfig()
 
-    ffi = range(8)
+    ffi = range(16)
     params = {}
     params['fileDir'] = fileDir
     params['dbNames'] = dbNames
