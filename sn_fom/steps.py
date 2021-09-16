@@ -4,9 +4,10 @@ from sn_fom.nsn_scenario import NSN_config, nsn_bin
 import pandas as pd
 from . import np
 
+
 def fit_SN(fileDir, dbNames, config, fields, saveSN=''):
     data_sn = pd.DataFrame()
-    
+
     for i, dbName in enumerate(dbNames):
         fields_to_process = fields[i].split(',')
         idx = config['fieldName'].isin(fields_to_process)
@@ -23,6 +24,7 @@ def fit_SN(fileDir, dbNames, config, fields, saveSN=''):
 
     # make the fit and get the parameters
     params_fit = fit()
+
     if SNID != '':
         params_fit['SNID'] = SNID
     return params_fit
@@ -67,11 +69,11 @@ def getSN(fileDir, dbName, config, fields):
     # get SN from simu
     data_sn = loadSN(fileDir, dbName, 'allSN', zcomp)
 
-    #load x1_c distrib
+    # load x1_c distrib
     x1_color = getDist()
-    
+
     # select according to nsn_per_bin
-    data_sn = selSN(data_sn, nsn_per_bin,x1_color)
+    data_sn = selSN(data_sn, nsn_per_bin, x1_color)
 
     print(len(data_sn), type(data_sn))
 

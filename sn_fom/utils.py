@@ -94,7 +94,8 @@ def selSN(sn_data, nsn_per_bin,x1_color):
         if zp <= 0.1:
             zrange= 'low_z'
         if nsn_choose > 0:
-            
+            if zp<= 0.2:
+                nsn_choose *= 100
             x1_color_vals = pdist(x1_color,zrange,nsn_choose)
             #print('my choice here',zm,zp,x1_color_vals)
             #selected_data = pd.DataFrame(sn_data_z)
