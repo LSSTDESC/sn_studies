@@ -141,7 +141,7 @@ class CosmoDist:
 
         """
         wp = w0+wa*z/(1.+z)
-        #wp = w0
+        # wp = w0
 
         H = Om*(1+z)**3+(1.-Om)*(1+z)**(3*(1.+wp))
         # H = Om*(1+z)**3+(1.-Om)*(1+z)
@@ -177,10 +177,10 @@ class CosmoDist:
         if (hasattr(z, '__iter__')):
             s = np.zeros(len(z))
             for i, t in enumerate(z):
-                s[i] = (1+t)*quad(integrand, 0, t, limit=100)[0]
+                s[i] = (1+t)*quad(integrand, 0.0, t, limit=100)[0]
             return s
         else:
-            return (1+z)*quad(integrand, 0, z, limit=100)[0]
+            return (1+z)*quad(integrand, 0.0, z, limit=100)[0]
 
     def mu(self, z, Om=0.3, w0=-1.0, wa=0.0):
         """
@@ -429,16 +429,18 @@ class FitData:
 
         print(data.columns)
         Z = data['z_fit']
-        Mb = data['mbfit']
-        Cov_mbmb = data['Cov_mbmb']
+        #Mb = data['mbfit']
+        Mb = -2.5*np.log10(data['x0_fit'])+10.635
+        # Cov_mbmb = data['Cov_mbmb']
+        Cov_mbmb = (2.5 / (data['x0_fit']*np.log(10)))**2*data['Cov_x0x0']
         Cov_x1x1 = data['Cov_x1x1']
         Cov_colorcolor = data['Cov_colorcolor']
         Cov_x1mb = -2.5*data['Cov_x0x1'] / \
             (data['x0_fit']*np.log(10))
-        Cov_x1mb = data['Cov_x1mb']
+        # Cov_x1mb = data['Cov_x1mb']
         Cov_colormb = -2.5*data['Cov_x0color'] / \
             (data['x0_fit']*np.log(10))
-        Cov_colormb = data['Cov_colormb']
+        # Cov_colormb = data['Cov_colormb']
         Cov_x1color = data['Cov_x1color']
         X1 = data['x1_fit']
         Color = data['color_fit']
@@ -448,7 +450,7 @@ class FitData:
         self.fit = FitCosmo(Z, X1, Color, Mb, Cov_mbmb,
                             Cov_x1x1, Cov_colorcolor, Cov_x1mb,
                             Cov_colormb, Cov_x1color, sigZ, len(data),
-                            params_fit=['M', 'alpha', 'beta', 'Om', 'w0'])
+                            params_fit=['Om', 'w0', 'wa', 'M', 'alpha', 'beta', ])
 
     def __call__(self):
         """
@@ -461,7 +463,7 @@ class FitData:
         Om = 0.3
         w0 = -1.0
         wa = 0.0
-        m = -19.045
+        M = -19.045
         alpha = 0.13
         beta = 3.1
 
@@ -473,58 +475,51 @@ class FitData:
         print(mean)
 
         time_ref = time.time()
-        """
-        gzero_vals = np.arange(0.0001,0.0005,0.00001)
-        for gzero in gzero_vals:
-            chii2_init = self.fit.zchii2_nowa((Om, w0, m, alpha,beta), wa,gzero)-self.fit.ndf
-            print('chi2 here',gzero, chii2_init)
 
-        print(test)
-        #gzero=self.fit.zfinal2_nowa(wa)
+        """
+        gzero_vals = np.arange(0.01, 0.05, 0.01)
+        for gzero in gzero_vals:
+            self.fit.gzero = gzero
+            chii2_init = self.fit.zchii2(
+                (Om, w0, wa, M, alpha, beta))-self.fit.ndf
+            print('chi2 here', gzero, chii2_init)
+
+        # print(test)
+        gzero = self.fit.zfinal2()
         """
         gzero = 0.
         print('gzero', gzero)
        # the fit is done here
         # res = self.zfinal1(
         #    self.Mb, self.Z, self.X1, self.X2, self.sigZ)
-        self.fit.wa = wa
         self.fit.gzero = gzero
-        res = self.fit.zfinal1_nowa()
-        print('after fit', time.time()-time_ref)
-        print(res.x)
-        # get the covariance matrix
-        covmat = res.hess_inv
-        #covmat = res.jac
-        print(np.sqrt(np.diag(covmat)))
+        resa = self.fit.fitcosmo(Om, w0, wa, M, alpha, beta, 'minuit')
+        print('fit minuit done', resa['chi2']/resa['ndf'])
+        # print(test)
+        """
+        resb = self.fit.fitcosmo(Om, w0, wa, M, alpha, beta, 'scipy')
+        print('fit scipy done')
+        resa = pd.concat((resa, resb))
+        resa['chi2_ndf'] = resa['chi2']/resa['ndf']
+        vv = ['Om', 'w0', 'wa', 'M', 'alpha', 'beta']
+        prvar = list(vv)
+        for pp in vv:
+            var = 'sigma_{}'.format(pp)
+            resa[var] = np.sqrt(resa['Cov_{}_{}'.format(pp, pp)])
+            prvar.append(var)
+        prvar.append('fitter')
+        prvar.append('chi2_ndf')
+        ia = resa['fitter'] == 'minuit'
+        ib = resa['fitter'] == 'scipy'
+        print(resa[ia][prvar])
+        print(resa[ib][prvar])
 
-        # Extract the parameters and copy in a dict
-        params = {}
-
-        parNames = ['Om', 'w0', 'wa', 'M', 'alpha', 'beta']
-        parNames = ['Om', 'w0', 'M', 'alpha', 'beta']
-
-        for i, vv in enumerate(parNames):
-            params[vv] = [res.x[i]]
-            for j, pp in enumerate(parNames):
-                if j >= i:
-                    nn = 'Cov_{}_{}'.format(vv, pp)
-                    params[nn] = [covmat[i][j]]
-
-        tup = []
-        for pp in parNames:
-            tup.append(params[pp][0])
-
-        #chi2 = self.zchii2(tuple(tup), self.Mb, self.Z, self.X1, self.X2, self.sigZ)/self.ndf
-        chi2 = self.fit.zchii2_nowa(tuple(tup), wa, gzero)/self.fit.ndf
-        print('hhh', tup, chi2)
-        params['chi2'] = [chi2]
-
-        fit_result = pd.DataFrame.from_dict(params)
-
+        print(test)
+        """
         # plot Hubble diagram here
-        #self.fit.plot_hubble(gzero, params['Om'][0], params['w0'][0], wa, params['M'][0], params['alpha'][0], params['beta'][0])
+        # self.fit.plot_hubble(gzero, params['Om'][0], params['w0'][0], wa, params['M'][0], params['alpha'][0], params['beta'][0])
 
-        return fit_result
+        return resa
 
 
 class FitCosmo(CosmoDist):
@@ -540,7 +535,7 @@ class FitCosmo(CosmoDist):
     def __init__(self, Z, X1, Color, Mb, Cov_mbmb,
                  Cov_x1x1, Cov_colorcolor, Cov_x1mb,
                  Cov_colormb, Cov_x1color, sigZ, nsn,
-                 params_fit=['M', 'alpha', 'beta', 'Om', 'w0'],
+                 params_fit=['Om', 'w0', 'wa', 'M', 'alpha', 'beta'],
                  H0=72, c=299792.458):
         super().__init__(H0, c)
 
@@ -552,17 +547,14 @@ class FitCosmo(CosmoDist):
         self.Mber = np.sqrt(Cov_mbmb)
         self.gx1 = Cov_x1x1
         self.gxc = Cov_colorcolor
-        # self.cov1 = -2.5*data['Cov_x0x1'] / \
-        #    (data['x0_fit']*np.log(10))
         self.cov1 = Cov_x1mb
-        # self.cov2 = -2.5*data['Cov_x0color'] / \
-        #    (data['x0_fit']*np.log(10))
         self.cov2 = Cov_colormb
         self.cov3 = Cov_x1color
         self.sigZ = sigZ
         self.X1 = X1
         self.Color = Color
         self.ndf = nsn-len(params_fit)
+        self.params_fit = params_fit
 
     def plot_modulus(self, offset=0):
         z = np.arange(0.001, 0.12, 0.001)
@@ -587,11 +579,25 @@ class FitCosmo(CosmoDist):
 
         Returns
         ----------
-        var_mu = Mberr**2+alpha**2*sigma_x1+beta**2*sigma_color+2*alpha*Cov_x1_mb-2*alpha*beta*Cov_x1_color-2*beta*Cov_mb_color
+        var_mu = Mberr**2+alpha**2*sigma_x1+beta**2*sigma_color+2* \
+            alpha*Cov_x1_mb-2*alpha*beta*Cov_x1_color-2*beta*Cov_mb_color
         """
-        return self.Mber**2+(alpha**2)*self.gx1+(beta**2)*self.gxc+2*alpha*self.cov1-2*beta*self.cov2-2*alpha*beta*self.cov3
+        res = self.Mber**2+(alpha**2)*self.gx1+(beta**2)*self.gxc + \
+            2*alpha*self.cov1-2*beta*self.cov2-2*alpha*beta*self.cov3
+        """
+        print('hhh', np.sqrt(self.gx1), np.sqrt(self.gxc))
+        import matplotlib.pyplot as plt
+        plt.hist(alpha**2*self.gx1, histtype='step', label='gx1')
+        plt.hist(beta**2*self.gxc, histtype='step', label='gcx')
+        plt.hist(2*alpha*self.cov1, histtype='step', label='cov1')
+        plt.hist(-2*beta*self.cov2, histtype='step', label='cov2')
+        plt.hist(-2*alpha*beta*self.cov3, histtype='step', label='cov3')
+        plt.legend()
+        plt.show()
+        """
+        return res
 
-    def zchii2(self, tup, gzero):
+    def zchii2(self, tup):
         """
         Method to estimate the chi2 for a cosmo fit
 
@@ -606,9 +612,10 @@ class FitCosmo(CosmoDist):
         """
         Om, w0, wa, M, alpha, beta = tup
         # return np.sum((Mb-self.mu(Z, Om, w0, wa)-M+alpha*x1-beta*color)**2/(self.sigmI(alpha, beta)+gzero**2+self.sigMu(1.-Om, Z, sigZ)**2))
-        return np.sum((self.Mb-self.mu(Z, Om, w0, wa)-M+alpha*self.X1-beta*self.Color)**2/(self.sigmI(alpha, beta)+gzero**2+self.sigZ**2))
+        # return np.sum((self.Mb-self.mu(self.Z, Om, w0, wa)-M+alpha*self.X1-beta*self.Color)**2/(self.sigmI(alpha, beta)+self.gzero**2+self.sigZ**2))
+        return self.chi2(Om, w0, wa, M, alpha, beta)
 
-    def zchii2_nowa(self, tup, wa, gzero):
+    def zchii2_nowa(self, tup):
         """
         Method to estimate the chi2 for a cosmo fit
 
@@ -628,7 +635,13 @@ class FitCosmo(CosmoDist):
         """
         Om, w0, M, alpha, beta = tup
 
-        return np.sum((self.Mb-self.mu(self.Z, Om, w0, wa)-M+alpha*self.X1-beta*self.Color)**2/(self.sigmI(alpha, beta)+gzero**2+self.sigMu(Om, w0, wa)**2))
+        # return np.sum((self.Mb-self.mu(self.Z, Om, w0, self.wa)-M+alpha*self.X1-beta*self.Color)**2/(self.sigmI(alpha, beta)+self.gzero**2+self.sigMu(Om, w0, self.wa)**2))
+        return self.chi2(Om, w0, self.wa, M, alpha, beta)
+
+    def chi2(self, Om, w0, wa, M, alpha, beta):
+
+        # self.sigMu(Om, w0, wa)**2))
+        return np.sum((self.Mb-M+alpha*self.X1-beta*self.Color-self.mu(self.Z, Om, w0, wa))**2/(self.sigmI(alpha, beta)))
 
     def zchii2_nowa_im(self, Om, w0, M, alpha, beta):
         """
@@ -648,16 +661,40 @@ class FitCosmo(CosmoDist):
         the cosmo chi2
 
         """
-        #Om, w0, M, alpha, beta = tup
-        return np.sum((self.Mb-self.mu(self.Z, Om, w0, self.wa)-M+alpha*self.X1-beta*self.Color)**2/(self.sigmI(alpha, beta)+self.gzero**2+self.sigMu(Om, w0, self.wa)**2))
+        # Om, w0, M, alpha, beta = tup
+        # return np.sum((self.Mb-self.mu(self.Z, Om, w0, self.wa)-M+alpha*self.X1-beta*self.Color)**2/(self.sigmI(alpha, beta)+self.gzero**2+self.sigMu(Om, w0, self.wa)**2))
+        return self.chi2(Om, w0, self.wa, M, alpha, beta)
+
+    def zchii2_im(self, Om, w0, wa, M, alpha, beta):
+        """
+        Method to estimate the chi2 for a cosmo fit
+
+        Parameters
+        --------------
+        tup: tuple
+          parameters to fit (Om, w0, M, alpha, beta)
+         wa: float
+           wa parameter
+         gzero: float
+           gzero parameter
+
+        Returns
+        ----------
+        the cosmo chi2
+
+        """
+        # Om, w0, M, alpha, beta = tup
+        # return np.sum((self.Mb-self.mu(self.Z, Om, w0, wa)-M+alpha*self.X1-beta*self.Color)**2/(self.sigmI(alpha, beta)+self.gzero**2+self.sigMu(Om, w0, wa)**2))
+        return self.chi2(Om, w0, wa, M, alpha, beta)
 
     def zfinal1(self, gzero):
         """
         Method to estimate cosmo fit parameters M, alpha, beta, Om, w0, wa
         """
-        return optimize.minimize(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1), args=(gzero), method='BFGS')
+        self.gzero = gzero
+        return optimize.minimize(self.zchii2, (0.3, -1.0, 0., -19., 0.13, 3.1))
 
-    def zfinal1_nowa(self):
+    def fitcosmo(self, Om, w0, wa, M, alpha, beta, fitter='minuit'):
         """
         Method to estimate cosmo fit parameters M, alpha, beta, Om, w0
 
@@ -665,8 +702,6 @@ class FitCosmo(CosmoDist):
         --------------
         wa: float
           wa DE parameter
-        gzero: float
-           gzero parameter
 
         Returns
         ----------
@@ -674,15 +709,95 @@ class FitCosmo(CosmoDist):
 
         """
 
-        m = Minuit(self.zchii2_nowa_im, Om=0.3, w0=-1.0, M=-19.,
-                   alpha=0.13, beta=3.1)
+        if fitter == 'minuit':
+            return self.fitcosmo_minuit(Om, w0, wa, M, alpha, beta)
+
+        if fitter == 'scipy':
+            return self.fitcosmo_scipy(Om, w0, wa, M, alpha, beta)
+
+    def fitcosmo_minuit(self, Om, w0, wa, M, alpha, beta):
+        """
+        Method to estimate cosmo fit parameters M, alpha, beta, Om, w0, and wa
+
+        Parameters
+        --------------
+       Om, w0, wa, M, alpha, beta: float
+          cosmo parameters to fit
+
+        Returns
+        ----------
+        fitted parameters
+
+        """
+        if 'wa' not in self.params_fit:
+            self.wa = wa
+            m = Minuit(self.zchii2_nowa_im, Om=Om, w0=w0, M=M,
+                       alpha=alpha, beta=beta)
+        else:
+            m = Minuit(self.zchii2_im, Om=Om, w0=w0, wa=wa, M=M,
+                       alpha=alpha, beta=beta)
+
+        # perform the fit here
         m.migrad()
+        dictout = {}
         values = m.values
-        print('after fit', values)
+        for key, vals in values.items():
+            dictout[key] = [vals]
         m.hesse()   # run covariance estimator
-        print(m.errors)
-        return values
-        # return optimize.minimize(self.zchii2_nowa, (0.3, -1.0, -19., 0.13, 3.1), args=(wa, gzero), method='BFGS')
+        for key, vals in m.covariance.items():
+            what = '{}_{}'.format(key[0], key[1])
+            dictout['Cov_{}'.format(what)] = [vals]
+
+        dictout['accuracy'] = [m.accurate]
+        dictout['chi2'] = [m.fval]
+        dictout['ndf'] = [self.ndf]
+        dictout['fitter'] = ['minuit']
+        if 'wa' not in self.params_fit:
+            dictout['wa'] = [wa]
+
+        return pd.DataFrame.from_dict(dictout)
+
+    def fitcosmo_scipy(self, Om, w0, wa, M, alpha, beta):
+
+        if 'wa' not in self.params_fit:
+            self.wa = wa
+            res = optimize.minimize(
+                self.zchii2_im, (Om, w0, M, alpha, beta))
+        else:
+            res = optimize.minimize(
+                self.zchii2, (Om, w0, wa, M, alpha, beta))
+
+        print(res.x)
+        # get the covariance matrix
+        covmat = res.hess_inv
+        # covmat = res.jac
+        print(np.sqrt(np.diag(covmat)))
+
+        # Extract the parameters and copy in a dict
+        params = {}
+
+        for i, vv in enumerate(self.params_fit):
+            params[vv] = [res.x[i]]
+            for j, pp in enumerate(self.params_fit):
+                if j >= i:
+                    nn = 'Cov_{}_{}'.format(vv, pp)
+                    params[nn] = [covmat[i][j]]
+
+        tup = []
+        for pp in self.params_fit:
+            tup.append(params[pp][0])
+
+        # chi2 = self.zchii2(tuple(tup), self.Mb, self.Z, self.X1, self.X2, self.sigZ)/self.ndf
+        if 'wa' not in self.params_fit:
+            chi2 = self.zchii2_nowa(tuple(tup))
+        else:
+            chi2 = self.zchii2(tuple(tup))
+        print('hhh', tup, chi2)
+        params['chi2'] = [chi2]
+        params['ndf'] = [self.ndf]
+        params['accuracy'] = [1]
+        params['fitter'] = ['scipy']
+        return pd.DataFrame.from_dict(params)
 
     def zchi2ndf(self, gzero):
         """
@@ -698,8 +813,10 @@ class FitCosmo(CosmoDist):
         ----------
         fitted parameters
         """
-        om, w0, wa, m, xi1, xi2 = self.zfinal1(gzero)
-        return self.zchii2((om, w0, wa, m, xi1, xi2), gzero)-self.ndf
+        res = self.zfinal1(gzero)
+        om, w0,  wa, m, xi1, xi2 = res.x[0], res.x[1], res.x[2], res.x[3], res.x[4], res.x[5]
+        print('jjj', om, w0, wa, m, xi1, xi2, gzero)
+        return self.zchii2((om, w0, wa, m, xi1, xi2))-self.ndf
 
     def zfinal2(self):
         """
@@ -710,7 +827,7 @@ class FitCosmo(CosmoDist):
         ----------
         gzero parameter
          """
-        return optimize.newton(self.zchi2ndf, 0.1)
+        return optimize.newton(self.zchi2ndf, 0.01)
 
     def zchi2ndf_nowa(self, gzero, wa):
         """
@@ -730,7 +847,7 @@ class FitCosmo(CosmoDist):
         """
         res = self.zfinal1_nowa(gzero, wa)
         om, w0,  m, xi1, xi2 = res.x[0], res.x[1], res.x[2], res.x[3], res.x[4]
-        #om, w0,  m, xi1, xi2 = 0.3, -1.0, -19.045, 0.13, 3.1
+        # om, w0,  m, xi1, xi2 = 0.3, -1.0, -19.045, 0.13, 3.1
         print('jjj', om, w0,  m, xi1, xi2, gzero, self.ndf)
         return self.zchii2_nowa((om, w0, m, xi1, xi2), wa, gzero)-self.ndf
 
@@ -832,26 +949,25 @@ class Sigma_Fisher(CosmoDist):
     def __init__(self, data,
                  params=dict(zip(['M', 'alpha', 'beta', 'Om', 'w0',
                              'wa'], [-19.045, 0.13, 2.96, 0.3, -1.0, 0.0])),
-                 params_Fisher=['M', 'alpha', 'beta', 'Om', 'w0'],
+                 params_Fisher=['Om', 'w0', 'wa', 'M', 'alpha', 'beta', ],
                  H0=72, c=299792.458):
         super().__init__(H0, c)
 
         Z = data['z_fit']
-        Mb = data['mbfit']
-        Cov_mbmb = data['Cov_mbmb']
+        Mb = -2.5*np.log10(data['x0_fit'])+10.635
+        # Cov_mbmb = data['Cov_mbmb']
+        Cov_mbmb = (2.5 / (data['x0_fit']*np.log(10)))**2*data['Cov_x0x0']
         Cov_x1x1 = data['Cov_x1x1']
         Cov_colorcolor = data['Cov_colorcolor']
         Cov_x1mb = -2.5*data['Cov_x0x1'] / \
             (data['x0_fit']*np.log(10))
-        Cov_x1mb = data['Cov_x1mb']
         Cov_colormb = -2.5*data['Cov_x0color'] / \
             (data['x0_fit']*np.log(10))
-        Cov_colormb = data['Cov_colormb']
         Cov_x1color = data['Cov_x1color']
         X1 = data['x1_fit']
         Color = data['color_fit']
         sigZ = 0.01*(1.+Z)
-        #sigZ = 0.0
+        # sigZ = 0.0
         # instance of the fit functions here
         self.fit = FitCosmo(Z, X1, Color, Mb, Cov_mbmb,
                             Cov_x1x1, Cov_colorcolor, Cov_x1mb,
@@ -886,11 +1002,11 @@ class Sigma_Fisher(CosmoDist):
         res = None
         # if detmat > 0:
         # invert this matrix
-        #b = np.identity(A.shape[1], dtype=A.dtype)
+        # b = np.identity(A.shape[1], dtype=A.dtype)
         # u, piv, x, info = lapack.dgesv(A, b)
         if (np.linalg.det(A)):
             res = np.linalg.inv(A)
-            #print('Fisher inverted',res)
+            # print('Fisher inverted',res)
             print('Cov from Fisher', np.sqrt(np.diag(res)))
             """
             # marginalize over M, alpha and beta
@@ -905,11 +1021,11 @@ class Sigma_Fisher(CosmoDist):
     def matFisher(self):
 
         parName = self.params_Fisher
-        #parName = ['Om','w0','wa']
+        # parName = ['Om','w0','wa']
         nparams = len(parName)
 
         # get derivatives
-        #deriv = self.derivative_chi2(parName)
+        # deriv = self.derivative_chi2(parName)
         # fill the Fisher matrix
         Fisher_Matrix = np.zeros((nparams, nparams))
 
@@ -935,7 +1051,7 @@ class Sigma_Fisher(CosmoDist):
                 Fisher_Matrix [ia, jb] = 0.5*deriv[vala]*deriv[valb]
         """
 
-        #Fisher_Matrix = Fisher_Matrix + np.triu(Fisher_Matrix, 1).T
+        # Fisher_Matrix = Fisher_Matrix + np.triu(Fisher_Matrix, 1).T
 
         return Fisher_Matrix
 
@@ -968,11 +1084,24 @@ class Sigma_Fisher(CosmoDist):
         for key, pp in param.items():
             pars[key] = pp + ha*(parNamea == key)+hb*(parNameb == key)
 
-        tup = (pars['Om'], pars['w0'], pars['M'], pars['alpha'], pars['beta'])
+        self.fit.gzero = 0.
+        Om = pars['Om']
+        w0 = pars['w0']
         wa = pars['wa']
-        #print('in chi2',M, alpha, beta, Om, w0, wa,np.sum(self.sigmasq(alpha,beta)))
-        # return np.sum((self.Mb-M+alpha*self.X1-beta*self.X2-self.mu(self.Z, Om, w0, wa))**2/(self.sigmasq(alpha,beta)+self.sigMu(self.Z,Om,w0,wa,self.sigZ)**2))
-        return self.fit.zchii2_nowa(tup, wa, 0.0)
+        M = pars['M'],
+        alpha = pars['alpha']
+        beta = pars['beta']
+        if 'wa' not in self.params_Fisher:
+            tup = (pars['Om'], pars['w0'], pars['M'],
+                   pars['alpha'], pars['beta'])
+            # rr = self.fit.zchii2_nowa(tup, wa)
+            rr = self.fit.zchii2_nowa_im(Om, w0, M, alpha, beta)
+        else:
+            tup = (pars['Om'], pars['w0'], pars['wa'],
+                   pars['M'], pars['alpha'], pars['beta'])
+            rr = self.fit.zchii2(tup)
+            # rr = self.fit.zchii2_im(Om, w0, wa, M, alpha, beta)
+        return rr
 
     def datatest(self, params, sigma=0.5):
 
@@ -1011,6 +1140,6 @@ class Sigma_Fisher(CosmoDist):
         suma = -np.sum((self.datat['x']**2+params['a']*self.datat['x'])*(
             self.datat['x']**3+params['b']*self.datat['x'])/self.datat['sigma']**2)
         sumb = np.sum((self.datat['y']-self.functest(params,
-                      self.datat['x']))*self.datat['x']/self.datat['sigma']**2)
+                                                     self.datat['x']))*self.datat['x']/self.datat['sigma']**2)
 
         return -2.*(suma+sumb)

@@ -5,6 +5,7 @@ import pandas as pd
 from scipy.interpolate import interp1d
 from matplotlib.ticker import NullFormatter
 
+
 class plotStat:
 
     def __init__(self, params):
@@ -28,7 +29,7 @@ class plotStat:
         figb, axb = plt.subplots()
         idx = res['FoM'] <= 1000.
         sel = res[idx]
-        axb.hist(sel['FoM'],bins=20,histtype='step')
+        axb.hist(sel['FoM'], bins=20, histtype='step')
         plt.show()
 
     def getFoM(self, params_fit):
@@ -105,6 +106,7 @@ def ellipse_axis(sigx, sigy, sigxy):
 
     return np.sqrt(a_sq), np.sqrt(b_sq)
 
+
 class plotHubbleResiduals(CosmoDist):
     """
     Class to plot Hubble residuals
@@ -125,10 +127,10 @@ class plotHubbleResiduals(CosmoDist):
 
     """
 
-    def __init__(self, fitparams, fichName, H0=72, c=299792.458, rescale_factor=1, var_FoM = ['Om','w0']):
+    def __init__(self, fitparams, fichName, H0=72, c=299792.458, rescale_factor=1, var_FoM=['Om', 'w0']):
         super().__init__(H0, c)
 
-        #load SN
+        # load SN
         data = pd.read_hdf(fichName)
 
         self.Z = data['z_fit']
@@ -136,10 +138,10 @@ class plotHubbleResiduals(CosmoDist):
         self.Mber = np.sqrt(data['Cov_mbmb'])
         self.gx1 = data['Cov_x1x1']
         self.gxc = data['Cov_colorcolor']
-        #self.cov1 = -2.5*data['Cov_x0x1'] / \
+        # self.cov1 = -2.5*data['Cov_x0x1'] / \
         #    (data['x0_fit']*np.log(10))
         self.cov1 = data['Cov_x1mb']
-        #self.cov2 = -2.5*data['Cov_x0color'] / \
+        # self.cov2 = -2.5*data['Cov_x0color'] / \
         #    (data['x0_fit']*np.log(10))
         self.cov2 = data['Cov_colormb']
         self.cov3 = data['Cov_x1color']
@@ -149,14 +151,14 @@ class plotHubbleResiduals(CosmoDist):
         print('Number of SN', len(data))
         self.zmin = np.min(self.Z)
         self.zmax = np.max(self.Z)
-        
+
         print(fitparams)
         self.Om = fitparams['Om']
         self.w0 = fitparams['w0']
         #self.wa = fitparams['wa']
         self.wa = 0.0
-        self.alpha =fitparams['alpha']
-        self.beta =fitparams['beta']
+        self.alpha = fitparams['alpha']
+        self.beta = fitparams['beta']
         self.M = fitparams['M']
         """
         self.sigma_w0 = np.sqrt(fitparams['Cov_w0_w0'])
@@ -164,60 +166,59 @@ class plotHubbleResiduals(CosmoDist):
         self.sigma_w0_wa = fitparams['Cov_w0_wa']
         """
         vara = var_FoM[0]
-        sig_vara = 'Cov_{}_{}'.format(vara,vara)
+        sig_vara = 'Cov_{}_{}'.format(vara, vara)
         varb = var_FoM[1]
-        sig_varb = 'Cov_{}_{}'.format(varb,varb)
-        sig_vara_varb = 'Cov_{}_{}'.format(vara,varb)
-        self.sigma_a= np.sqrt(fitparams[sig_vara])
+        sig_varb = 'Cov_{}_{}'.format(varb, varb)
+        sig_vara_varb = 'Cov_{}_{}'.format(vara, varb)
+        self.sigma_a = np.sqrt(fitparams[sig_vara])
         self.sigma_b = np.sqrt(fitparams[sig_varb])
         self.sigma_a_b = fitparams[sig_vara_varb]
-        self.chi2 = fitparams['chi2']
+        self.chi2 = fitparams['chi2']/fitparams['ndf']
 
-        self.lega = '$\Omega_m$'+' = {}'.format(np.round(fitparams[vara],3))
-        self.lega += '$\pm $'+'{}'.format(np.round(self.sigma_a,3))
-        self.legb = '$w$'+' = {}'.format(np.round(fitparams[varb],3))
-        self.legb += '$\pm $'+'{}'.format(np.round(self.sigma_b,3))                                
-                                          
+        self.lega = '$\Omega_m$'+' = {}'.format(np.round(fitparams[vara], 3))
+        self.lega += '$\pm $'+'{}'.format(np.round(self.sigma_a, 3))
+        self.legb = '$w$'+' = {}'.format(np.round(fitparams[varb], 3))
+        self.legb += '$\pm $'+'{}'.format(np.round(self.sigma_b, 3))
 
     def plots(self):
 
-        FoM_val, rho = FoM(self.sigma_a,self.sigma_b,self.sigma_a_b)
-        fig = plt.figure(figsize=(12,8))
-        ttit = 'FoM (95%)  = {} \n'.format(np.round(FoM_val,2))
-        ttit += '{} {}'.format(self.lega,self.legb)
+        FoM_val, rho = FoM(self.sigma_a, self.sigma_b, self.sigma_a_b)
+        fig = plt.figure(figsize=(12, 8))
+        ttit = 'FoM (95%)  = {} \n'.format(np.round(FoM_val, 2))
+        ttit += '{} {}'.format(self.lega, self.legb)
         """
         ttit += '$\sigma_{w_0}$'+'= {}'.format(np.round(self.sigma_w0,3))
         ttit += '$\sigma_{w_a}$'+'= {}'.format(np.round(self.sigma_wa,3))
         """
-        ttit += ' $\chi^2/ndf$'+' = {}'.format(np.round(self.chi2,5))
+        ttit += ' $\chi^2/ndf$'+' = {}'.format(np.round(self.chi2, 5))
         fig.suptitle(ttit)
-        
+
         ax = fig.add_axes((.1, .3, .8, .6))
         self.plot_hubble(ax)
-        ax.set_xlim([self.zmin,self.zmax])
+        ax.set_xlim([self.zmin, self.zmax])
         axb = fig.add_axes((.1, .1, .8, .2))
-        bottom_h = left_h = 0.1+ 0.8 + 0.02
+        bottom_h = left_h = 0.1 + 0.8 + 0.02
         rect_histy = [left_h, 0.1, 0.05, 0.2]
         axbh = fig.add_axes(rect_histy)
-        nullfmt = NullFormatter() 
+        nullfmt = NullFormatter()
         axbh.yaxis.set_major_formatter(nullfmt)
-        self.plot_residuals(axb,axbh)
-        axb.set_xlim([self.zmin,self.zmax])
-        
-        #plt.show()
-        
+        self.plot_residuals(axb, axbh)
+        axb.set_xlim([self.zmin, self.zmax])
+
+        # plt.show()
+
     def sigmI(self, alpha, beta):
 
         # return self.Mber**2+(Xi1**2)*self.gx1+(Xi2**2)*self.gxc-2*Xi1*self.cov1-2*Xi2*self.cov2+2*Xi1*Xi2*self.cov3
         return self.Mber**2+(alpha**2)*self.gx1+(beta**2)*self.gxc+2*alpha*self.cov1-2*beta*self.cov2-2*alpha*beta*self.cov3
-    
-    def plot_hubble(self,ax):
+
+    def plot_hubble(self, ax):
         ax.errorbar(self.Z, self.Mb+self.alpha*self.X1-self.beta*self.X2,
-                     yerr=np.sqrt(self.sigmI(self.alpha, self.beta)), xerr=None, fmt='.',color='k')
+                    yerr=np.sqrt(self.sigmI(self.alpha, self.beta)), xerr=None, fmt='.', color='k')
         z = np.arange(0.001, 1., 0.001)
         r = self.mu(z, self.Om, self.w0, self.wa)
         ax.plot(z, r+self.M, color='r')
-        
+
     def plot_sn_vars(self):
         """
         plot data related to supernovae: x1, color and diff with fits
@@ -242,7 +243,7 @@ class plotHubbleResiduals(CosmoDist):
         # ax[1, 2].hist(sel['z'], bins=20, histtype='step')
         ax[1, 2].plot(sel['z'], np.sqrt(sel['Cov_colorcolor']), 'ko')
 
-    def plot_residuals(self, axb , axbh, binned=False, nbins=50):
+    def plot_residuals(self, axb, axbh, binned=False, nbins=50):
         """
         Method to plot distance modulus vs redshift
 
@@ -256,7 +257,7 @@ class plotHubbleResiduals(CosmoDist):
         r = []
 
         for z in np.arange(self.zmin, self.zmax+0.01, 0.001):
-            mu, mup, mum = self.mu(z,self.Om, self.w0, self.wa), self.mu(
+            mu, mup, mum = self.mu(z, self.Om, self.w0, self.wa), self.mu(
                 z, self.Om, self.w0+0.01, self.wa), self.mu(z, self.Om, self.w0-0.01, self.wa)
             r.append((z, mu, mup, mum))
 
@@ -272,13 +273,13 @@ class plotHubbleResiduals(CosmoDist):
         ax.plot(res['z'], res['mup'], color='b')
         ax.plot(res['z'], res['mum'], color='b')
         """
-        
+
         res_interp = interp1d(res['z'], res['mu'],
                               bounds_error=False, fill_value=0.)
 
         # add the mu columns
         mu = -self.M+self.alpha*self.X1-self.beta*self.X2+self.Mb
-        sigma_mu = np.sqrt(self.sigmI(self.alpha, self.beta)) 
+        sigma_mu = np.sqrt(self.sigmI(self.alpha, self.beta))
         # add the mu_th column
         mu_th = res_interp(self.Z)
 
@@ -307,12 +308,12 @@ class plotHubbleResiduals(CosmoDist):
         axb.errorbar(x, residuals, yerr=None, color='k',
                      lineStyle='None', marker='o', ms=2)
         axbh.hist(residuals, bins=20, orientation='horizontal')
-        print('Residuals',np.mean(residuals),np.std(residuals))
+        print('Residuals', np.mean(residuals), np.std(residuals))
         axb.errorbar(res['z'], res['mu']-res['mup'], color='r', ls='dotted')
         axb.errorbar(res['z'], res['mu']-res['mum'], color='r', ls='dotted')
 
         axb.grid()
-        
+
     def binned_data(self, zmin, zmax, data, nbins, muth_interp, vary='mu', erry='sigma_mu'):
         """
         Method to transform a set of data to binned data
@@ -353,10 +354,11 @@ class plotHubbleResiduals(CosmoDist):
 
         return plot_centers, plot_values, error_values, residuals
 
+
 def binned_data(zmin, zmax, data, nbins, vary='mu', erry='sigma_mu'):
     """
     Method to transform a set of data to binned data
-    
+
     Parameters
     ---------------
     zmin: float
@@ -385,10 +387,10 @@ def binned_data(zmin, zmax, data, nbins, vary='mu', erry='sigma_mu'):
     group = data.groupby(pd.cut(data.z, bins))
     plot_centers = (bins[:-1] + bins[1:])/2
     plot_values = group[vary].mean()
-    
+
     # plot_values = group.apply(lambda x: np.sum(
     #    x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
-    print('plot values',plot_values)
+    print('plot values', plot_values)
     error_values = None
     if erry != '':
         error_values = group.apply(
@@ -396,6 +398,7 @@ def binned_data(zmin, zmax, data, nbins, vary='mu', erry='sigma_mu'):
         print('error', error_values)
 
     return plot_centers, plot_values, error_values
+
 
 def plotFitRes(data):
     """
@@ -410,23 +413,24 @@ def plotFitRes(data):
     # get the FoM
     var_a = 'Om'
     var_b = 'w0'
-    Cov_a = 'Cov_{}_{}'.format(var_a,var_a)
-    Cov_b = 'Cov_{}_{}'.format(var_b,var_b)
-    Cov_a_b = 'Cov_{}_{}'.format(var_a,var_b)
+    Cov_a = 'Cov_{}_{}'.format(var_a, var_a)
+    Cov_b = 'Cov_{}_{}'.format(var_b, var_b)
+    Cov_a_b = 'Cov_{}_{}'.format(var_a, var_b)
     sigma_a = 'sigma_{}'.format(var_a)
     sigma_b = 'sigma_{}'.format(var_b)
     data[sigma_a] = np.sqrt(data[Cov_a])
     data[sigma_b] = np.sqrt(data[Cov_b])
-    
-    data['FoM'] = data.apply(lambda x: FoM(x[sigma_a], x[sigma_b], x[Cov_a_b])[0], axis=1)
-    fig, ax = plt.subplots(ncols=2, nrows=2)
-    idx = data['FoM']< 20000
-    sel = data[idx]
-    ax[0,0].hist(sel[sigma_a], histtype='step',bins=100)
-    ax[0,1].hist(sel[sigma_b], histtype='step',bins=100)
-    
-    ax[1,0].hist(sel['FoM'], histtype='step',bins=50)
 
-    print('medians',data[[sigma_a,sigma_b,'FoM']].median())
-    
+    data['FoM'] = data.apply(lambda x: FoM(
+        x[sigma_a], x[sigma_b], x[Cov_a_b])[0], axis=1)
+    fig, ax = plt.subplots(ncols=2, nrows=2)
+    idx = data['FoM'] < 20000
+    sel = data[idx]
+    ax[0, 0].hist(sel[sigma_a], histtype='step', bins=100)
+    ax[0, 1].hist(sel[sigma_b], histtype='step', bins=100)
+
+    ax[1, 0].hist(sel['FoM'], histtype='step', bins=50)
+
+    print('medians', data[[sigma_a, sigma_b, 'FoM']].median())
+
     plt.show()
