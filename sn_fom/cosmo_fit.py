@@ -429,7 +429,7 @@ class FitData:
 
         print(data.columns)
         Z = data['z_fit']
-        #Mb = data['mbfit']
+        # Mb = data['mbfit']
         Mb = -2.5*np.log10(data['x0_fit'])+10.635
         # Cov_mbmb = data['Cov_mbmb']
         Cov_mbmb = (2.5 / (data['x0_fit']*np.log(10)))**2*data['Cov_x0x0']
@@ -437,10 +437,8 @@ class FitData:
         Cov_colorcolor = data['Cov_colorcolor']
         Cov_x1mb = -2.5*data['Cov_x0x1'] / \
             (data['x0_fit']*np.log(10))
-        # Cov_x1mb = data['Cov_x1mb']
         Cov_colormb = -2.5*data['Cov_x0color'] / \
             (data['x0_fit']*np.log(10))
-        # Cov_colormb = data['Cov_colormb']
         Cov_x1color = data['Cov_x1color']
         X1 = data['x1_fit']
         Color = data['color_fit']
@@ -464,6 +462,7 @@ class FitData:
         w0 = -1.0
         wa = 0.0
         M = -19.045
+        M = -19.0
         alpha = 0.13
         beta = 3.1
 
@@ -494,11 +493,17 @@ class FitData:
         #    self.Mb, self.Z, self.X1, self.X2, self.sigZ)
         self.fit.gzero = gzero
         resa = self.fit.fitcosmo(Om, w0, wa, M, alpha, beta, 'minuit')
-        print('fit minuit done', resa['chi2']/resa['ndf'])
-        # print(test)
+        print('fit minuit done', resa['chi2']/resa['ndf'],
+              resa[['Om', 'w0', 'wa', 'M', 'alpha', 'beta']])
         """
+        # print(test)
         resb = self.fit.fitcosmo(Om, w0, wa, M, alpha, beta, 'scipy')
+        
         print('fit scipy done')
+        print(resb[['Om', 'w0', 'wa', 'M', 'alpha', 'beta']])
+        print(test)
+        """
+        """
         resa = pd.concat((resa, resb))
         resa['chi2_ndf'] = resa['chi2']/resa['ndf']
         vv = ['Om', 'w0', 'wa', 'M', 'alpha', 'beta']
@@ -529,7 +534,6 @@ class FitCosmo(CosmoDist):
     Parameters
     ---------------
 
-
     """
 
     def __init__(self, Z, X1, Color, Mb, Cov_mbmb,
@@ -553,7 +557,7 @@ class FitCosmo(CosmoDist):
         self.sigZ = sigZ
         self.X1 = X1
         self.Color = Color
-        self.ndf = nsn-len(params_fit)
+        self.ndf = nsn-len(params_fit)-1
         self.params_fit = params_fit
 
     def plot_modulus(self, offset=0):
@@ -573,13 +577,13 @@ class FitCosmo(CosmoDist):
         Parameters
         ---------------
         alpha: float
-          alpha parameter (for SN standardization)
+          alpha parameter(for SN standardization)
         beta: float
           beta parameter
 
         Returns
         ----------
-        var_mu = Mberr**2+alpha**2*sigma_x1+beta**2*sigma_color+2* \
+        var_mu = Mberr**2+alpha**2*sigma_x1+beta**2*sigma_color+2 * \
             alpha*Cov_x1_mb-2*alpha*beta*Cov_x1_color-2*beta*Cov_mb_color
         """
         res = self.Mber**2+(alpha**2)*self.gx1+(beta**2)*self.gxc + \
@@ -604,7 +608,7 @@ class FitCosmo(CosmoDist):
         Parameters
         --------------
         tup: tuple
-          parameters to fit (Om, w0, wa, M, alpha, beta)
+          parameters to fit(Om, w0, wa, M, alpha, beta)
 
         Returns
         ----------
@@ -622,7 +626,7 @@ class FitCosmo(CosmoDist):
         Parameters
         --------------
         tup: tuple
-          parameters to fit (Om, w0, M, alpha, beta)
+          parameters to fit(Om, w0, M, alpha, beta)
          wa: float
            wa parameter
          gzero: float

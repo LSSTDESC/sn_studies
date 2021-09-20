@@ -3,6 +3,7 @@ import pandas as pd
 from scipy.interpolate import interp1d
 from . import np
 
+
 class Mod_z:
     """
     Method to modify values of input file
@@ -164,7 +165,7 @@ class SeasonLength:
         """
 
         res = config.groupby(['fieldName', 'zcomp', 'nseasons', 'max_season_length',
-                              'survey_area', 'nfields']).apply(lambda x: self.calc_sl(x, cadence)).reset_index()
+                              'survey_area', 'nfields', 'zsurvey', 'surveytype']).apply(lambda x: self.calc_sl(x, cadence)).reset_index()
         return res
 
     def calc_sl(self, grp, cadence):
@@ -222,19 +223,29 @@ class NSN_scenario:
 
         fieldName = sel['fieldName'].item()
         zcomp = sel['zcomp'].item()
+        zsurvey = sel['zsurvey'].item()
         season_length = sel['season_length'].item()
         area = sel['survey_area'].item()
         nseasons = sel['nseasons'].item()
         nfields = sel['nfields'].item()
+        surveytype = sel['surveytype'].item()
 
         print(fieldName, zcomp, season_length, area, nseasons, nfields)
 
         zmin = 0.05
         zstep = 0.05
+        zmax = 1.2
 
-        zvals = np.arange(zmin, zcomp+zstep, zstep).tolist()
+        assert(surveytype in ['complete', 'full'])
 
-        zvals[-1] = zcomp
+        if surveytype == 'complete':
+            zmax = zcomp
+        if surveytype == 'full':
+            zmax = zsurvey
+
+        zvals = np.arange(zmin, zmax+zstep, zstep).tolist()
+
+        zvals[-1] = zmax
         r = [(0.01, 0.)]
         for z in zvals:
             zzmax = np.round(z, 2)
@@ -251,10 +262,12 @@ class NSN_scenario:
 
         res['fieldName'] = fieldName
         res['zcomp'] = zcomp
+        res['zsurvey'] = zsurvey
         res['season_length'] = season_length
         res['survey_area'] = area
         res['nseasons'] = nseasons
         res['nfields'] = nfields
+        res['surveytype'] = surveytype
 
         return res
 
@@ -288,7 +301,13 @@ class NSN_config:
         -----------
         the total number of supernovae
         """
-        idx = np.abs(self.data['z']-self.data['zcomp']) < 1.e-5
+        surveytype = np.unique(self.data['surveytype']).item()
+
+        zref = 'zcomp'
+        if surveytype == 'full':
+            zref = 'zsurvey'
+
+        idx = np.abs(self.data['z']-self.data[zref]) < 1.e-5
 
         return np.sum(self.data[idx]['nsn_survey'])
 
@@ -308,14 +327,14 @@ def nsn_bin(nsn_scen):
 
     """
 
-    print(nsn_scen)
+    print('test here', nsn_scen)
     # df = pd.DataFrame(np.copy(nsn_scen))
 
     nsn_scen = nsn_scen.sort_values(by=['z'])
-    df = nsn_scen.groupby(['fieldName']).apply(lambda x: pd.DataFrame(
+    df = nsn_scen.groupby(['fieldName', 'surveytype', 'zcomp', 'zsurvey']).apply(lambda x: pd.DataFrame(
         {'z': x['z'][1:], 'nsn_survey': np.diff(x['nsn_survey'])})).reset_index()
 
-    return df.groupby(['z']).sum().reset_index()
+    return df.groupby(['z', 'surveytype', 'zcomp', 'zsurvey']).sum().reset_index()
 
 
 """

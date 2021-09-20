@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-#from . import np
+# from . import np
 from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
 from sn_fom.steps import multifit
@@ -24,6 +24,16 @@ parser.add_option("--fields", type="str",
 parser.add_option("--nproc", type=int,
                   default=4,
                   help="number of procs for multiprocessing  [%default]")
+parser.add_option("--nseasons", type=int,
+                  default=2,
+                  help="number of seasons per field  [%default]")
+parser.add_option("--dirSN", type=str,
+                  default='fake_SN',
+                  help="location dir of simulated SN used to estimate cosmo parameters  [%default]")
+parser.add_option("--dirFit", type=str,
+                  default='fake_Fit',
+                  help="location dir of fit cosmo parameters  [%default]")
+
 
 opts, args = parser.parse_args()
 
@@ -31,13 +41,29 @@ fileDir = opts.fileDir
 dbNames = opts.dbName.split('/')
 fields = opts.fields.split('/')
 nproc = opts.nproc
+dirSN = opts.dirSN
+dirFit = opts.dirFit
+nseasons = opts.nseasons
 print('hello dbNames', dbNames, fields)
+tagName = ''
+for ip, dd in enumerate(dbNames):
+    tagName += '{}_{}'.format(dd, fields[ip].replace(',', '_'))
+    if ip < len(dbNames)-1:
+        tagName += '_'
 
+tagName += '_{}'.format(nseasons)
+dirSN = '{}_{}'.format(dirSN, tagName)
+dirFit = '{}_{}'.format(dirFit, tagName)
 
-fitparName = 'FitParams.hdf5'
+for vv in [dirSN, dirFit]:
+    if not os.path.isdir(vv):
+        os.mkdir(vv)
+
+fitparName = '{}/FitParams.hdf5'.format(dirFit)
+
 if not os.path.isfile(fitparName):
     # get default configuration file
-    config = getconfig()
+    config = getconfig(nseasons=nseasons)
 
     ffi = range(16)
     params = {}
@@ -45,6 +71,7 @@ if not os.path.isfile(fitparName):
     params['dbNames'] = dbNames
     params['config'] = config
     params['fields'] = fields
+    params['dirSN'] = dirSN
     params_fit = multiproc(ffi, params, multifit, nproc)
 
     print(params_fit)
@@ -70,7 +97,7 @@ beta = 3.1
 M = -19.045
 
 params = dict(zip(['M', 'alpha', 'beta', 'Om', 'w0', 'wa'],
-              [M, alpha, beta, Om, w0, wa]))
+                  [M, alpha, beta, Om, w0, wa]))
 # params=dict(zip(['Om','w0','wa'],[Om,w0,wa]))
 plotFitRes(params_fit)
 fig, ax = plt.subplots()
@@ -85,7 +112,8 @@ for i, row in params_fit.iterrows():
     snName = '{}.hdf5'.format(row['SNID'])
 
     plotresi = plotHubbleResiduals(row, snName)
-    plotresi.plots()
+    # plotresi.plots()
+    plotresi.plot_sn_vars()
 
     data = pd.read_hdf(snName)
     print('NSN', len(data), data.columns)
@@ -102,8 +130,9 @@ for i, row in params_fit.iterrows():
     # print(row)
     plt.show()
     """
-    #ax.hist(np.sqrt(data['Cov_colorcolor']),histtype='step')
-    plot_centers, plot_values, error_values = binned_data(0.005,0.905,data, 19,vary='mu',erry='')
+    # ax.hist(np.sqrt(data['Cov_colorcolor']),histtype='step')
+    plot_centers, plot_values, error_values = binned_data(
+        0.005,0.905,data, 19,vary='mu',erry='')
     ax.plot(plot_centers, plot_values,marker='.',lineStyle='None')
     plt.show()
     """

@@ -38,7 +38,7 @@ def loadSN(fDir, dbName, tagprod, zlim):
     return data
 
 
-def selSN(sn_data, nsn_per_bin,x1_color):
+def selSN(sn_data, nsn_per_bin, x1_color):
     """
     Method to select a number of simulated SN according to the expected nsn_per_bin
 
@@ -55,14 +55,23 @@ def selSN(sn_data, nsn_per_bin,x1_color):
     -----------
     selected data
     """
-    
-    zcomp = np.unique(sn_data['zcomp']).item()
-    zcomp = np.round(zcomp, 2)
+
+    surveytype = np.unique(nsn_per_bin['surveytype']).item()
+    zcomp = np.unique(nsn_per_bin['zcomp']).item()
+    zsurvey = np.unique(nsn_per_bin['zsurvey']).item()
+
+    assert(surveytype in ['full', 'complete'])
+    if surveytype == 'full':
+        zmax = zsurvey
+    if surveytype == 'complete':
+        zmax = zcomp
+
+    zmax = np.round(zmax, 2)
     zstep = 0.05
-    zvals = np.arange(0, zcomp+zstep, 0.05).tolist()
+    zvals = np.arange(0, zmax+zstep, 0.05).tolist()
 
     zvals[0] = 0.01
-    zvals[-1] = zcomp
+    zvals[-1] = zmax
 
     #sel_data = select(sn_data)
     out_data = pd.DataFrame()
@@ -92,19 +101,19 @@ def selSN(sn_data, nsn_per_bin,x1_color):
         """
         zrange = 'high_z'
         if zp <= 0.1:
-            zrange= 'low_z'
+            zrange = 'low_z'
         if nsn_choose > 0:
-            if zp<= 0.2:
-                nsn_choose *= 100
-            x1_color_vals = pdist(x1_color,zrange,nsn_choose)
+            if zp <= 0.2:
+                nsn_choose *= 50
+            x1_color_vals = pdist(x1_color, zrange, nsn_choose)
             #print('my choice here',zm,zp,x1_color_vals)
             #selected_data = pd.DataFrame(sn_data_z)
             #selected_data['inum'] = selected_data.reset_index().index
 
             # select(x1,color) selected data according to dist
 
-            selected_data = select_x1_color(sn_data_z,x1_color_vals)
-            
+            selected_data = select_x1_color(sn_data_z, x1_color_vals)
+
             """
             choice = np.random.choice(len(selected_data), nsn_choose)
             print('choice', choice, len(selected_data), nsn_choose)
@@ -113,9 +122,9 @@ def selSN(sn_data, nsn_per_bin,x1_color):
             """
             out_data = pd.concat((out_data, selected_data))
 
-    #select sn here
+    # select sn here
     out_data = select(out_data)
-            
+
     return out_data
 
 
@@ -173,7 +182,7 @@ def select(dd):
     return dd[idx].copy()
 
 
-def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'], nseasons=2, max_season_length=180., survey_area=9.6):
+def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'], nseasons=2, max_season_length=180., survey_area=9.6, zsurvey=1., surveytype='full'):
 
     # fields = ['COSMOS']
     nfields = dict(zip(fields, [1, 1, 1, 1, 2]))
@@ -184,10 +193,10 @@ def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'], nseasons=2,
 
     for field in fields:
         r.append((field, zcomp[field], max_season_length,
-                  nfields[field], survey_area, nseasons))
+                  nfields[field], survey_area, nseasons, zsurvey, surveytype))
 
     config = pd.DataFrame(r, columns=[
-        'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons'])
+        'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons', 'zsurvey', 'surveytype'])
 
     return config
 
@@ -237,7 +246,8 @@ def getDist(web_path='https://me.lsst.eu/gris/DESC_SN_pipeline',
 
     return params
 
-def pdist(x1_color, zrange,nsn_choose):
+
+def pdist(x1_color, zrange, nsn_choose):
 
     df = pd.DataFrame(x1_color[zrange])
     df['inum'] = df.reset_index().index
@@ -245,27 +255,30 @@ def pdist(x1_color, zrange,nsn_choose):
     imax = df['inum'].max()
     norm = np.sum(df['weight'])
     #print(imin, imax,len(df))
-    ichoice = np.random.choice(range(imin,imax+1), nsn_choose, p=df['weight']/norm)
-    
-    return df.loc[ichoice][['x1','color']]
+    ichoice = np.random.choice(
+        range(imin, imax+1), nsn_choose, p=df['weight']/norm)
+
+    return df.loc[ichoice][['x1', 'color']]
+
 
 def select_x1_color(df, x1_color_vals):
 
-    x1_color_vals = x1_color_vals.groupby(['x1','color']).size().to_frame('size').reset_index()
+    x1_color_vals = x1_color_vals.groupby(
+        ['x1', 'color']).size().to_frame('size').reset_index()
     x1_color_vals['size'] = x1_color_vals['size'].astype(int)
     #print('for selection',x1_color_vals)
     new_df = pd.DataFrame()
 
-    for i,vv in x1_color_vals.iterrows():
+    for i, vv in x1_color_vals.iterrows():
         nsn_th = int(vv['size'])
         idx = np.abs(df['x1']-vv['x1']) < 1.e-5
         idx &= np.abs(df['color']-vv['color']) < 1.e-5
         seldf = pd.DataFrame(df[idx])
         if len(seldf) > 0:
             seldf['inum'] = seldf.reset_index().index
-            if len(seldf) <= vv['size']: #take all here
+            if len(seldf) <= vv['size']:  # take all here
                 new_df = pd.concat((new_df, seldf))
-            else: # take random here
+            else:  # take random here
                 #print('choice', len(seldf),nsn_th)
                 choice = np.random.choice(len(seldf), nsn_th)
                 #print('choice', choice,len(seldf), nsn_th)

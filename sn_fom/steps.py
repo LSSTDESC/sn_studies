@@ -36,12 +36,13 @@ def multifit(index, params, j=0, output_q=None):
     dbNames = params['dbNames']
     config = params['config']
     fields = params['fields']
-
+    saveSN = params['dirSN']
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
     for i in index:
-        saveSN = 'SN_{}.hdf5'.format(i)
-        fitpar = fit_SN(fileDir, dbNames, config, fields, saveSN=saveSN)
+        if saveSN != '':
+            saveSN_f = '{}/SN_{}.hdf5'.format(saveSN, i)
+        fitpar = fit_SN(fileDir, dbNames, config, fields, saveSN=saveSN_f)
         params_fit = pd.concat((params_fit, fitpar))
 
     if output_q is not None:
@@ -55,9 +56,10 @@ def getSN(fileDir, dbName, config, fields):
     tt = zcomp_pixels(fileDir, dbName, 'faintSN')
     zcomp = tt()
     print('redshift completeness', zcomp)
-
+    zcomplete = zcomp['zcomp'][0]
+    #zcomplete = 1.
     config = update_config(fields, config,
-                           np.round(zcomp['zcomp'][0], 2))
+                           np.round(zcomplete, 2))
     print('config updated', config)
 
     # get number of supernovae

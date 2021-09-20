@@ -133,17 +133,19 @@ class plotHubbleResiduals(CosmoDist):
         # load SN
         data = pd.read_hdf(fichName)
 
+        self.data = data
         self.Z = data['z_fit']
-        self.Mb = data['mbfit']
-        self.Mber = np.sqrt(data['Cov_mbmb'])
+        self.Mb = -2.5*np.log10(data['x0_fit'])+10.635
+        Cov_mbmb = (2.5 / (data['x0_fit']*np.log(10)))**2*data['Cov_x0x0']
+        self.Mber = np.sqrt(Cov_mbmb)
         self.gx1 = data['Cov_x1x1']
         self.gxc = data['Cov_colorcolor']
-        # self.cov1 = -2.5*data['Cov_x0x1'] / \
-        #    (data['x0_fit']*np.log(10))
-        self.cov1 = data['Cov_x1mb']
-        # self.cov2 = -2.5*data['Cov_x0color'] / \
-        #    (data['x0_fit']*np.log(10))
-        self.cov2 = data['Cov_colormb']
+        self.cov1 = -2.5*data['Cov_x0x1'] / \
+            (data['x0_fit']*np.log(10))
+        #self.cov1 = data['Cov_x1mb']
+        self.cov2 = -2.5*data['Cov_x0color'] / \
+            (data['x0_fit']*np.log(10))
+        #self.cov2 = data['Cov_colormb']
         self.cov3 = data['Cov_x1color']
         self.sigZ = data['z_fit']/(1.e5*data['z_fit'])
         self.X1 = data['x1_fit']
@@ -155,11 +157,16 @@ class plotHubbleResiduals(CosmoDist):
         print(fitparams)
         self.Om = fitparams['Om']
         self.w0 = fitparams['w0']
-        #self.wa = fitparams['wa']
-        self.wa = 0.0
+        self.wa = fitparams['wa']
+        #self.wa = 0.0
         self.alpha = fitparams['alpha']
         self.beta = fitparams['beta']
         self.M = fitparams['M']
+        mu = -self.M+self.alpha*self.X1-self.beta*self.X2+self.Mb
+        sigma_mu = np.sqrt(self.sigmI(self.alpha, self.beta))
+        self.data['mu'] = mu
+        self.data['sigma_mu'] = sigma_mu
+
         """
         self.sigma_w0 = np.sqrt(fitparams['Cov_w0_w0'])
         self.sigma_wa = np.sqrt(fitparams['Cov_wa_wa'])
@@ -168,24 +175,34 @@ class plotHubbleResiduals(CosmoDist):
         vara = var_FoM[0]
         sig_vara = 'Cov_{}_{}'.format(vara, vara)
         varb = var_FoM[1]
+        varc = 'wa'
         sig_varb = 'Cov_{}_{}'.format(varb, varb)
+        sig_varc = 'Cov_{}_{}'.format(varc, varc)
         sig_vara_varb = 'Cov_{}_{}'.format(vara, varb)
+        sig_varb_varc = 'Cov_{}_{}'.format(varb, varc)
+
         self.sigma_a = np.sqrt(fitparams[sig_vara])
         self.sigma_b = np.sqrt(fitparams[sig_varb])
+        self.sigma_c = np.sqrt(fitparams[sig_varc])
         self.sigma_a_b = fitparams[sig_vara_varb]
+        self.sigma_b_c = fitparams[sig_varb_varc]
+
         self.chi2 = fitparams['chi2']/fitparams['ndf']
 
         self.lega = '$\Omega_m$'+' = {}'.format(np.round(fitparams[vara], 3))
         self.lega += '$\pm $'+'{}'.format(np.round(self.sigma_a, 3))
-        self.legb = '$w$'+' = {}'.format(np.round(fitparams[varb], 3))
+        self.legb = '$w_0$'+' = {}'.format(np.round(fitparams[varb], 3))
         self.legb += '$\pm $'+'{}'.format(np.round(self.sigma_b, 3))
+        self.legc = '$w_a$'+' = {}'.format(np.round(fitparams[varc], 3))
+        self.legc += '$\pm $'+'{}'.format(np.round(self.sigma_c, 3))
 
     def plots(self):
 
-        FoM_val, rho = FoM(self.sigma_a, self.sigma_b, self.sigma_a_b)
+        #FoM_val, rho = FoM(self.sigma_a, self.sigma_b, self.sigma_a_b)
+        FoM_val, rho = FoM(self.sigma_b, self.sigma_c, self.sigma_b_c)
         fig = plt.figure(figsize=(12, 8))
         ttit = 'FoM (95%)  = {} \n'.format(np.round(FoM_val, 2))
-        ttit += '{} {}'.format(self.lega, self.legb)
+        ttit += '{} {} {} \n'.format(self.lega, self.legb, self.legc)
         """
         ttit += '$\sigma_{w_0}$'+'= {}'.format(np.round(self.sigma_w0,3))
         ttit += '$\sigma_{w_a}$'+'= {}'.format(np.round(self.sigma_wa,3))
@@ -195,6 +212,7 @@ class plotHubbleResiduals(CosmoDist):
 
         ax = fig.add_axes((.1, .3, .8, .6))
         self.plot_hubble(ax)
+        print('zmin and zmax', self.zmin, self.zmax)
         ax.set_xlim([self.zmin, self.zmax])
         axb = fig.add_axes((.1, .1, .8, .2))
         bottom_h = left_h = 0.1 + 0.8 + 0.02
@@ -202,7 +220,7 @@ class plotHubbleResiduals(CosmoDist):
         axbh = fig.add_axes(rect_histy)
         nullfmt = NullFormatter()
         axbh.yaxis.set_major_formatter(nullfmt)
-        self.plot_residuals(axb, axbh)
+        self.plot_residuals(axb, axbh, binned=True)
         axb.set_xlim([self.zmin, self.zmax])
 
         # plt.show()
@@ -229,13 +247,13 @@ class plotHubbleResiduals(CosmoDist):
 
         vars = ['x1', 'x1_fit', 'color', 'color_fit']
 
-        ax[0, 0].hist(self.data_all['x1'], bins=100, histtype='step')
-        ax[0, 1].hist(self.data_all['color'], bins=100, histtype='step')
-        ax[0, 2].hist(self.data_all['z'], bins=100, histtype='step')
+        ax[0, 0].hist(self.data['x1'], bins=100, histtype='step')
+        ax[0, 1].hist(self.data['color'], bins=100, histtype='step')
+        ax[0, 2].hist(self.data['z'], bins=100, histtype='step')
 
-        idx = self.data_all['fitstatus'] == 'fitok'
+        idx = self.data['fitstatus'] == 'fitok'
         # idx &= np.sqrt(self.data_all['Cov_colorcolor']) <= 0.04
-        sel = self.data_all[idx]
+        sel = self.data[idx]
         ax[1, 0].hist(sel['x1']-sel['x1_fit'],
                       bins=20, histtype='step')
         ax[1, 1].hist(sel['color'] -
@@ -289,7 +307,7 @@ class plotHubbleResiduals(CosmoDist):
         x, y, yerr, residuals = 0., 0., 0., 0.
         if binned:
             x, y, yerr, residuals = self.binned_data(
-                zmin, zmax, data, nbins, res_interp)
+                self.zmin, self.zmax, self.data, nbins, res_interp)
             io = x >= 0.3
             io &= x <= 0.4
             print('mean residual', np.mean(residuals[io]))
