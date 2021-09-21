@@ -498,7 +498,7 @@ class FitData:
         """
         # print(test)
         resb = self.fit.fitcosmo(Om, w0, wa, M, alpha, beta, 'scipy')
-        
+
         print('fit scipy done')
         print(resb[['Om', 'w0', 'wa', 'M', 'alpha', 'beta']])
         print(test)
@@ -980,6 +980,24 @@ class Sigma_Fisher(CosmoDist):
         # fit parameters
         self.params = params
         self.params_Fisher = params_Fisher
+        self.data = data
+        self.Om = params['Om']
+        self.w0 = params['w0']
+        self.wa = params['wa']
+        self.M = params['M']
+        self.alpha = params['alpha']
+        self.beta = params['beta']
+        data['Mb'] = -2.5*np.log10(data['x0_fit'])+10.635
+        data['Cov_mb_mb'] = (
+            2.5 / (data['x0_fit']*np.log(10)))**2*data['Cov_x0x0']
+        data['Cov_x1mb'] = -2.5*data['Cov_x0x1'] / \
+            (data['x0_fit']*np.log(10))
+        data['Cov_colormb'] = -2.5*data['Cov_x0color'] / \
+            (data['x0_fit']*np.log(10))
+        data['sigma_mu'] = self.data.apply(
+            lambda x: self.sigma_mu(x, self.alpha, self.beta), axis=1)
+
+        self.data = data
 
     def __call__(self):
         """
@@ -1000,29 +1018,73 @@ class Sigma_Fisher(CosmoDist):
               derivab, self.derivtest_ab(paramtest))
         print(test)
         """
-        # get Fisher matrix
-        A = self.matFisher()
-        detmat = np.linalg.det(A)
-        res = None
-        # if detmat > 0:
-        # invert this matrix
-        # b = np.identity(A.shape[1], dtype=A.dtype)
-        # u, piv, x, info = lapack.dgesv(A, b)
-        if (np.linalg.det(A)):
-            res = np.linalg.inv(A)
-            # print('Fisher inverted',res)
-            print('Cov from Fisher', np.sqrt(np.diag(res)))
-            """
-            # marginalize over M, alpha and beta
-            mat = np.zeros((2,2))
-            mat[0,0] = res[3,3]
-            mat[1,0] = res[3,4]
-            mat[0,1] = res[4,3]
-            mat[1,1] = res[4,4]
-            print('after marginalization',mat, np.linalg.inv(mat))
-            """
+        # get covariance matrix (from Hessian)
+        res = self.matCov()
+        #resb = self.Hessian()
 
-    def matFisher(self):
+        print(res)
+        if res is not None:
+            return dict(zip(self.params_Fisher, [res[i] for i in range(len(res))]))
+        else:
+            return dict(zip(self.params_Fisher, [-999]*len(self.params_Fisher)))
+
+    def matCov(self):
+
+        parName = self.params_Fisher
+        # parName = ['Om','w0','wa']
+        nparams = len(parName)
+
+        # get derivatives
+        # deriv = self.derivative_chi2(parName)
+        Fisher_Matrix = np.zeros((nparams, nparams))
+
+        self.data['chi2_indiv'] = self.data.apply(
+            lambda x: self.chi2_indiv(x, self.params), axis=1)
+        for pp in parName:
+            self.data['d_{}'.format(pp)] = self.data.apply(
+                lambda x: self.derivative_grp(x, self.derivative_Fisher, self.params, pp), axis=1)
+
+        # construct the Jacobian matrix
+        ndata = len(self.data)
+        J = np.zeros((ndata, nparams))
+
+        print('data', ndata, nparams)
+        io = -1
+        for i, row in self.data.iterrows():
+            io += 1
+            for j, pp in enumerate(parName):
+                J[io, j] = row['d_{}'.format(pp)]
+
+        # second order derivatives
+        """
+        hpar = dict(zip(parName, [1.e-1, 1.e-1, 1.e-1, 1.e-1, 1.e-3, 1.e-3]))
+        for j, pp in enumerate(parName):
+            for jb, ppb in enumerate(parName):
+                what = 'd2_{}_{}'.format(pp, ppb)
+                if pp == ppb:
+                    self.data[what] = self.data.apply(lambda x: self.derivative2_same(x,
+                                                                                      self.chi2_indiv, self.params, pp, h=hpar[pp]), axis=1)
+                else:
+                    self.data[what] = self.data.apply(lambda x: self.derivative2_mix(x,
+                                                                                     self.chi2_indiv, self.params, pp, ppb, ha=hpar[pp], hb=hpar[ppb]), axis=1)
+        print('what', self.data['d2_Om_Om'])
+        Hsec = np.zeros((nparams, nparams))
+        for i, pp in enumerate(parName):
+            for j, ppb in enumerate(parName):
+                Hsec[i, j] = np.sum(self.data['chi2_indiv']
+                                    * self.data['d2_{}_{}'.format(pp, ppb)])
+        """
+        # Hessian
+        H = 2.*(np.dot(J.T, J))
+        detmat = np.linalg.det(H)
+        Cov = None
+        if detmat:
+            H_inv = np.linalg.inv(H)
+            Cov = np.sqrt(np.diag(H_inv))
+
+        return Cov
+
+    def Hessian(self):
 
         parName = self.params_Fisher
         # parName = ['Om','w0','wa']
@@ -1031,81 +1093,94 @@ class Sigma_Fisher(CosmoDist):
         # get derivatives
         # deriv = self.derivative_chi2(parName)
         # fill the Fisher matrix
-        Fisher_Matrix = np.zeros((nparams, nparams))
+        ndata = len(self.data)
 
-        for ia, vala in enumerate(parName):
-            for jb, valb in enumerate(parName):
-                if jb >= ia:
-                    deriv = 0
-                    derivn = 0
-                    if vala == valb:
-                        deriv = self.derivative2_same(
-                            self.chi2, self.params, vala)
-                    else:
-                        deriv = self.derivative2_mix(
-                            self.chi2, self.params, vala, valb)
+        for j, pp in enumerate(parName):
+            for jb, ppb in enumerate(parName):
+                what = 'd2_{}_{}'.format(pp, ppb)
+                if pp == ppb:
+                    self.data[what] = self.data.apply(lambda x: self.derivative2_same(x,
+                                                                                      self.chi2_indiv, self.params, pp), axis=1)
+                else:
+                    self.data[what] = self.data.apply(lambda x: self.derivative2_mix(x,
+                                                                                     self.chi2_indiv, self.params, pp, ppb), axis=1)
 
-                    # print('hello',ia,jb,vala,valb,deriv,derivn)
-                    Fisher_Matrix[ia, jb] = 0.5*deriv
+        H = np.zeros((nparams, nparams))
+        io = -1
+        for i, pp in enumerate(parName):
+            for j, ppb in enumerate(parName):
+                H[i, j] = np.sum(self.data['d2_{}_{}'.format(pp, ppb)])
 
-        Fisher_Matrix = Fisher_Matrix + np.triu(Fisher_Matrix, 1).T
-        """
-        for ia, vala in enumerate(parName):
-            for jb, valb in enumerate(parName):
-                Fisher_Matrix [ia, jb] = 0.5*deriv[vala]*deriv[valb]
-        """
+        print(H)
+        Cov = None
+        detmat = np.linalg.det(H)
+        if detmat:
+            H_inv = np.linalg.inv(H)
+            Cov = np.sqrt(np.diag(H_inv))
+        return Cov
 
-        # Fisher_Matrix = Fisher_Matrix + np.triu(Fisher_Matrix, 1).T
-
-        return Fisher_Matrix
-
-    def derivative(self, func, params, parName, h=1.e-8):
-
-        deriv = (func(params, parName, h)-func(params, parName, h))/(2*h)
-
-        return deriv
-
-    def derivative2_same(self, func, params, parName, h=1.e-8):
-
-        deriv = (func(params, parName, h)-2.*func(params) +
-                 func(params, parName, -h))/(h**2)
-
-        return deriv
-
-    def derivative2_mix(self, func, params, parName1, parName2, h=1.e-8):
-
-        deriv = func(params, parName1, h, parName2, h)
-        deriv -= func(params, parName1, -h, parName2, h)
-        deriv -= func(params, parName1, h, parName2, -h)
-        deriv += func(params, parName1, -h, parName2, -h)
-        deriv /= 4*h*h
-
-        return deriv
-
-    def chi2(self, param, parNamea='', ha=0, parNameb='', hb=0):
-
+    def derivative_Fisher(self, grp, params, parName, h=1.e-8):
         pars = {}
-        for key, pp in param.items():
-            pars[key] = pp + ha*(parNamea == key)+hb*(parNameb == key)
+        for key, pp in params.items():
+            pars[key] = pp + h*(parName == key)
 
-        self.fit.gzero = 0.
         Om = pars['Om']
         w0 = pars['w0']
         wa = pars['wa']
-        M = pars['M'],
+        M = pars['M']
         alpha = pars['alpha']
         beta = pars['beta']
-        if 'wa' not in self.params_Fisher:
-            tup = (pars['Om'], pars['w0'], pars['M'],
-                   pars['alpha'], pars['beta'])
-            # rr = self.fit.zchii2_nowa(tup, wa)
-            rr = self.fit.zchii2_nowa_im(Om, w0, M, alpha, beta)
-        else:
-            tup = (pars['Om'], pars['w0'], pars['wa'],
-                   pars['M'], pars['alpha'], pars['beta'])
-            rr = self.fit.zchii2(tup)
-            # rr = self.fit.zchii2_im(Om, w0, wa, M, alpha, beta)
-        return rr
+
+        return (grp.Mb-M+alpha*grp.x1-beta*grp.color-self.mu(grp.z, Om, w0, wa))/self.sigma_mu(grp, alpha, beta)
+
+    def derivative_grp(self, grp, func, params, parName, h=1.e-8):
+
+        deriv = (func(grp, params, parName, h) -
+                 func(grp, params, parName, -h))/(2*h)
+
+        return deriv
+
+    def derivative(self, func, params, parName, h=1.e-8):
+
+        deriv = (func(params, parName, h)-func(params, parName, -h))/(2*h)
+
+        return deriv
+
+    def derivative2_same(self, grp, func, params, parName, h=1.e-8):
+
+        deriv = (func(grp, params, parName, h)-2.*func(grp, params) +
+                 func(grp, params, parName, -h))/(h**2)
+
+        return deriv
+
+    def derivative2_mix(self, grp, func, params, parName1, parName2, ha=1.e-8, hb=1.e-8):
+
+        deriv = func(grp, params, parName1, ha, parName2, hb)
+        deriv -= func(grp, params, parName1, -ha, parName2, hb)
+        deriv -= func(grp, params, parName1, ha, parName2, -hb)
+        deriv += func(grp, params, parName1, -ha, parName2, -hb)
+        deriv /= 4*ha*hb
+
+        return deriv
+
+    def chi2_indiv(self, grp, param, parNamea='', ha=0, parNameb='', hb=0):
+
+        pars = {}
+        for key, pp in param.items():
+            pars[key] = pp
+            if key == parNamea:
+                pars[key] += ha
+            if key == parNameb:
+                pars[key] += hb
+
+        Om = pars['Om']
+        w0 = pars['w0']
+        wa = pars['wa']
+        M = pars['M']
+        alpha = pars['alpha']
+        beta = pars['beta']
+
+        return (grp.Mb-M+alpha*grp.x1-beta*grp.color-self.mu(grp.z, Om, w0, wa))/self.sigma_mu(grp, alpha, beta)
 
     def datatest(self, params, sigma=0.5):
 
@@ -1147,3 +1222,9 @@ class Sigma_Fisher(CosmoDist):
                                                      self.datat['x']))*self.datat['x']/self.datat['sigma']**2)
 
         return -2.*(suma+sumb)
+
+    def sigma_mu(self, grp, alpha, beta):
+
+        res = grp.Cov_mbmb+(alpha**2)*grp.Cov_x1x1+(beta**2)*grp.Cov_colorcolor + \
+            2*alpha*grp.Cov_x1mb-2*beta*grp.Cov_colormb-2*alpha*beta*grp.Cov_x1color
+        return np.sqrt(res)

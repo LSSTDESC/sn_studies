@@ -142,10 +142,10 @@ class plotHubbleResiduals(CosmoDist):
         self.gxc = data['Cov_colorcolor']
         self.cov1 = -2.5*data['Cov_x0x1'] / \
             (data['x0_fit']*np.log(10))
-        #self.cov1 = data['Cov_x1mb']
+        # self.cov1 = data['Cov_x1mb']
         self.cov2 = -2.5*data['Cov_x0color'] / \
             (data['x0_fit']*np.log(10))
-        #self.cov2 = data['Cov_colormb']
+        # self.cov2 = data['Cov_colormb']
         self.cov3 = data['Cov_x1color']
         self.sigZ = data['z_fit']/(1.e5*data['z_fit'])
         self.X1 = data['x1_fit']
@@ -158,7 +158,7 @@ class plotHubbleResiduals(CosmoDist):
         self.Om = fitparams['Om']
         self.w0 = fitparams['w0']
         self.wa = fitparams['wa']
-        #self.wa = 0.0
+        # self.wa = 0.0
         self.alpha = fitparams['alpha']
         self.beta = fitparams['beta']
         self.M = fitparams['M']
@@ -198,7 +198,7 @@ class plotHubbleResiduals(CosmoDist):
 
     def plots(self):
 
-        #FoM_val, rho = FoM(self.sigma_a, self.sigma_b, self.sigma_a_b)
+        # FoM_val, rho = FoM(self.sigma_a, self.sigma_b, self.sigma_a_b)
         FoM_val, rho = FoM(self.sigma_b, self.sigma_c, self.sigma_b_c)
         fig = plt.figure(figsize=(12, 8))
         ttit = 'FoM (95%)  = {} \n'.format(np.round(FoM_val, 2))
@@ -322,7 +322,7 @@ class plotHubbleResiduals(CosmoDist):
                     color='k', lineStyle='None', marker='o', ms=2)
         ax.grid()
         """
-        #axb = fig.add_axes((.1, .1, .8, .2))
+        # axb = fig.add_axes((.1, .1, .8, .2))
         axb.errorbar(x, residuals, yerr=None, color='k',
                      lineStyle='None', marker='o', ms=2)
         axbh.hist(residuals, bins=20, orientation='horizontal')
@@ -452,3 +452,85 @@ def plotFitRes(data):
     print('medians', data[[sigma_a, sigma_b, 'FoM']].median())
 
     plt.show()
+
+
+class plotSN:
+
+    def __init__(self, params_fit, params_true):
+
+        self.params_fit = params_fit
+        self.ppt = params_true
+
+        from sn_fom.cosmo_fit import CosmoDist
+
+        self.cosmo = CosmoDist()
+
+    def __call__(self):
+
+        #from sn_fom.cosmo_fit import FitData
+        fig, ax = plt.subplots()
+        ip = -1
+        for i, row in self.params_fit.iterrows():
+            ip += 1
+            snName = '{}.hdf5'.format(row['SNID'])
+            data = pd.read_hdf(snName)
+            print(data[['z', 'z_fit']])
+            data = self.complete_data(data)
+            pp = []
+            for vv in ['Om', 'w0', 'wa']:
+                var = 'sigma_{}'.format(vv)
+                row[var] = np.sqrt(row['Cov_{}_{}'.format(vv, vv)])
+                pp.append(var)
+
+            print(row[pp])
+            self.binned(data, ax, 'resi_mu')
+
+            """
+            print('fitted', row)
+            fit = FitData(data)
+
+            newpar = fit()
+            
+            print('new fit', newpar)
+            print(test)
+            """
+
+            if ip >= 1:
+                break
+
+        plt.show()
+        print(test)
+
+    def complete_data(self, data):
+
+        data['sigma_mu'] = data['Cov_mbmb']
+        +self.ppt['alpha']**2*data['Cov_x1x1']
+        +self.ppt['beta']**2*data['Cov_colorcolor']
+        + 2 * self.ppt['alpha']*data['Cov_x1mb']
+        -2.*self.ppt['beta']*data['Cov_colormb']
+        - 2.*self.ppt['alpha']*self.ppt['beta']*data['Cov_x1color']
+
+        data['sigma_mu'] = np.sqrt(data['sigma_mu'])
+        data['mu'] = -self.ppt['M']+data['mbfit']+self.ppt['alpha'] * \
+            data['x1_fit']-self.ppt['beta']*data['color_fit']
+
+        data['resi_mu'] = self.cosmo.mu(
+            data['z'], self.ppt['Om'], self.ppt['w0'], self.ppt['wa'])-data['mu']
+        return data
+
+    def binned(self, data, ax, var='mu'):
+
+        zmin, zmax = 0.05, 1.
+        nbins = 20
+        bins = np.linspace(zmin, zmax, nbins)
+        group = data.groupby(pd.cut(data.z, bins))
+        plot_centers = (bins[:-1] + bins[1:])/2
+
+        print(group.size(), np.sum(group.size()))
+        if var == 'size':
+            plot_values = group.size()
+        else:
+            plot_values = group[var].median()
+            plot_centers = group['x1'].median()
+
+        ax.plot(plot_centers, plot_values, marker='o')

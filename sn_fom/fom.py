@@ -4,7 +4,7 @@ import numpy as np
 from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
 from sn_fom.steps import multifit
-from sn_fom.plot import plotStat, plotHubbleResiduals, binned_data, plotFitRes
+from sn_fom.plot import plotStat, plotHubbleResiduals, binned_data, plotFitRes, plotSN
 from sn_fom.utils import getconfig
 from sn_fom.cosmo_fit import Sigma_Fisher
 import os
@@ -94,11 +94,19 @@ w0 = -1.0
 wa = 0.0
 alpha = 0.13
 beta = 3.1
-M = -19.045
+M = -19.012
 
 params = dict(zip(['M', 'alpha', 'beta', 'Om', 'w0', 'wa'],
                   [M, alpha, beta, Om, w0, wa]))
 # params=dict(zip(['Om','w0','wa'],[Om,w0,wa]))
+
+
+idx = params_fit['accuracy'] == 1
+params_fit = params_fit[idx]
+
+myplot = plotSN(params_fit, params)
+myplot()
+
 plotFitRes(params_fit)
 fig, ax = plt.subplots()
 """
@@ -112,8 +120,8 @@ for i, row in params_fit.iterrows():
     snName = '{}.hdf5'.format(row['SNID'])
 
     plotresi = plotHubbleResiduals(row, snName)
-    # plotresi.plots()
-    plotresi.plot_sn_vars()
+    plotresi.plots()
+    # plotresi.plot_sn_vars()
 
     data = pd.read_hdf(snName)
     print('NSN', len(data), data.columns)
@@ -123,9 +131,11 @@ for i, row in params_fit.iterrows():
     data['sigma_mu'] = np.sqrt(data['sigma_mu'])
     data['mu'] = -M+data['mbfit']+alpha*data['x1_fit']-beta*data['color_fit']
     sig = Sigma_Fisher(data, params=params)
-    sig()
-    for pp in ['M', 'alpha', 'beta', 'Om', 'w0']:
-        print(pp, np.sqrt(row['Cov_{}_{}'.format(pp, pp)]))
+    res_Fisher = sig()
+    for pp in sig.params_Fisher:
+        row['sigma_{}'.format(pp)] = np.sqrt(row['Cov_{}_{}'.format(pp, pp)])
+        print(pp, row[pp], row['sigma_{}'.format(pp)],
+              res_Fisher[pp], row['sigma_{}'.format(pp)]/res_Fisher[pp])
     print('chi2', row['chi2'])
     # print(row)
     plt.show()
