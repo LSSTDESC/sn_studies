@@ -67,12 +67,14 @@ def FoM(sigma_w0, sigma_wa, sigma_w0_wa, coeff_CL=6.17):
 
 
     """
-
+    print('in FoM')
     rho = sigma_w0_wa/(sigma_w0*sigma_wa)
+    print('rhrhrhrh', rho)
     # get ellipse parameters
     a, b = ellipse_axis(sigma_w0, sigma_wa, sigma_w0_wa)
     area = coeff_CL*a*b
 
+    print('alors FoM', rho, a, b, area)
     return 1./area, rho
 
 
@@ -439,10 +441,12 @@ def plotFitRes(data):
     data[sigma_a] = np.sqrt(data[Cov_a])
     data[sigma_b] = np.sqrt(data[Cov_b])
 
+    print('hhhhhhhhhkokokoo', data[sigma_a], data[sigma_b])
     data['FoM'] = data.apply(lambda x: FoM(
         x[sigma_a], x[sigma_b], x[Cov_a_b])[0], axis=1)
+    print('FoM', data['FoM'])
     fig, ax = plt.subplots(ncols=2, nrows=2)
-    idx = data['FoM'] < 20000
+    idx = data['FoM'] < 1.e10
     sel = data[idx]
     ax[0, 0].hist(sel[sigma_a], histtype='step', bins=100)
     ax[0, 1].hist(sel[sigma_b], histtype='step', bins=100)
@@ -483,8 +487,8 @@ class plotSN:
                 pp.append(var)
 
             print(row[pp])
-            self.binned(data, ax, 'resi_mu')
-
+            #self.binned(data, ax, var='resi_mu', error='sigma_mu')
+            self.binned(data, ax, var='x1', error='')
             """
             print('fitted', row)
             fit = FitData(data)
@@ -495,13 +499,23 @@ class plotSN:
             print(test)
             """
 
-            if ip >= 1:
-                break
+            # if ip >= 1:
+            #    break
 
         plt.show()
         print(test)
 
     def complete_data(self, data):
+
+        data['Mb'] = -2.5*np.log10(data['x0_fit'])+10.635
+        data['Cov_mbmb'] = (
+            2.5 / (data['x0_fit']*np.log(10)))**2*data['Cov_x0x0']
+
+        data['Cov_x1mb'] = -2.5*data['Cov_x0x1'] / \
+            (data['x0_fit']*np.log(10))
+
+        data['Cov_colormb'] = -2.5*data['Cov_x0color'] / \
+            (data['x0_fit']*np.log(10))
 
         data['sigma_mu'] = data['Cov_mbmb']
         +self.ppt['alpha']**2*data['Cov_x1x1']
@@ -518,7 +532,7 @@ class plotSN:
             data['z'], self.ppt['Om'], self.ppt['w0'], self.ppt['wa'])-data['mu']
         return data
 
-    def binned(self, data, ax, var='mu'):
+    def binned(self, data, ax, var='mu', error=''):
 
         zmin, zmax = 0.05, 1.
         nbins = 20
@@ -531,6 +545,10 @@ class plotSN:
             plot_values = group.size()
         else:
             plot_values = group[var].median()
-            plot_centers = group['x1'].median()
 
-        ax.plot(plot_centers, plot_values, marker='o')
+        error_values = None
+        if error != '':
+            error_values = group.apply(
+                lambda x: 1./np.sqrt(np.sum(1./x[error]**2)))
+
+        ax.errorbar(plot_centers, plot_values, yerr=error_values, marker='o')

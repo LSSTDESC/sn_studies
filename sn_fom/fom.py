@@ -33,7 +33,15 @@ parser.add_option("--dirSN", type=str,
 parser.add_option("--dirFit", type=str,
                   default='fake_Fit',
                   help="location dir of fit cosmo parameters  [%default]")
-
+parser.add_option("--snType", type=str,
+                  default='allSN',
+                  help="SN type for main run (faintSN,mediumSN,brightSN,allSN)  [%default]")
+parser.add_option("--surveyType", type=str,
+                  default='full',
+                  help="type of survey (full, complete) [%default]")
+parser.add_option("--zsurvey", type=float,
+                  default=1.0,
+                  help="zmax for the survey [%default]")
 
 opts, args = parser.parse_args()
 
@@ -44,6 +52,10 @@ nproc = opts.nproc
 dirSN = opts.dirSN
 dirFit = opts.dirFit
 nseasons = opts.nseasons
+snType = opts.snType
+surveyType = opts.surveyType
+zsurvey = opts.zsurvey
+
 print('hello dbNames', dbNames, fields)
 tagName = ''
 for ip, dd in enumerate(dbNames):
@@ -52,6 +64,8 @@ for ip, dd in enumerate(dbNames):
         tagName += '_'
 
 tagName += '_{}'.format(nseasons)
+tagName += '_{}'.format(snType)
+
 dirSN = '{}_{}'.format(dirSN, tagName)
 dirFit = '{}_{}'.format(dirFit, tagName)
 
@@ -59,11 +73,14 @@ for vv in [dirSN, dirFit]:
     if not os.path.isdir(vv):
         os.mkdir(vv)
 
+print('dirfit', dirFit)
+
 fitparName = '{}/FitParams.hdf5'.format(dirFit)
 
 if not os.path.isfile(fitparName):
     # get default configuration file
-    config = getconfig(nseasons=nseasons)
+    config = getconfig(nseasons=nseasons, zsurvey=zsurvey,
+                       surveytype=surveyType)
 
     ffi = range(16)
     params = {}
@@ -72,6 +89,7 @@ if not os.path.isfile(fitparName):
     params['config'] = config
     params['fields'] = fields
     params['dirSN'] = dirSN
+    params['snType'] = snType
     params_fit = multiproc(ffi, params, multifit, nproc)
 
     print(params_fit)
@@ -94,19 +112,20 @@ w0 = -1.0
 wa = 0.0
 alpha = 0.13
 beta = 3.1
-M = -19.012
-
+M = -19.0906
+#M = -18.97
 params = dict(zip(['M', 'alpha', 'beta', 'Om', 'w0', 'wa'],
                   [M, alpha, beta, Om, w0, wa]))
 # params=dict(zip(['Om','w0','wa'],[Om,w0,wa]))
 
 
-idx = params_fit['accuracy'] == 1
-params_fit = params_fit[idx]
-
+#idx = params_fit['accuracy'] == 1
+#params_fit = params_fit[idx]
+print('params fit', len(params_fit))
+"""
 myplot = plotSN(params_fit, params)
 myplot()
-
+"""
 plotFitRes(params_fit)
 fig, ax = plt.subplots()
 """
@@ -125,6 +144,15 @@ for i, row in params_fit.iterrows():
 
     data = pd.read_hdf(snName)
     print('NSN', len(data), data.columns)
+    data['Mb'] = -2.5*np.log10(data['x0_fit'])+10.635
+    data['Cov_mbmb'] = (
+        2.5 / (data['x0_fit']*np.log(10)))**2*data['Cov_x0x0']
+
+    data['Cov_x1mb'] = -2.5*data['Cov_x0x1'] / \
+        (data['x0_fit']*np.log(10))
+
+    data['Cov_colormb'] = -2.5*data['Cov_x0color'] / \
+        (data['x0_fit']*np.log(10))
     data['sigma_mu'] = data['Cov_mbmb']+alpha**2*data['Cov_x1x1']+beta**2*data['Cov_colorcolor'] + \
         2*alpha*data['Cov_x1mb']-2.*beta*data['Cov_colormb'] - \
         2.*alpha*beta*data['Cov_x1color']

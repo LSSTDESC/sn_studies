@@ -10,6 +10,7 @@ import time
 import copy
 import scipy.linalg as la
 from iminuit import Minuit, describe, cost
+from astropy.cosmology import w0waCDM
 
 
 class zcomp_pixels:
@@ -120,6 +121,15 @@ class CosmoDist:
         self.H0 = H0
         self.c = c
 
+    def dL(self, z, Om=0.3, w0=-1., wa=0.0):
+
+        cosmology = w0waCDM(H0=self.H0,
+                            Om0=Om,
+                            Ode0=1.-Om,
+                            w0=w0, wa=wa)
+
+        return cosmology.luminosity_distance(z).value*1.e6
+
     def cosmo_func(self, z, Om=0.3, w0=-1.0, wa=0.0):
         """
         Method to estimate the integrand for the luminosity distance
@@ -150,7 +160,7 @@ class CosmoDist:
 
         return 1/fu
 
-    def dL(self, z, Om=0.3, w0=-1., wa=0.0):
+    def dL_old(self, z, Om=0.3, w0=-1., wa=0.0):
         """
         Method to estimate the luminosity distance
 
@@ -182,7 +192,7 @@ class CosmoDist:
         else:
             return (1+z)*quad(integrand, 0.0, z, limit=100)[0]
 
-    def mu(self, z, Om=0.3, w0=-1.0, wa=0.0):
+    def mu_old(self, z, Om=0.3, w0=-1.0, wa=0.0):
         """
         Method to estimate distance modulus
 
@@ -209,6 +219,32 @@ class CosmoDist:
             return (np.log10(self.dL([z], Om, w0, wa))*5-5)[0]
 
         # return 5.*np.log10(self.dL(z, Om, w0, wa))+25. #if dL in Mpc
+
+    def mu(self, z, Om=0.3, w0=-1.0, wa=0.0):
+        """
+        Method to estimate distance modulus
+
+        Parameters
+        ---------------
+        z: float
+           redshift
+        Om: float, opt
+          Omega_m parameter (default: 0.3)
+        w0: float, opt
+          w0 DE parameter (default: -1.0)
+        wa: float, opt
+            wa DE parameter (default: 0.)
+
+        Returns
+        -----------
+        distance modulus (float)
+
+        """
+
+        if (hasattr(z, '__iter__')):
+            return np.log10(self.dL(z, Om, w0, wa))*5-5
+        else:
+            return (np.log10(self.dL([z], Om, w0, wa))*5-5)[0]
 
     def mufit(self, z, alpha, beta, Mb, x1, color, mbfit, Om=0.3, w0=-1.0, wa=0.0):
 
@@ -487,11 +523,23 @@ class FitData:
         gzero = self.fit.zfinal2()
         """
         gzero = 0.
-        print('gzero', gzero)
+
        # the fit is done here
         # res = self.zfinal1(
         #    self.Mb, self.Z, self.X1, self.X2, self.sigZ)
-        self.fit.gzero = gzero
+        self.fit.gzero = 0.0
+        """
+        Omb = 0.2980310890963704
+        w0b = -1.011451889936614
+        wab = -0.060382299532261284
+        Mbb = -18.97602852487285
+        alphab = 0.12896184914584868
+        betab = 3.1007710392326353
+        """
+        chi2 = self.fit.chi2(Om, w0, wa, M, alpha, beta)
+        ndf = len(self.fit.Z)-5
+        print('gzero and chi2', gzero, chi2, chi2/ndf)
+
         resa = self.fit.fitcosmo(Om, w0, wa, M, alpha, beta, 'minuit')
         print('fit minuit done', resa['chi2']/resa['ndf'],
               resa[['Om', 'w0', 'wa', 'M', 'alpha', 'beta']])
@@ -522,7 +570,10 @@ class FitData:
         print(test)
         """
         # plot Hubble diagram here
-        # self.fit.plot_hubble(gzero, params['Om'][0], params['w0'][0], wa, params['M'][0], params['alpha'][0], params['beta'][0])
+        """
+        self.fit.plot_hubble(gzero, resa['Om'][0], resa['w0'][0],
+                             wa, resa['M'][0], resa['alpha'][0], resa['beta'][0])
+        """
 
         return resa
 
@@ -645,7 +696,11 @@ class FitCosmo(CosmoDist):
     def chi2(self, Om, w0, wa, M, alpha, beta):
 
         # self.sigMu(Om, w0, wa)**2))
-        return np.sum((self.Mb-M+alpha*self.X1-beta*self.Color-self.mu(self.Z, Om, w0, wa))**2/(self.sigmI(alpha, beta)))
+        """
+        print('dl', self.mu(self.Z, Om, w0, wa),
+              self.mu_old(self.Z, Om, w0, wa))
+        """
+        return np.sum((self.Mb-M+alpha*self.X1-beta*self.Color-self.mu(self.Z, Om, w0, wa))**2/(self.sigmI(alpha, beta)+self.gzero**2))
 
     def zchii2_nowa_im(self, Om, w0, M, alpha, beta):
         """
@@ -689,7 +744,9 @@ class FitCosmo(CosmoDist):
         """
         # Om, w0, M, alpha, beta = tup
         # return np.sum((self.Mb-self.mu(self.Z, Om, w0, wa)-M+alpha*self.X1-beta*self.Color)**2/(self.sigmI(alpha, beta)+self.gzero**2+self.sigMu(Om, w0, wa)**2))
-        return self.chi2(Om, w0, wa, M, alpha, beta)
+
+        res = self.chi2(Om, w0, wa, M, alpha, beta)
+        return res
 
     def zfinal1(self, gzero):
         """
@@ -755,6 +812,7 @@ class FitCosmo(CosmoDist):
         dictout['accuracy'] = [m.accurate]
         dictout['chi2'] = [m.fval]
         dictout['ndf'] = [self.ndf]
+        print('hello chi2', m.fval, self.ndf)
         dictout['fitter'] = ['minuit']
         if 'wa' not in self.params_fit:
             dictout['wa'] = [wa]
@@ -1020,7 +1078,7 @@ class Sigma_Fisher(CosmoDist):
         """
         # get covariance matrix (from Hessian)
         res = self.matCov()
-        #resb = self.Hessian()
+        # resb = self.Hessian()
 
         print(res)
         if res is not None:
@@ -1067,7 +1125,7 @@ class Sigma_Fisher(CosmoDist):
                 else:
                     self.data[what] = self.data.apply(lambda x: self.derivative2_mix(x,
                                                                                      self.chi2_indiv, self.params, pp, ppb, ha=hpar[pp], hb=hpar[ppb]), axis=1)
-        print('what', self.data['d2_Om_Om'])
+
         Hsec = np.zeros((nparams, nparams))
         for i, pp in enumerate(parName):
             for j, ppb in enumerate(parName):
@@ -1075,7 +1133,8 @@ class Sigma_Fisher(CosmoDist):
                                     * self.data['d2_{}_{}'.format(pp, ppb)])
         """
         # Hessian
-        H = 2.*(np.dot(J.T, J))
+        # H = 2.*(np.dot(J.T, J)+Hsec)
+        H = 2.*np.dot(J.T, J)
         detmat = np.linalg.det(H)
         Cov = None
         if detmat:

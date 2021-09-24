@@ -1,6 +1,6 @@
 import numpy as np
 import glob
-from sn_tools.sn_utils import multiproc
+from sn_tools.sn_utils import multiproc, x1_color_dist, check_get_file
 from sn_tools.sn_io import loopStack_params
 from sn_tools.sn_io import check_get_file
 import pandas as pd
@@ -99,28 +99,26 @@ def selSN(sn_data, nsn_per_bin, x1_color):
         print(zp, nsn_expected, nsn_simu, nsn_sel, nsn_choose)
         nsn_choose = nsn_sel
         """
-        zrange = 'high_z'
+        zrange = 'highz'
         if zp <= 0.1:
-            zrange = 'low_z'
+            zrange = 'lowz'
         if nsn_choose > 0:
             if zp <= 0.2:
-                nsn_choose *= 50
-            x1_color_vals = pdist(x1_color, zrange, nsn_choose)
+                nsn_choose *= 20
+            #x1_color_vals = pdist(sn_data, x1_color, zrange, nsn_choose)
             #print('my choice here',zm,zp,x1_color_vals)
-            #selected_data = pd.DataFrame(sn_data_z)
-            #selected_data['inum'] = selected_data.reset_index().index
+            selected_data = pd.DataFrame(sn_data_z)
+            selected_data['inum'] = selected_data.reset_index().index
 
             # select(x1,color) selected data according to dist
 
-            selected_data = select_x1_color(sn_data_z, x1_color_vals)
+            #selected_data = select_x1_color(sn_data_z, x1_color_vals)
 
-            """
             choice = np.random.choice(len(selected_data), nsn_choose)
-            print('choice', choice, len(selected_data), nsn_choose)
-            print(selected_data)
+            #print('choice', choice, len(selected_data), nsn_choose)
+            # print(selected_data)
             io = selected_data['inum'].isin(choice)
-            """
-            out_data = pd.concat((out_data, selected_data))
+            out_data = pd.concat((out_data, selected_data[io]))
 
     # select sn here
     out_data = select(out_data)
@@ -202,7 +200,7 @@ def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'], nseasons=2,
 
 
 def getDist(web_path='https://me.lsst.eu/gris/DESC_SN_pipeline',
-            dirFiles='reference_files', distname='x1_color', rate='JLA'):
+            dirFiles='reference_files', distName='x1_color_G10.csv'):
     """ get (x1,color) distributions
     Parameters
     --------------
@@ -211,43 +209,46 @@ def getDist(web_path='https://me.lsst.eu/gris/DESC_SN_pipeline',
       (default: https://me.lsst.eu/gris/DESC_SN_pipeline)
     dirFiles: str, opt
       dir where the file will be copied (frome web_path) (default: reference_files)
-    distname: str, opt
-       variables for the distribution (default: x1_color)
-    rate: str, opt
-        name of the x1_color distrib (JLA, ...)
+    distName: str, opt
+       fileName to use (default: x1_color_G10.csv)
+
     Returns
     -----------
-    dict of (x1,color) rates
-    keys : 'low_z' and 'high_z'
-    values (float) : recarray with X1,Color,weight_X1,weight_Color,weight
+    pandas df with the following cols
+    zrange, param, val, proba
+
+    with
+    zrange = lowz, highz
+    param = x1,color
     """
 
-    # prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
-    pars = distname.split('_')
-    para = pars[0]
-    if len(pars) >= 1:
-        parb = pars[1]
+    check_get_file(web_path, dirFiles, distName)
 
-    prefix = '{}/Dist_{}_{}_{}'.format(dirFiles, pars, pars, rate)
-    suffix = '.txt'
-    # names=['x1','c','weight_x1','weight_c','weight_tot']
-    dtype = np.dtype([(para, np.float), (parb, np.float),
-                      ('weight_{}'.format(para),
-                       np.float), ('weight_{}'.format(parb), np.float),
-                      ('weight', np.float)])
-    params = {}
-    for val in ['low_z', 'high_z']:
-        fName = '{}_{}{}'.format(
-            prefix, val, suffix)
-        fName = 'Dist_{}_{}_{}_{}{}'.format(para, parb, rate, val, suffix)
-        check_get_file(web_path, dirFiles, fName)
-        params[val] = np.loadtxt(
-            '{}/{}'.format(dirFiles, fName), dtype=dtype)
+    fullName = '{}/{}'.format(dirFiles, distName)
 
-    return params
+    return x1_color_dist(fullName).proba
 
 
-def pdist(x1_color, zrange, nsn_choose):
+def pdist(df, x1_color, zrange, nsn_choose):
+
+    idx = x1_color['zrange'] == zrange
+    sel = x1_color[idx]
+
+    # select x1 vals
+    rr = {}
+    for vv in ['x1', 'color']:
+        ig = sel['param'] == vv
+        selb = sel[ig]
+        norm = np.sum(selb['proba'])
+        rc = np.random.choice(df[vv], nsn_choose, p=selb['proba']/norm)
+        rr[vv] = rc.tolist()
+
+    df = pd.DataFrame.from_dict(rv)
+
+    print(df)
+
+
+def pdist_deprecated(x1_color, zrange, nsn_choose):
 
     df = pd.DataFrame(x1_color[zrange])
     df['inum'] = df.reset_index().index
