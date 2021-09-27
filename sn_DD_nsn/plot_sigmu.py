@@ -35,13 +35,15 @@ def plot(ax, sna):
     ax.plot(sn['z'], sn['beta']*np.sqrt(sn['Cov_colorcolor']),
             color='r', label=bet+'$\sigma_C$')
     ax.plot(sn['z'], sn['alpha']*np.sqrt(sn['Cov_x1x1']),
-            color='b', label=alph+'$\sigma_{x1}$')
+            color='b', label=alph+'$\sigma_{x1}$', ls='dashed')
     ax.plot(sn['z'], np.sqrt(sn['Cov_mbmb']),
-            color='g', label='$\sigma_{m_b}$')
+            color='g', label='$\sigma_{m_b}$', ls='dotted')
 
     miny = np.min(sn['alpha']*np.sqrt(sn['Cov_x1x1']))
     ax.grid()
-    ax.legend(loc='upper left')
+    #ax.legend(loc='upper left')
+    ax.legend(bbox_to_anchor=(0.5, 1.12), ncol=3,
+              frameon=False, loc='upper center')
     ax.set_xlim([0.3, 0.8])
     ax.set_ylim([0., None])
     ax.set_xlabel(r'$z$')
@@ -49,10 +51,10 @@ def plot(ax, sna):
 
     interp = interp1d(sn['beta']*np.sqrt(sn['Cov_colorcolor']), sn['z'])
     zlim = interp(0.12)
-    ax.plot([0.3, zlim], [0.12]*2, color='k', lw=1, ls='dashed')
-    ax.plot([zlim]*2, [0., 0.12], color='k', lw=1, ls='dashed')
+    ax.plot([0.3, zlim], [0.12]*2, color='k', lw=2, ls=(0, (5, 1)))
+    ax.plot([zlim]*2, [0., 0.12], color='k', lw=2, ls=(0, (5, 1)))
     zlimstr = '$z_{limit}$'
-    ax.text(0.63, 0.125, zlimstr+' = {}'.format(np.round(zlim, 2)), fontsize=15)
+    ax.text(0.63, 0.125, zlimstr+' = {}'.format(np.round(zlim, 2)))
 
 
 def plot_snr_sigmaC(sna):
@@ -62,13 +64,14 @@ def plot_snr_sigmaC(sna):
 
     sna.sort('z')
     bands = 'izy'
+    lsb = dict(zip(bands, ['solid', 'dashed', 'dotted']))
     snrmin = {}
     for b in bands:
         var = 'SNR_{}'.format(b)
         idx = sna[var] > 0.
         sel = sna[idx]
         ax.plot(sel[var], np.sqrt(sel['Cov_colorcolor']),
-                color=filtercolors[b], label='${}$ band'.format(b))
+                color=filtercolors[b], label='${}$ band'.format(b), ls=lsb[b])
         ii = interp1d(np.sqrt(sna['Cov_colorcolor']), sna['SNR_{}'.format(b)])
         snrmin[b] = ii(0.04)
 
@@ -77,14 +80,17 @@ def plot_snr_sigmaC(sna):
     ax.set_xlabel(r'Signal-to-Noise Ratio')
     ax.set_ylabel(r'$\sigma_C$')
     ax.grid()
-    ax.legend()
-
+    # ax.legend()
+    ax.legend(bbox_to_anchor=(0.5, 1.12), ncol=3,
+              frameon=False, loc='upper center')
     for b in bands:
-        ax.plot([0., snrmin[b]], [0.04]*2, color='k', lw=1, ls='dashed')
-        ax.plot([snrmin[b]]*2, [0., 0.04], color='k', lw=1, ls='dashed')
+        ax.plot([0., snrmin[b]], [0.04]*2,
+                color='k', lw=2, ls=(0, (5, 1)))
+        ax.plot([snrmin[b]]*2, [0., 0.04],
+                color='k', lw=2, ls=(0, (5, 1)))
         ffi = 'SNR$_{'+b+'}$'
         ax.text(snrmin[b]-10, 0.041, '{} = {}'.format(ffi,
-                                                      np.round(snrmin[b])), color=filtercolors[b], fontsize=15)
+                                                      np.round(snrmin[b])), color=filtercolors[b])
 
 
 parser = OptionParser()
