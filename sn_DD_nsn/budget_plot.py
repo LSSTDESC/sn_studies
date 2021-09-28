@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-plt.rcParams['xtick.labelsize'] = 15
-plt.rcParams['ytick.labelsize'] = 15
-plt.rcParams['axes.labelsize'] = 15
-plt.rcParams['figure.titlesize'] = 15
-plt.rcParams['legend.fontsize'] = 15
+plt.rcParams['xtick.labelsize'] = 20
+plt.rcParams['ytick.labelsize'] = 20
+plt.rcParams['axes.labelsize'] = 20
+plt.rcParams['figure.titlesize'] = 20
+plt.rcParams['legend.fontsize'] = 20
 #plt.rcParams['font.weight'] = 'bold'
 plt.rcParams['font.family'] = 'Arial'
 
@@ -53,7 +53,8 @@ def plotcontour(ax, Nfields, Nseasons, cadence, nvmin, nvmax, slmin, slmax, colo
         nvmin, nvmax, slmin, slmax), aspect='auto', alpha=0.25, cmap='hsv')
 
     zzv = [0.01, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15]
-    zzv = [0.05, 0.07, 0.09, 0.11, 0.13, 0.15]
+    #zzv = [0.03, 0.05, 0.07, 0.09, 0.11, 0.13, 0.15]
+    zzv = [0.03, 0.05, 0.08, 0.10, 0.15]
     zzvc = [100.*zz for zz in zzv]
     CS = plt.contour(NV, SL, BUD, zzv, colors=color, linestyles=ls)
 
@@ -62,7 +63,7 @@ def plotcontour(ax, Nfields, Nseasons, cadence, nvmin, nvmax, slmin, slmax, colo
     #strs = ['{}%'.format(np.int(zz)) for zz in zzvc]
     for l, s in zip(CS.levels, strs):
         fmt[l] = s
-    ax.clabel(CS, inline=True, fontsize=10,
+    ax.clabel(CS, inline=True, fontsize=15,
               colors=color, fmt=fmt)
 
 
@@ -73,16 +74,18 @@ nvmin, nvmax = 5, 250
 slmin, slmax = 120, 240
 
 coords = [(12.41, 180), (41.5, 180.), (61.05, 180.), (208.05, 180.)]
-fig, ax = plt.subplots(figsize=(8, 6))
+fig, ax = plt.subplots(figsize=(12, 10))
 plotcontour(ax, Nfields, Nseasons, cadence, nvmin, nvmax, slmin, slmax)
-coords = [62.0, 208.05]
+#coords = [62.0, 208.05]
+coords = [36.46, 208.05]
 ax.plot(coords, [180.]*2,  'ko')
 
 
 Nseasons = 10
 plotcontour(ax, Nfields, Nseasons, cadence, nvmin,
             nvmax, slmin, slmax, color='r', ls='dashed')
-coords = [12.41, 41.5]
+#coords = [12.41, 41.5]
+coords = [7.3, 41.5]
 ax.plot(coords, [180.]*2,  'ro')
 
 
@@ -107,7 +110,7 @@ fig, ax = plt.subplots()
 
 bomin = 0.01
 bomax = 0.08
-bnmin = 0.05
+bnmin = 0.03
 bnmax = 0.15
 # bnmin=2.
 # bnmax=15.
