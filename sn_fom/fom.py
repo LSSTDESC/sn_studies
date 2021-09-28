@@ -3,7 +3,7 @@ import numpy as np
 # from . import np
 from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
-from sn_fom.steps import multifit
+from sn_fom.steps import multifit, sigma_mu
 from sn_fom.plot import plotStat, plotHubbleResiduals, binned_data, plotFitRes, plotSN
 from sn_fom.utils import getconfig
 from sn_fom.cosmo_fit import Sigma_Fisher
@@ -56,6 +56,20 @@ snType = opts.snType
 surveyType = opts.surveyType
 zsurvey = opts.zsurvey
 
+
+sigmuName = 'sigma_mu_from_simu.hdf5'
+if not os.path.isfile(sigmuName):
+    pp = {}
+    pp['fileDir'] = fileDir
+    pp['dbNames'] = ['DD_0.90', 'DD_0.65', 'DD_0.70', 'DD_0.80']
+    pp['snType'] = 'allSN'
+    res = sigma_mu(pp)
+    res.to_hdf(sigmuName, key='sigmamu')
+
+sigma_mu_from_simu = pd.read_hdf(sigmuName)
+
+# load sigma_mu here
+
 print('hello dbNames', dbNames, fields)
 tagName = ''
 for ip, dd in enumerate(dbNames):
@@ -90,6 +104,7 @@ if not os.path.isfile(fitparName):
     params['fields'] = fields
     params['dirSN'] = dirSN
     params['snType'] = snType
+    params['sigma_mu'] = sigma_mu_from_simu
     params_fit = multiproc(ffi, params, multifit, nproc)
 
     print(params_fit)

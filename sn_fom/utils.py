@@ -21,8 +21,9 @@ def loadSN(fDir, dbName, tagprod, zlim):
 
     # select data according to (zlim, season)
 
-    data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
-        'healpixID', 'season'])
+    if zlim > 0:
+        data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
+            'healpixID', 'season'])
 
     """
     data = select(data)
@@ -287,3 +288,61 @@ def select_x1_color(df, x1_color_vals):
                 new_df = pd.concat((new_df, seldf[io]))
 
     return new_df
+
+
+def transformSN(fileDir, dbName, snType, zcomp, alpha, beta):
+
+    data_sn = loadSN(fileDir, dbName, snType, zcomp)
+    data_sn = select(pd.DataFrame(data_sn))
+    data_sn['Mb'] = -2.5*np.log10(data_sn['x0_fit'])+10.635
+    data_sn['Cov_mbmb'] = (
+        2.5 / (data_sn['x0_fit']*np.log(10)))**2*data_sn['Cov_x0x0']
+    data_sn['Cov_x1mb'] = -2.5*data_sn['Cov_x0x1'] / \
+        (data_sn['x0_fit']*np.log(10))
+
+    data_sn['Cov_colormb'] = -2.5*data_sn['Cov_x0color'] / \
+        (data_sn['x0_fit']*np.log(10))
+    data_sn['var_mu'] = data_sn['Cov_mbmb']+alpha**2*data_sn['Cov_x1x1']+beta**2*data_sn['Cov_colorcolor'] + \
+        2*alpha*data_sn['Cov_x1mb']-2.*beta*data_sn['Cov_colormb'] - \
+        2.*alpha*beta*data_sn['Cov_x1color']
+    data_sn['sigma_mu'] = np.sqrt(data_sn['var_mu'])
+
+    return data_sn
+
+
+def binned_data(zmin, zmax, nbins, data, var='sigma_mu'):
+    """
+    function  to transform a set of data to binned data
+
+    Parameters
+    ---------------
+    zmin: float
+      min redshift
+    zmax: float
+      max redshift
+    data: pandas df
+      data to be binned
+    vary: str, opt
+      y-axis variable (default: mu)
+    erry: str, opt
+      y-axis var error (default: sigma_mu)
+
+    Returns
+    -----------
+    x, y, yerr:
+    x : redshift centers
+    y: weighted mean of distance modulus
+    yerr: distance modulus error
+
+    """
+    bins = np.linspace(zmin, zmax, nbins)
+    group = data.groupby(pd.cut(data.z, bins))
+    plot_centers = (bins[:-1] + bins[1:])/2
+    plot_values = group[var].mean().to_list()
+    error_values = group[var].std().to_list()
+
+    print(plot_centers, plot_values)
+    df = pd.DataFrame(plot_centers, columns=['z'])
+    df['{}_mean'.format(var)] = plot_values
+    df['{}_rms'.format(var)] = error_values
+    return df
