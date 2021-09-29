@@ -1,6 +1,6 @@
 from sn_fom.cosmo_fit import zcomp_pixels, FitData, FitData_mu
 from sn_fom.utils import loadSN, selSN, update_config, getDist, transformSN, binned_data
-from sn_fom.utils import nSN_bin_eff, simu_mu
+from sn_fom.utils import nSN_bin_eff, simu_mu, select
 from sn_fom.nsn_scenario import NSN_config, nsn_bin
 import pandas as pd
 from . import np
@@ -10,12 +10,10 @@ def fit_SN(fileDir, dbNames, config, fields, snType, params_fit=['Om', 'w0', 'wa
     data_sn = pd.DataFrame()
 
     # first step: generate SN
-    print('there man', dbNames)
+    print('there man', dbNames, sigmu)
 
-    idx = config['fieldName'] == 'WFD'
-    idxb = sigmu['dbName'] == 'WFD'
-    wfd = getSN_mu_simu(
-        fileDir, 'WDF_0.2', config[idx], ['WFD'], sigmu[idxb])
+    idxb = sigmu['dbName'] == 'WFD_0.20'
+    wfd = getSN_mu_simu_wfd(fileDir, 'WFD_0.20', sigmu[idxb])
     print(test)
     for i, dbName in enumerate(dbNames):
         fields_to_process = fields[i].split(',')
@@ -128,6 +126,46 @@ def getSN_mu_simu(fileDir, dbName, config, fields, sigmu_from_simu):
 
     simuparams = nsn_eff.merge(sigmu_from_simu, left_on=['z'], right_on=['z'])
 
+    # simulate distance modulus (and error) here
+
+    SN = simu_mu(simuparams)
+    return SN
+
+
+def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu):
+    print(sigmu_from_simu, np.mean(np.diff(sigmu_from_simu['z'])))
+    zst = np.mean(np.diff(sigmu_from_simu['z']))/2
+    zmin = 0.
+    zmax = sigmu_from_simu['z'].max()+zst
+    bins = np.arange(zmin, zmax, 2.*zst)
+
+    # get SN from simu
+    data_sn = select(loadSN(fileDir, dbName, 'WFD'))
+
+    idx = data_sn['z'] < 0.2
+    data_sn = data_sn[idx]
+    # get the effective (bias effect) number of expected SN per bin
+    group = data_sn.groupby(pd.cut(data_sn.z, bins))
+    print(group.size())
+    plot_centers = (bins[:-1] + bins[1:])/2
+    nsn_eff = pd.DataFrame(plot_centers, columns=['z'])
+    nsn_eff['nsn_eff'] = group.size().to_list()
+    nsn_eff['surveytype'] = 'full'
+    nsn_eff['zcomp'] = 0.2
+    nsn_eff['zsurvey'] = 0.2
+
+    print(nsn_eff)
+    """
+    import matplotlib.pyplot as plt
+    plt.hist(data_sn['z'], histtype='step')
+    plt.show()
+    """
+
+    # merge with sigmu_from_simu
+
+    simuparams = nsn_eff.merge(sigmu_from_simu, left_on=['z'], right_on=['z'])
+
+    print(simuparams)
     # simulate distance modulus (and error) here
 
     SN = simu_mu(simuparams)

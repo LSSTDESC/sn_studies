@@ -278,11 +278,11 @@ def loadData(dirFile, dbName, tagprod):
     print('search path', search_path)
     fis = glob.glob(search_path)
 
-    print(fis)
+    # print(fis)
     # load the files
     params = dict(zip(['objtype'], ['astropyTable']))
 
-    res = multiproc(fis, params, loopStack_params, 4).to_pandas()
+    res = multiproc(fis[:50], params, loopStack_params, 8).to_pandas()
     # res['fitstatus'] = res['fitstatus'].str.decode('utf-8')
 
     return res
