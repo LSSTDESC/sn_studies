@@ -246,6 +246,15 @@ class CosmoDist:
         else:
             return (np.log10(self.dL([z], Om, w0, wa))*5-5)[0]
 
+    def mu_astro(self, z, Om, w0, wa):
+
+        cosmology = w0waCDM(H0=self.H0,
+                            Om0=Om,
+                            Ode0=1.-Om,
+                            w0=w0, wa=wa)
+
+        return cosmology.distmod(z).value
+
     def mufit(self, z, alpha, beta, Mb, x1, color, mbfit, Om=0.3, w0=-1.0, wa=0.0):
 
         return mbfit+alpha*x1-beta*color-self.mu(z, Om, w0, wa)-Mb
@@ -574,6 +583,54 @@ class FitData:
         self.fit.plot_hubble(gzero, resa['Om'][0], resa['w0'][0],
                              wa, resa['M'][0], resa['alpha'][0], resa['beta'][0])
         """
+
+        return resa
+
+
+class FitData_mu:
+    """
+    class to perform a cosmo fit on data
+
+    Parameters
+    ---------------
+    data: array
+      data to fit
+
+    """
+
+    def __init__(self, data, params_fit=['Om', 'w0']):
+        print('Number of SN for fit', len(data))
+        # print set([d[name]['idr.subset'] for name in d.keys()]
+
+        Z_SN = data['z_SN']
+        mu_SN = data['mu_SN']
+        sigma_mu_SN = data['sigma_mu_SN']
+
+        # instance of the fit functions here
+        self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN,
+                               params_fit=params_fit)
+
+    def __call__(self):
+
+        Om = 0.3
+        w0 = -1.0
+        wa = 0.0
+        self.fit.gzero = 0.0
+        chi2 = self.fit.chi2(Om, w0, wa)
+
+        """
+        print('hello chi2', chi2, chi2/self.fit.ndf)
+        print('fitting gzero', self.fit.gzero)
+        gzero = self.fit.zfinal2()
+        """
+        resa = self.fit.fitcosmo(Om, w0, wa)
+        print(resa.columns)
+        toprint = []
+        for vv in self.fit.params_fit:
+            toprint.append(vv)
+            toprint.append('sigma_{}'.format(vv))
+        toprint.append('chi2_ndf')
+        print('fit minuit done', resa[toprint])
 
         return resa
 
@@ -1002,6 +1059,139 @@ class FitCosmo(CosmoDist):
         plt.show()
 
 
+class FitCosmo_mu(CosmoDist):
+    """
+    Class to fit cosmology from a set of data
+
+    Parameters
+    ---------------
+
+    """
+
+    def __init__(self, Z, mu, sigma_mu,
+                 params_fit=['Om', 'w0'],
+                 H0=70, c=299792.458):
+        super().__init__(H0, c)
+
+        nsn = len(Z)
+        print('Number of SN for fit', nsn)
+
+        self.Z_SN = Z
+        self.mu_SN = mu
+        self.sigma_mu_SN = sigma_mu
+        self.ndf = nsn-len(params_fit)-1
+        self.params_fit = params_fit
+
+    def plot_modulus(self, offset=0):
+        z = np.arange(0.001, 0.12, 0.001)
+        for Ol in [0, 0.3, 0.7, 1]:
+            # hodl=luminosity_distance(z,Ol)
+            r = self.mu(z, Ol)
+            plt.plot(z, hodl)
+            plt.plot(z, r+offset, 'x')
+        plt.show()
+
+    def fitcosmo(self, Om, w0, wa):
+        """
+        Method to estimate cosmo fit parameters Om, w0, and wa
+
+        Parameters
+        --------------
+       Om, w0, wa : float
+          cosmo parameters to fit
+
+        Returns
+        ----------
+        fitted parameters
+
+        """
+        if 'wa' not in self.params_fit:
+            self.wa = wa
+            m = Minuit(self.chi2_nowa, Om=Om, w0=w0)
+        else:
+            m = Minuit(self.chi2, Om=Om, w0=w0, wa=wa)
+
+        # perform the fit here
+        m.migrad()
+        dictout = {}
+        values = m.values
+        for key, vals in values.items():
+            dictout[key] = [vals]
+        m.hesse()   # run covariance estimator
+
+        for key, vals in m.covariance.items():
+            what = '{}_{}'.format(key[0], key[1])
+            dictout['Cov_{}'.format(what)] = [vals]
+
+        dictout['accuracy'] = [m.accurate]
+        dictout['chi2'] = [m.fval]
+        dictout['ndf'] = [self.ndf]
+
+        dictout['fitter'] = ['minuit']
+        if 'wa' not in self.params_fit:
+            dictout['wa'] = [wa]
+        for vv in self.params_fit:
+            dictout['sigma_{}'.format(vv)] = np.sqrt(
+                dictout['Cov_{}_{}'.format(vv, vv)])
+
+        df = pd.DataFrame.from_dict(dictout)
+        df['chi2_ndf'] = df['chi2']/df['ndf']
+
+        return df
+
+    def chi2ndf(self, gzero):
+        """
+        Method to estimate the gzero parameter
+        to get a chisquare equal to 1
+
+        Parameters
+        ---------------
+        gzero: float
+          gzero param
+
+        Returns
+        ----------
+        fitted parameters
+        """
+        res = self.zfinal1(gzero)
+        print('ici', res)
+        om, w0,  wa = res.x[0], res.x[1], res.x[2]
+        chi2ndf = self.tchi2((om, w0, wa))-self.ndf
+        #print('jjj', om, w0, wa, chi2ndf)
+        return chi2ndf
+
+    def zfinal2(self):
+        """
+        Method to estimate the gzero parameter
+        to get a chisquare equal to 1
+
+        Returns
+        ----------
+        gzero parameter
+         """
+        return optimize.newton(self.chi2ndf, 0.1)
+
+    def zfinal1(self, gzero):
+        """
+        Method to estimate cosmo fit parameters M, alpha, beta, Om, w0, wa
+        """
+        self.gzero = gzero
+        return optimize.minimize(self.tchi2, (0.3, -1.0, 0.))
+
+    def chi2(self, Om, w0, wa):
+
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2)+self.gzero**2))
+
+    def chi2_nowa(self, Om, w0):
+
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, self.wa))**2/(self.sigma_mu_SN**2)+self.gzero**2))
+
+    def tchi2(self, tup):
+        Om, w0, wa = tup
+        #print('tchi2', Om, w0, wa, self.gzero)
+        return self.chi2(Om, w0, wa)
+
+
 class Sigma_Fisher(CosmoDist):
     """"
     class to estimate error parameters using Fisher matrices
@@ -1134,7 +1324,7 @@ class Sigma_Fisher(CosmoDist):
         """
         # Hessian
         # H = 2.*(np.dot(J.T, J)+Hsec)
-        H = 2.*np.dot(J.T, J)
+        H = 2*np.dot(J.T, J)
         detmat = np.linalg.det(H)
         Cov = None
         if detmat:
@@ -1240,6 +1430,273 @@ class Sigma_Fisher(CosmoDist):
         beta = pars['beta']
 
         return (grp.Mb-M+alpha*grp.x1-beta*grp.color-self.mu(grp.z, Om, w0, wa))/self.sigma_mu(grp, alpha, beta)
+
+    def datatest(self, params, sigma=0.5):
+
+        x = np.arange(0., 30, 0.5)
+        y = self.functest(params, x)
+        data = np.random.randn(len(y)) * sigma + y
+
+        df = pd.DataFrame(x, columns=['x'])
+        df['y'] = y
+        df['sigma'] = sigma
+        return df
+
+    def functest(self, params, x):
+        # print('ffun',params)
+        y = params['a']*x**3+params['b']*x**2+params['a']*params['b']*x
+        return y
+
+    def chi2test(self, params, parNamea='', ha=0, parNameb='', hb=0):
+
+        pars = {}
+        for key, pp in params.items():
+            pars[key] = pp + ha*(parNamea == key)+hb*(parNameb == key)
+
+        print('pp', pars)
+        return np.sum((self.datat['y']-self.functest(pars, self.datat['x']))**2/self.datat['sigma']**2)
+
+    def derivtest_a(self, params):
+
+        return 2.*np.sum((self.datat['x']**3+params['b']*self.datat['x'])**2/self.datat['sigma']**2)
+
+    def derivtest_b(self, params):
+
+        return 2.*np.sum((self.datat['x']**2+params['a']*self.datat['x'])**2/self.datat['sigma']**2)
+
+    def derivtest_ab(self, params):
+        suma = -np.sum((self.datat['x']**2+params['a']*self.datat['x'])*(
+            self.datat['x']**3+params['b']*self.datat['x'])/self.datat['sigma']**2)
+        sumb = np.sum((self.datat['y']-self.functest(params,
+                                                     self.datat['x']))*self.datat['x']/self.datat['sigma']**2)
+
+        return -2.*(suma+sumb)
+
+    def sigma_mu(self, grp, alpha, beta):
+
+        res = grp.Cov_mbmb+(alpha**2)*grp.Cov_x1x1+(beta**2)*grp.Cov_colorcolor + \
+            2*alpha*grp.Cov_x1mb-2*beta*grp.Cov_colormb-2*alpha*beta*grp.Cov_x1color
+        return np.sqrt(res)
+
+
+class Sigma_Fisher_mu(CosmoDist):
+    """"
+    class to estimate error parameters using Fisher matrices
+
+    """
+
+    def __init__(self, data,
+                 params=dict(zip(['Om', 'w0',
+                             'wa'], [0.3, -1.0, 0.0])),
+                 params_Fisher=['Om', 'w0'],
+                 H0=70, c=299792.458):
+        super().__init__(H0, c)
+
+        self.data = data
+        # fit parameters
+        self.params = params
+        self.params_Fisher = params_Fisher
+
+    def __call__(self):
+        """
+        paramtest = {}
+        paramtest['a'] = 0.1
+        paramtest['b'] = 3.
+
+        self.datat = self.datatest(paramtest)
+        print('chi2',self.chi2test(paramtest))
+        print('derivative a')
+        deriva = self.derivative2_same(self.chi2test,paramtest,'a')
+        print('derivative b')
+        derivb = self.derivative2_same(self.chi2test,paramtest,'b')
+        print('derivative ab')
+        derivab = self.derivative2_mix(self.chi2test,paramtest,'a','b')
+        print(deriva,self.derivtest_a(paramtest),
+              derivb, self.derivtest_b(paramtest),
+              derivab, self.derivtest_ab(paramtest))
+        print(test)
+        """
+        # get covariance matrix (from Hessian)
+        res = self.matCov()
+        #resb = self.Hessian()
+
+        #print(res, resb)
+        if res is not None:
+            return dict(zip(self.params_Fisher, [res[i] for i in range(len(res))]))
+        else:
+            return dict(zip(self.params_Fisher, [-999]*len(self.params_Fisher)))
+
+    def matCov(self):
+
+        parName = self.params_Fisher
+        # parName = ['Om','w0','wa']
+        nparams = len(parName)
+
+        # get derivatives
+        # deriv = self.derivative_chi2(parName)
+        Fisher_Matrix = np.zeros((nparams, nparams))
+
+        self.data['chi2_indiv'] = self.data.apply(
+            lambda x: self.chi2_indiv(x, self.params), axis=1)
+        for pp in parName:
+            self.data['d_{}'.format(pp)] = self.data.apply(
+                lambda x: self.derivative_grp(x, self.derivative_Fisher, self.params, pp), axis=1)
+
+        # construct the Jacobian matrix
+        ndata = len(self.data)
+        J = np.zeros((ndata, nparams))
+
+        io = -1
+        for i, row in self.data.iterrows():
+            io += 1
+            for j, pp in enumerate(parName):
+                J[io, j] = row['d_{}'.format(pp)]
+
+        # second order derivatives
+
+        #hpar = dict(zip(parName, [1.e-1, 1.e-1, 1.e-1, 1.e-1, 1.e-3, 1.e-3]))
+        """
+        hpar = dict(zip(parName, [1.e-5, 1.e-5, 1.e-5]))
+        for j, pp in enumerate(parName):
+            for jb, ppb in enumerate(parName):
+                what = 'd2_{}_{}'.format(pp, ppb)
+                if pp == ppb:
+                    self.data[what] = self.data.apply(lambda x: self.derivative2_same(x,
+                                                                                      self.chi2_indiv, self.params, pp, h=hpar[pp]), axis=1)
+                else:
+                    self.data[what] = self.data.apply(lambda x: self.derivative2_mix(x,
+                                                                                     self.chi2_indiv, self.params, pp, ppb, ha=hpar[pp], hb=hpar[ppb]), axis=1)
+
+        Hsec = np.zeros((nparams, nparams))
+        for i, pp in enumerate(parName):
+            for j, ppb in enumerate(parName):
+                Hsec[i, j] = np.sum(self.data['chi2_indiv']
+                                    * self.data['d2_{}_{}'.format(pp, ppb)])
+        """
+        # Hessian
+        #H = 2.*(np.dot(J.T, J)+Hsec)
+        H = np.dot(J.T, J)
+        detmat = np.linalg.det(H)
+        Cov = None
+        if detmat:
+            H_inv = np.linalg.inv(H)
+            Cov = np.sqrt(np.diag(H_inv))
+
+        return Cov
+
+    def Hessian(self):
+
+        parName = self.params_Fisher
+        # parName = ['Om','w0','wa']
+        nparams = len(parName)
+
+        # get derivatives
+        # deriv = self.derivative_chi2(parName)
+        # fill the Fisher matrix
+        ndata = len(self.data)
+
+        for j, pp in enumerate(parName):
+            for jb, ppb in enumerate(parName):
+                what = 'd2_{}_{}'.format(pp, ppb)
+                if pp == ppb:
+                    # self.data[what] = self.data.apply(lambda x: self.derivative2_same(x,
+                    #                                                                  self.chi2_indiv_2, self.params, pp), axis=1)
+                    self.data[what] = self.derivative2_same(
+                        self.data, self.chi2_indiv_2, self.params, pp, h=1.e-8)
+                else:
+                    # self.data[what] = self.data.apply(lambda x: self.derivative2_mix(x,
+                    #                                                                 self.chi2_indiv_2, self.params, pp, ppb), axis=1)
+                    self.data[what] = self.derivative2_mix(
+                        self.data, self.chi2_indiv_2, self.params, pp, ppb, ha=1.e-8, hb=1.e-8)
+
+        H = np.zeros((nparams, nparams))
+        io = -1
+        for i, pp in enumerate(parName):
+            for j, ppb in enumerate(parName):
+                H[i, j] = 0.5*np.sum(self.data['d2_{}_{}'.format(pp, ppb)])
+
+        print('hessian', H)
+        Cov = None
+        detmat = np.linalg.det(H)
+        if detmat:
+            print('hessian det', detmat)
+            H_inv = np.linalg.inv(H)
+            print('hessian inverted', H_inv)
+            Cov = np.sqrt(np.diag(H_inv))
+        return Cov
+
+    def derivative_Fisher(self, grp, params, parName, h=1.e-8):
+        pars = {}
+        for key, pp in params.items():
+            pars[key] = pp + h*(parName == key)
+
+        Om = pars['Om']
+        w0 = pars['w0']
+        wa = pars['wa']
+
+        return (grp.mu_SN-self.mu(grp.z_SN, Om, w0, wa))/grp.sigma_mu_SN
+
+    def derivative_grp(self, grp, func, params, parName, h=1.e-8):
+
+        deriv = (func(grp, params, parName, h) -
+                 func(grp, params, parName, -h))/(2*h)
+
+        return deriv
+
+    def derivative(self, func, params, parName, h=1.e-8):
+
+        deriv = (func(params, parName, h)-func(params, parName, -h))/(2*h)
+
+        return deriv
+
+    def derivative2_same(self, grp, func, params, parName, h=1.e-8):
+
+        deriv = (func(grp, params, parName, h)-2.*func(grp, params) +
+                 func(grp, params, parName, -h))/(h**2)
+
+        return deriv
+
+    def derivative2_mix(self, grp, func, params, parName1, parName2, ha=1.e-8, hb=1.e-8):
+
+        deriv = func(grp, params, parName1, ha, parName2, hb)
+        deriv -= func(grp, params, parName1, -ha, parName2, hb)
+        deriv -= func(grp, params, parName1, ha, parName2, -hb)
+        deriv += func(grp, params, parName1, -ha, parName2, -hb)
+        deriv /= 4*ha*hb
+
+        return deriv
+
+    def chi2_indiv(self, grp, param, parNamea='', ha=0, parNameb='', hb=0):
+
+        pars = {}
+        for key, pp in param.items():
+            pars[key] = pp
+            if key == parNamea:
+                pars[key] += ha
+            if key == parNameb:
+                pars[key] += hb
+
+        Om = pars['Om']
+        w0 = pars['w0']
+        wa = pars['wa']
+
+        return (grp.mu_SN-self.mu_astro(grp.z_SN, Om, w0, wa))/grp.sigma_mu_SN
+
+    def chi2_indiv_2(self, grp, param, parNamea='', ha=0, parNameb='', hb=0):
+
+        pars = {}
+        for key, pp in param.items():
+            pars[key] = pp
+            if key == parNamea:
+                pars[key] += ha
+            if key == parNameb:
+                pars[key] += hb
+
+        Om = pars['Om']
+        w0 = pars['w0']
+        wa = pars['wa']
+
+        return np.sum((grp.mu_SN-self.mu_astro(grp.z_SN, Om, w0, wa))**2/grp.sigma_mu_SN**2)
 
     def datatest(self, params, sigma=0.5):
 

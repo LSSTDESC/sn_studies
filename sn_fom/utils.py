@@ -14,14 +14,14 @@ def update_config(fields, config, zcomp):
     return config
 
 
-def loadSN(fDir, dbName, tagprod, zlim):
+def loadSN(fDir, dbName, tagprod, zlim=pd.DataFrame()):
 
     # load data
     data = loadData(fDir, dbName, tagprod)
 
     # select data according to (zlim, season)
 
-    if zlim > 0:
+    if not zlim.empty:
         data = data.merge(zlim, left_on=['healpixID', 'season'], right_on=[
             'healpixID', 'season'])
 
@@ -127,6 +127,135 @@ def selSN(sn_data, nsn_per_bin, x1_color):
     return out_data
 
 
+def nSN_bin_eff(data, nsn_per_bin):
+    """
+    Method to select a number of simulated SN according to the expected nsn_per_bin
+
+    Parameters
+    ---------------
+    data: pandas df
+      simulated sn
+    nsn_per_bin: pandas df
+      df with the expected number of sn per bin
+    x1_color: dict
+
+    Returns
+    -----------
+    selected data
+    """
+
+    sel_data = select(data)
+    surveytype = np.unique(nsn_per_bin['surveytype']).item()
+    zcomp = np.unique(nsn_per_bin['zcomp']).item()
+    zsurvey = np.unique(nsn_per_bin['zsurvey']).item()
+
+    assert(surveytype in ['full', 'complete'])
+    if surveytype == 'full':
+        zmax = zsurvey
+    if surveytype == 'complete':
+        zmax = zcomp
+
+    zmax = np.round(zmax, 2)
+    zstep = 0.05
+    bins = np.arange(0, zmax+zstep, 0.05)
+    group = data.groupby(pd.cut(data.z, bins))
+    group_sel = sel_data.groupby(pd.cut(sel_data.z, bins))
+
+    # estimate efficiency here
+    effi = group_sel.size()/group.size()
+
+    # multiply efficiencies by expected number of sn
+    # slight shift to adjust the bining (not sure it is necessary actually)
+    nsn_per_bin['z'] -= 0.005
+    nsn_z = nsn_per_bin.groupby(pd.cut(nsn_per_bin.z, bins))[
+        'nsn_survey'].mean()
+
+    nsn_z *= effi
+
+    plot_centers = (bins[:-1] + bins[1:])/2
+    df = pd.DataFrame(plot_centers, columns=['z'])
+    df['nsn_eff'] = nsn_z.to_list()
+    df['surveytype'] = surveytype
+    df['zcomp'] = zcomp
+    df['zsurvey'] = zsurvey
+
+    return df
+
+
+def simu_mu(simpars):
+    """
+    Function to simulate distance modulus
+
+    Parameters
+    ---------------
+    simpars : pandas df
+      array of parameters for simulation
+
+    Returns
+    ----------
+    pandas df with simulated values
+
+    """
+    surveytype = np.unique(simpars['surveytype']).item()
+    zcomp = np.unique(simpars['zcomp']).item()
+    zsurvey = np.unique(simpars['zsurvey']).item()
+
+    assert(surveytype in ['full', 'complete'])
+    if surveytype == 'full':
+        zmax = zsurvey
+    if surveytype == 'complete':
+        zmax = zcomp
+
+    zmax = np.round(zmax, 2)
+    zstep = 0.05
+    bins = np.arange(0, zmax+zstep, 0.05)
+    group = simpars.groupby(pd.cut(simpars.z, bins)
+                            ).apply(lambda x: randsimu(x))
+
+    return group
+
+
+def randsimu(grp, zstep=0.05):
+    """
+    function to randomly simulate z, mu, sigmu distributions
+
+    Parameters
+    ---------------
+    grp: pandas df group 
+      simu parameters to use
+    zstep: float
+      z bin value
+
+    """
+
+    zmin = grp.name.left
+    zmax = grp.name.right
+    nsn = int(grp['nsn_eff'].mean())
+    sigma_mu = grp['sigma_mu_mean'].mean()
+    sigma_mu_rms = grp['sigma_mu_rms'].mean()
+
+    if nsn < 1:
+        return pd.DataFrame()
+    # random z between zmin and zmax
+    z = np.random.uniform(zmin, zmax, nsn)
+
+    # sigma_mu from gaussian
+    from random import gauss
+    sigmu = [gauss(sigma_mu, sigma_mu_rms) for i in range(nsn)]
+
+    # distance modulus
+    from sn_fom.cosmo_fit import CosmoDist
+    cosmo = CosmoDist(H0=70.)
+    dist_mu = cosmo.mu_astro(z, 0.3, -1.0, 0.0)
+    mu = [gauss(dist_mu[i], sigmu[i]) for i in range(len(dist_mu))]
+
+    df = pd.DataFrame(z, columns=['z_SN'])
+    df['mu_SN'] = mu
+    df['sigma_mu_SN'] = sigma_mu
+
+    return df
+
+
 def loadData(dirFile, dbName, tagprod):
     """
     Function to load data from file
@@ -181,18 +310,22 @@ def select(dd):
     return dd[idx].copy()
 
 
-def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'], nseasons=2, max_season_length=180., survey_area=9.6, zsurvey=1., surveytype='full'):
+def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS', 'WFD'],
+              nseasons=[2]*5+[10],
+              max_season_length=180.,
+              survey_area=[9.6]*5+[50],
+              zsurvey=1., surveytype='full'):
 
     # fields = ['COSMOS']
-    nfields = dict(zip(fields, [1, 1, 1, 1, 2]))
-    zcomp = dict(zip(fields, [0.9, 0.9, 0.7, 0.7, 0.7]))
+    nfields = dict(zip(fields, [1, 1, 1, 1, 2, 50]))
+    zcomp = dict(zip(fields, [0.9, 0.9, 0.7, 0.7, 0.7, 0.2]))
 
     # get scenario
     r = []
 
-    for field in fields:
+    for io, field in enumerate(fields):
         r.append((field, zcomp[field], max_season_length,
-                  nfields[field], survey_area, nseasons, zsurvey, surveytype))
+                  nfields[field], survey_area[io], nseasons[io], zsurvey, surveytype))
 
     config = pd.DataFrame(r, columns=[
         'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons', 'zsurvey', 'surveytype'])
@@ -290,9 +423,9 @@ def select_x1_color(df, x1_color_vals):
     return new_df
 
 
-def transformSN(fileDir, dbName, snType, zcomp, alpha, beta):
+def transformSN(fileDir, dbName, snType, alpha, beta):
 
-    data_sn = loadSN(fileDir, dbName, snType, zcomp)
+    data_sn = loadSN(fileDir, dbName, snType)
     data_sn = select(pd.DataFrame(data_sn))
     data_sn['Mb'] = -2.5*np.log10(data_sn['x0_fit'])+10.635
     data_sn['Cov_mbmb'] = (
@@ -341,7 +474,6 @@ def binned_data(zmin, zmax, nbins, data, var='sigma_mu'):
     plot_values = group[var].mean().to_list()
     error_values = group[var].std().to_list()
 
-    print(plot_centers, plot_values)
     df = pd.DataFrame(plot_centers, columns=['z'])
     df['{}_mean'.format(var)] = plot_values
     df['{}_rms'.format(var)] = error_values

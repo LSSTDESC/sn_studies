@@ -375,6 +375,209 @@ class plotHubbleResiduals(CosmoDist):
         return plot_centers, plot_values, error_values, residuals
 
 
+class plotHubbleResiduals_mu(CosmoDist):
+    """
+    Class to plot Hubble residuals
+    This class inherits from the CosmoDist class
+
+    Parameters
+    ---------------
+    fDir: str
+      location dir of the files to process
+    dbName: str
+       db Name to process
+    zlim: float
+      redshift completeness
+    H0 : float,opt
+      Hubble cte (default: 72.  # km.s-1.Mpc-1)
+    c: float, opt
+     speed of the light (default: = 299792.458  # km.s-1)
+
+    """
+
+    def __init__(self, fitparams, fichName, H0=70., c=299792.458, rescale_factor=1, var_FoM=['Om', 'w0'], var_fit=['Om', 'w0', 'wa']):
+        super().__init__(H0, c)
+
+        # load SN
+        data = pd.read_hdf(fichName)
+
+        self.data = data
+        self.Z = data['z_SN']
+        self.mu = data['mu_SN']
+        self.sigma_mu = data['sigma_mu_SN']
+        self.zmin, self.zmax = np.min(self.Z), np.max(self.Z)
+
+        print(fitparams)
+        self.Om = fitparams['Om']
+        self.w0 = fitparams['w0']
+        self.wa = fitparams['wa']
+
+        sig = {}
+        for vv in var_fit:
+            sig[vv] = {}
+            sig[vv]['val'] = fitparams[vv]
+            sig[vv]['sigma'] = np.sqrt(fitparams['Cov_{}_{}'.format(vv, vv)])
+
+        vara = var_FoM[0]
+        sig_vara = 'Cov_{}_{}'.format(vara, vara)
+        varb = var_FoM[1]
+
+        sig_varb = 'Cov_{}_{}'.format(varb, varb)
+        sig_vara_varb = 'Cov_{}_{}'.format(vara, varb)
+
+        self.sigma_a = np.sqrt(fitparams[sig_vara])
+        self.sigma_b = np.sqrt(fitparams[sig_varb])
+        self.sigma_a_b = fitparams[sig_vara_varb]
+
+        self.chi2 = fitparams['chi2']/fitparams['ndf']
+
+        """
+        self.lega = '$\Omega_m$'+' = {}'.format(np.round(fitparams[vara], 3))
+        self.lega += '$\pm $'+'{}'.format(np.round(self.sigma_a, 3))
+        self.legb = '$w_0$'+' = {}'.format(np.round(fitparams[varb], 3))
+        self.legb += '$\pm $'+'{}'.format(np.round(self.sigma_b, 3))
+        """
+        self.lega = '$\Omega_m$'+' = {}'.format(np.round(sig['Om']['val'], 3))
+        self.lega += '$\pm $'+'{}'.format(np.round(sig['Om']['sigma'], 3))
+        self.lega += ' $w_0$'+' = {}'.format(np.round(sig['w0']['val'], 3))
+        self.lega += '$\pm $'+'{}'.format(np.round(sig['w0']['sigma'], 3))
+        if 'wa' in var_fit:
+            self.lega += ' $w_a$'+' = {}'.format(np.round(sig['wa']['val'], 3))
+            self.lega += '$\pm $'+'{}'.format(np.round(sig['wa']['sigma'], 3))
+
+    def plots(self):
+
+        # FoM_val, rho = FoM(self.sigma_a, self.sigma_b, self.sigma_a_b)
+        FoM_val, rho = FoM(self.sigma_a, self.sigma_b, self.sigma_a_b)
+        fig = plt.figure(figsize=(12, 8))
+        ttit = 'FoM (95%)  = {} \n'.format(np.round(FoM_val, 2))
+        ttit += '{} \n'.format(self.lega)
+        """
+        ttit += '$\sigma_{w_0}$'+'= {}'.format(np.round(self.sigma_w0,3))
+        ttit += '$\sigma_{w_a}$'+'= {}'.format(np.round(self.sigma_wa,3))
+        """
+        ttit += ' $\chi^2/ndf$'+' = {}'.format(np.round(self.chi2, 5))
+        fig.suptitle(ttit)
+
+        ax = fig.add_axes((.1, .3, .8, .6))
+        self.plot_hubble(ax)
+        print('zmin and zmax', self.zmin, self.zmax)
+        ax.set_xlim([self.zmin, self.zmax])
+        axb = fig.add_axes((.1, .1, .8, .2))
+        bottom_h = left_h = 0.1 + 0.8 + 0.02
+        rect_histy = [left_h, 0.1, 0.05, 0.2]
+        axbh = fig.add_axes(rect_histy)
+        nullfmt = NullFormatter()
+        axbh.yaxis.set_major_formatter(nullfmt)
+        self.plot_residuals(axb, axbh, binned=True)
+        axb.set_xlim([self.zmin, self.zmax])
+
+        # plt.show()
+    def plot_hubble(self, ax):
+        ax.errorbar(self.Z, self.mu,
+                    yerr=self.sigma_mu, xerr=None, fmt='.', color='k')
+        z = np.arange(0.001, 1., 0.001)
+        r = self.mu_astro(z, self.Om, self.w0, self.wa)
+        ax.plot(z, r, color='r')
+
+    def plot_residuals(self, axb, axbh, binned=False, nbins=50):
+        """
+        Method to plot distance modulus vs redshift
+
+        Parameters
+        ---------------
+        data: pandas df
+         data to plot
+
+        """
+
+        r = []
+
+        for z in np.arange(self.zmin, self.zmax+0.01, 0.001):
+            mu, mup, mum = self.mu_astro(z, self.Om, self.w0, self.wa), self.mu_astro(
+                z, self.Om, self.w0+0.01, self.wa), self.mu_astro(z, self.Om, self.w0-0.01, self.wa)
+            r.append((z, mu, mup, mum))
+
+        res = np.rec.fromrecords(r, names=['z', 'mu', 'mup', 'mum'])
+
+        res_interp = interp1d(res['z'], res['mu'],
+                              bounds_error=False, fill_value=0.)
+
+        # add the mu_th column
+        mu_th = res_interp(self.Z)
+
+        # residuals: mu-mu_th/mu
+        mu_residual = mu_th-mu
+
+        x, y, yerr, residuals = 0., 0., 0., 0.
+        if binned:
+            x, y, yerr, residuals = self.binned_data(
+                self.zmin, self.zmax, self.data, nbins, res_interp)
+            io = x >= 0.3
+            io &= x <= 0.4
+            print('mean residual', np.mean(residuals[io]))
+        else:
+            x, y, yerr = self.Z, self.mu, self.sigma_mu
+            residuals = mu_residual
+            io = x >= 0.3
+            io &= x <= 0.4
+            print('mean residual', np.mean(residuals[io]))
+        """
+        ax.errorbar(x, y, yerr=yerr,
+                    color='k', lineStyle='None', marker='o', ms=2)
+        ax.grid()
+        """
+        # axb = fig.add_axes((.1, .1, .8, .2))
+        axb.errorbar(x, residuals, yerr=None, color='k',
+                     lineStyle='None', marker='o', ms=2)
+        axbh.hist(residuals, bins=20, orientation='horizontal')
+        print('Residuals', np.mean(residuals), np.std(residuals))
+        axb.errorbar(res['z'], res['mu']-res['mup'], color='r', ls='dotted')
+        axb.errorbar(res['z'], res['mu']-res['mum'], color='r', ls='dotted')
+
+        axb.grid()
+
+    def binned_data(self, zmin, zmax, data, nbins, muth_interp, vary='mu_SN', erry='sigma_mu_SN'):
+        """
+        Method to transform a set of data to binned data
+
+        Parameters
+        ---------------
+        zmin: float
+          min redshift
+        zmax: float
+          max redshift
+        data: pandas df
+          data to be binned
+        vary: str, opt
+          y-axis variable (default: mu)
+        erry: str, opt
+          y-axis var error (default: sigma_mu)
+
+        Returns
+        -----------
+        x, y, yerr:
+        x : redshift centers
+        y: weighted mean of distance modulus
+        yerr: distance modulus error
+
+        """
+        data['diff_mu'] = muth_interp(data['z_SN'])-data[vary]
+        bins = np.linspace(zmin, zmax, nbins)
+        group = data.groupby(pd.cut(data.z_SN, bins))
+        plot_centers = (bins[:-1] + bins[1:])/2
+        plot_values = group.mu_SN.mean()
+        residuals = group.diff_mu.mean()
+        # plot_values = group.apply(lambda x: np.sum(
+        #    x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
+        print(plot_values)
+        error_values = group.apply(
+            lambda x: 1./np.sqrt(np.sum(1./x[erry]**2)))
+        print('error', error_values)
+
+        return plot_centers, plot_values, error_values, residuals
+
+
 def binned_data(zmin, zmax, data, nbins, vary='mu', erry='sigma_mu'):
     """
     Method to transform a set of data to binned data
@@ -471,7 +674,7 @@ class plotSN:
 
     def __call__(self):
 
-        #from sn_fom.cosmo_fit import FitData
+        # from sn_fom.cosmo_fit import FitData
         fig, ax = plt.subplots()
         ip = -1
         for i, row in self.params_fit.iterrows():
@@ -487,14 +690,14 @@ class plotSN:
                 pp.append(var)
 
             print(row[pp])
-            #self.binned(data, ax, var='resi_mu', error='sigma_mu')
+            # self.binned(data, ax, var='resi_mu', error='sigma_mu')
             self.binned(data, ax, var='x1', error='')
             """
             print('fitted', row)
             fit = FitData(data)
 
             newpar = fit()
-            
+
             print('new fit', newpar)
             print(test)
             """
@@ -511,17 +714,16 @@ class plotSN:
         data['Cov_mbmb'] = (
             2.5 / (data['x0_fit']*np.log(10)))**2*data['Cov_x0x0']
 
-        data['Cov_x1mb'] = -2.5*data['Cov_x0x1'] / \
-            (data['x0_fit']*np.log(10))
+        data['Cov_x1mb'] = -2.5*data['Cov_x0x1']/(data['x0_fit']*np.log(10))
 
         data['Cov_colormb'] = -2.5*data['Cov_x0color'] / \
             (data['x0_fit']*np.log(10))
 
         data['sigma_mu'] = data['Cov_mbmb']
-        +self.ppt['alpha']**2*data['Cov_x1x1']
-        +self.ppt['beta']**2*data['Cov_colorcolor']
+        + self.ppt['alpha']**2*data['Cov_x1x1']
+        + self.ppt['beta']**2*data['Cov_colorcolor']
         + 2 * self.ppt['alpha']*data['Cov_x1mb']
-        -2.*self.ppt['beta']*data['Cov_colormb']
+        - 2.*self.ppt['beta']*data['Cov_colormb']
         - 2.*self.ppt['alpha']*self.ppt['beta']*data['Cov_x1color']
 
         data['sigma_mu'] = np.sqrt(data['sigma_mu'])

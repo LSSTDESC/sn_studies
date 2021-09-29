@@ -3,10 +3,11 @@ import numpy as np
 # from . import np
 from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
-from sn_fom.steps import multifit, sigma_mu
+from sn_fom.steps import multifit, Sigma_mu_obs
 from sn_fom.plot import plotStat, plotHubbleResiduals, binned_data, plotFitRes, plotSN
+from sn_fom.plot import plotHubbleResiduals_mu
 from sn_fom.utils import getconfig
-from sn_fom.cosmo_fit import Sigma_Fisher
+from sn_fom.cosmo_fit import Sigma_Fisher, Sigma_Fisher_mu
 import os
 import pandas as pd
 
@@ -18,15 +19,21 @@ parser.add_option("--fileDir", type="str",
 parser.add_option("--dbName", type="str",
                   default='descddf_v1.5_10yrs',
                   help="file directory [%default]")
-parser.add_option("--fields", type="str",
+parser.add_option("--fields_DD", type="str",
                   default='COSMOS, XMM-LSS, ELAIS, CDFS, ADFS',
+                  help="file directory [%default]")
+parser.add_option("--fields_WFD", type="str",
+                  default='WFD',
                   help="file directory [%default]")
 parser.add_option("--nproc", type=int,
                   default=4,
                   help="number of procs for multiprocessing  [%default]")
-parser.add_option("--nseasons", type=int,
-                  default=2,
-                  help="number of seasons per field  [%default]")
+parser.add_option("--nseasons_DD", type=str,
+                  default='2,2,2,2,2',
+                  help="number of seasons per field  - DDFs [%default]")
+parser.add_option("--nseasons_WFD", type=int,
+                  default=10,
+                  help="number of seasons per field - WFD [%default]")
 parser.add_option("--dirSN", type=str,
                   default='fake_SN',
                   help="location dir of simulated SN used to estimate cosmo parameters  [%default]")
@@ -47,37 +54,29 @@ opts, args = parser.parse_args()
 
 fileDir = opts.fileDir
 dbNames = opts.dbName.split('/')
-fields = opts.fields.split('/')
+fields_DD = opts.fields_DD.split('/')
+fields_WFD = opts.fields_WFD
 nproc = opts.nproc
 dirSN = opts.dirSN
 dirFit = opts.dirFit
-nseasons = opts.nseasons
+nseasons_DD = list(map(int, opts.nseasons_DD.split(',')))
+nseasons_WFD = opts.nseasons_WFD
 snType = opts.snType
 surveyType = opts.surveyType
 zsurvey = opts.zsurvey
 
-
-sigmuName = 'sigma_mu_from_simu.hdf5'
-if not os.path.isfile(sigmuName):
-    pp = {}
-    pp['fileDir'] = fileDir
-    pp['dbNames'] = ['DD_0.90', 'DD_0.65', 'DD_0.70', 'DD_0.80']
-    pp['snType'] = 'allSN'
-    res = sigma_mu(pp)
-    res.to_hdf(sigmuName, key='sigmamu')
-
-sigma_mu_from_simu = pd.read_hdf(sigmuName)
+sigma_mu_from_simu = Sigma_mu_obs(fileDir, plot=False).data
 
 # load sigma_mu here
 
-print('hello dbNames', dbNames, fields)
+print('hello dbNames', dbNames, fields_DD, nseasons_DD)
 tagName = ''
 for ip, dd in enumerate(dbNames):
-    tagName += '{}_{}'.format(dd, fields[ip].replace(',', '_'))
+    tagName += '{}_{}'.format(dd, fields_DD[ip].replace(',', '_'))
     if ip < len(dbNames)-1:
         tagName += '_'
 
-tagName += '_{}'.format(nseasons)
+tagName += '_{}_{}'.format('_'.join(map(str, nseasons_DD)), nseasons_WFD)
 tagName += '_{}'.format(snType)
 
 dirSN = '{}_{}'.format(dirSN, tagName)
@@ -91,20 +90,24 @@ print('dirfit', dirFit)
 
 fitparName = '{}/FitParams.hdf5'.format(dirFit)
 
+print('hello', fitparName)
+config = getconfig(nseasons=nseasons_DD+[nseasons_WFD], zsurvey=zsurvey,
+                   surveytype=surveyType)
+
+parameter_to_fit = ['Om', 'w0', 'wa']
 if not os.path.isfile(fitparName):
     # get default configuration file
-    config = getconfig(nseasons=nseasons, zsurvey=zsurvey,
-                       surveytype=surveyType)
 
     ffi = range(16)
     params = {}
     params['fileDir'] = fileDir
     params['dbNames'] = dbNames
     params['config'] = config
-    params['fields'] = fields
+    params['fields'] = fields_DD
     params['dirSN'] = dirSN
     params['snType'] = snType
     params['sigma_mu'] = sigma_mu_from_simu
+    params['params_fit'] = parameter_to_fit
     params_fit = multiproc(ffi, params, multifit, nproc)
 
     print(params_fit)
@@ -121,7 +124,6 @@ plots = plotStat(params_fit)
 plots.plotFoM()
 """
 print(params_fit.columns)
-print(params_fit[['SNID', 'M']])
 Om = 0.3
 w0 = -1.0
 wa = 0.0
@@ -131,6 +133,8 @@ M = -19.0906
 #M = -18.97
 params = dict(zip(['M', 'alpha', 'beta', 'Om', 'w0', 'wa'],
                   [M, alpha, beta, Om, w0, wa]))
+params = dict(zip(['Om', 'w0', 'wa'],
+                  [Om, w0, wa]))
 # params=dict(zip(['Om','w0','wa'],[Om,w0,wa]))
 
 
@@ -153,11 +157,13 @@ plt.show()
 for i, row in params_fit.iterrows():
     snName = '{}.hdf5'.format(row['SNID'])
 
-    plotresi = plotHubbleResiduals(row, snName)
+    plotresi = plotHubbleResiduals_mu(
+        row, snName, var_FoM=['w0', 'wa'], var_fit=parameter_to_fit)
     plotresi.plots()
     # plotresi.plot_sn_vars()
 
     data = pd.read_hdf(snName)
+    """
     print('NSN', len(data), data.columns)
     data['Mb'] = -2.5*np.log10(data['x0_fit'])+10.635
     data['Cov_mbmb'] = (
@@ -173,7 +179,8 @@ for i, row in params_fit.iterrows():
         2.*alpha*beta*data['Cov_x1color']
     data['sigma_mu'] = np.sqrt(data['sigma_mu'])
     data['mu'] = -M+data['mbfit']+alpha*data['x1_fit']-beta*data['color_fit']
-    sig = Sigma_Fisher(data, params=params)
+    """
+    sig = Sigma_Fisher_mu(data, params=params, params_Fisher=parameter_to_fit)
     res_Fisher = sig()
     for pp in sig.params_Fisher:
         row['sigma_{}'.format(pp)] = np.sqrt(row['Cov_{}_{}'.format(pp, pp)])

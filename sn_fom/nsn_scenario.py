@@ -283,7 +283,6 @@ class NSN_config:
         sl = SeasonLength(fDir, fName, slDir, slName)
         config = sl(config)
 
-        print('here sl', config)
         # get nsn
         nsn = NSN_scenario()
         config = nsn(config)
@@ -327,7 +326,6 @@ def nsn_bin(nsn_scen):
 
     """
 
-    print('test here', nsn_scen)
     # df = pd.DataFrame(np.copy(nsn_scen))
 
     nsn_scen = nsn_scen.sort_values(by=['z'])
