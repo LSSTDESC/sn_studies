@@ -6,7 +6,56 @@ import pandas as pd
 from . import np
 
 
-def fit_SN(fileDir, dbNames, config, fields, snType, params_fit=['Om', 'w0', 'wa'], sigmu=pd.DataFrame(), saveSN=''):
+def fit_SN(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=pd.DataFrame(), params_fit=['Om', 'w0', 'wa'], saveSN=''):
+
+    # simulate supernovae here - DDF
+    data_sn = simul_SN(dbNames, config, fields, snType,
+                       sigmu, nsn_bias, saveSN=saveSN)
+
+    # add WFD SN if required
+    print('NSN DD:', len(data_sn), 'WFD:', len(sn_wfd))
+    if not sn_wfd.empty:
+        data_sn = pd.concat((data_sn, sn_wfd))
+
+    if saveSN != '':
+        data_sn.to_hdf(saveSN, key='sn')
+
+    # cosmo fit here
+    SNID = ''
+    if saveSN != '':
+        SNID = saveSN.split('.hdf5')[0]
+
+    # second step: fit the data
+
+    # FitCosmo instance
+    fit = FitData_mu(data_sn, params_fit=params_fit)
+
+    # make the fit and get the parameters
+    params_fit = fit()
+
+    if SNID != '':
+        params_fit['SNID'] = SNID
+    return params_fit
+
+
+def simul_SN(dbNames, config, fields, snType, sigmu, nsn_bias, saveSN=''):
+
+    data_sn = pd.DataFrame()
+    for i, dbName in enumerate(dbNames):
+        fields_to_process = fields[i].split(',')
+        idx = config['fieldName'].isin(fields_to_process)
+        # dd = getSN(fileDir, dbName, config[idx], fields_to_process, snType)
+        idxb = sigmu['dbName'] == dbName
+        idxa = nsn_bias['zcomp'] == dbName.split('_')[1]
+        dd = getSN_mu_simu(dbName, fields_to_process,
+                           sigmu[idxb], nsn_bias[idxa], config[idx])
+        data_sn = pd.concat((data_sn, dd))
+        print('there', dbName, fields_to_process, dd.size)
+
+    return data_sn
+
+
+def fit_SN_old(fileDir, dbNames, config, fields, snType, params_fit=['Om', 'w0', 'wa'], sigmu=pd.DataFrame(), saveSN=''):
     data_sn = pd.DataFrame()
 
     # first step: generate SN
@@ -14,6 +63,8 @@ def fit_SN(fileDir, dbNames, config, fields, snType, params_fit=['Om', 'w0', 'wa
 
     idxb = sigmu['dbName'] == 'WFD_0.20'
     wfd = getSN_mu_simu_wfd(fileDir, 'WFD_0.20', sigmu[idxb])
+
+    print(wfd)
     print(test)
     for i, dbName in enumerate(dbNames):
         fields_to_process = fields[i].split(',')
@@ -24,8 +75,6 @@ def fit_SN(fileDir, dbNames, config, fields, snType, params_fit=['Om', 'w0', 'wa
             fileDir, dbName, config[idx], fields_to_process, sigmu[idxb])
         data_sn = pd.concat((data_sn, dd))
         print('SN inter', dbName, len(dd))
-
-    data_sn = data_sn.droplevel('z')
 
     SNID = ''
     if saveSN != '':
@@ -55,15 +104,17 @@ def multifit(index, params, j=0, output_q=None):
     snType = params['snType']
     sigma_mu_from_simu = params['sigma_mu']
     params_for_fit = params['params_fit']
+    nsn_bias = params['nsn_bias']
+    sn_wfd = params['sn_wfd']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
     for i in index:
         if saveSN != '':
             saveSN_f = '{}/SN_{}.hdf5'.format(saveSN, i)
-        fitpar = fit_SN(fileDir, dbNames, config,
+        fitpar = fit_SN(dbNames, config,
                         fields, snType,
-                        params_for_fit, sigma_mu_from_simu, saveSN=saveSN_f)
+                        sigma_mu_from_simu, nsn_bias, sn_wfd, params_for_fit, saveSN=saveSN_f)
         params_fit = pd.concat((params_fit, fitpar))
 
     if output_q is not None:
@@ -103,7 +154,33 @@ def getSN(fileDir, dbName, config, fields, snType):
     return data_sn
 
 
-def getSN_mu_simu(fileDir, dbName, config, fields, sigmu_from_simu):
+def getSN_mu_simu(dbName, fields, sigmu, nsn_bias, config):
+
+    zcomp = dbName.split('_')[1]
+
+    SN = pd.DataFrame()
+    for field in fields:
+        idx = nsn_bias['fieldName'] == field
+        nsn_eff = pd.DataFrame(np.copy(nsn_bias[idx].to_records()))
+        ia = config['fieldName'] == field
+        selconfig = config[ia]
+        nseasons = selconfig['nseasons'].to_list()[0]
+        nfields = selconfig['nfields'].to_list()[0]
+        nsn_eff['nsn_eff'] *= nseasons*nfields
+        simuparams = nsn_eff.merge(
+            sigmu, left_on=['z'], right_on=['z'])
+        # simulate distance modulus (and error) here
+        res = simu_mu(simuparams)
+        SN = pd.concat((SN, res))
+
+    print('total number of SN', len(SN))
+
+    SN = SN.droplevel('z')
+
+    return SN
+
+
+def getSN_mu_simu_old(fileDir, dbName, config, fields, sigmu_from_simu):
 
     zcomp = dbName.split('_')[1]
     zcomplete = float(zcomp)
@@ -129,18 +206,21 @@ def getSN_mu_simu(fileDir, dbName, config, fields, sigmu_from_simu):
     # simulate distance modulus (and error) here
 
     SN = simu_mu(simuparams)
+
+    SN = SN.droplevel('z')
+
     return SN
 
 
 def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu):
-    print(sigmu_from_simu, np.mean(np.diff(sigmu_from_simu['z'])))
+
     zst = np.mean(np.diff(sigmu_from_simu['z']))/2
     zmin = 0.
     zmax = sigmu_from_simu['z'].max()+zst
     bins = np.arange(zmin, zmax, 2.*zst)
 
     # get SN from simu
-    data_sn = select(loadSN(fileDir, dbName, 'WFD'))
+    data_sn = select(loadSN(fileDir, dbName, 'WFD', nfich=150))
 
     idx = data_sn['z'] < 0.2
     data_sn = data_sn[idx]
@@ -154,21 +234,27 @@ def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu):
     nsn_eff['zcomp'] = 0.2
     nsn_eff['zsurvey'] = 0.2
 
-    print(nsn_eff)
+    # print('nsn_eff', nsn_eff)
+    # print('sigmu', sigmu_from_simu)
     """
     import matplotlib.pyplot as plt
     plt.hist(data_sn['z'], histtype='step')
     plt.show()
     """
 
+    print('total number of SN', np.sum(nsn_eff['nsn_eff']))
     # merge with sigmu_from_simu
-
+    nsn_eff = nsn_eff.round({'z': 6})
+    sigmu_from_simu = sigmu_from_simu.round({'z': 6})
     simuparams = nsn_eff.merge(sigmu_from_simu, left_on=['z'], right_on=['z'])
 
-    print(simuparams)
+    # print('after merging', simuparams)
     # simulate distance modulus (and error) here
 
     SN = simu_mu(simuparams)
+
+    SN = SN.droplevel('z')
+
     return SN
 
 
@@ -240,4 +326,147 @@ class Sigma_mu_obs:
         ax.grid()
         ax.set_xlabel('$z$')
         ax.set_ylabel('$\sigma_\mu$ [mag]')
+        plt.show()
+
+
+def SN_WFD(fileDir, sigmu=pd.DataFrame(), saveSN='SN_WFD.hdf5'):
+
+    import os
+    if not os.path.isfile(saveSN):
+
+        # generate SN
+
+        idxb = sigmu['dbName'] == 'WFD_0.20'
+        wfd = getSN_mu_simu_wfd(fileDir, 'WFD_0.20', sigmu[idxb])
+        wfd.to_hdf(saveSN, key='sn_wfd')
+
+    sn = pd.read_hdf(saveSN)
+
+    return sn
+
+
+class NSN_bias:
+    """
+    class to estimate the number of observed SN as a function of the redshift.
+    These numbers are estimated from a set of simulated+fitted LCs=SN
+
+    Parameters
+    ---------------
+    fileDir: str
+        location dir of the SN files
+    config_fields: list(str), opt
+    sigmu: pandas df
+      z, sigma_mu, sigma_mu_err for simulated SN
+      list of fields to process (default: ['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'])
+    dbNames: list(str), opt
+      list of configurations to consider (default: ['DD_0.65', 'DD_0.70', 'DD_0.80', 'DD_0.90'])
+    plot: bool, opt
+     to plot the results (default: False)
+    outName: str, opt
+      output name (default: nsn_bias.hdf5)
+
+
+    """
+
+    def __init__(self, fileDir, config,
+                 fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'],
+                 dbNames=['DD_0.65', 'DD_0.70', 'DD_0.80', 'DD_0.90'],
+                 plot=False, outName='nsn_bias.hdf5'):
+
+        self.fileDir = fileDir
+        self.config = config
+        self.fields = fields
+        self.dbNames = dbNames
+
+        import os
+        if not os.path.isfile(outName):
+            data = self.get_data()
+            data.to_hdf(outName, key='nsn')
+
+        self.data = pd.read_hdf(outName)
+        if plot:
+            self.plot()
+
+    def get_data(self):
+        """
+         Method to loop on dbNames and fields to estimate the number of sn per redshift bin
+
+         Returns
+         ----------
+         pandas df with the following columns
+
+         """
+        data_sn = pd.DataFrame()
+
+        for i, dbName in enumerate(self.dbNames):
+            for field in self.fields:
+                idx = self.config['fieldName'].isin([field])
+                dd = self.getNSN_bias(dbName, self.config[idx], [field])
+                data_sn = pd.concat((data_sn, dd))
+                print('SN inter', dbName, len(dd))
+
+        return data_sn
+
+    def getNSN_bias(self, dbName, config, fields):
+        """
+        Method to estimate the number of SN per redshift bin
+        for a configuration and a field
+
+        Parameters
+        --------------
+        dbName: str
+          configuration to consider
+        config: dict
+          config related to the field: nseason, nfields, season length,...
+        fields: list(str)
+          fields to process
+
+        Returns
+        ----------
+        pandas df with the following columns
+
+        """
+        zcomp = dbName.split('_')[1]
+        zcomplete = float(zcomp)
+
+        config = update_config(fields, config,
+                               np.round(zcomplete, 2))
+
+        nsn_scen = NSN_config(config)
+
+        nsn_per_bin = nsn_bin(nsn_scen.data)
+
+        # get SN from simu
+        data_sn = loadSN(self.fileDir, dbName, 'allSN')
+
+        # get the effective (bias effect) number of expected SN per bin
+
+        nsn_eff = nSN_bin_eff(data_sn, nsn_per_bin)
+
+        nsn_eff['fieldName'] = fields[0]
+        nsn_eff['zcomp'] = zcomp
+
+        return nsn_eff
+
+    def plot(self):
+        """
+        Method to plot nsn vs z for each field and config
+
+        """
+        import matplotlib.pyplot as plt
+        for field in self.data['fieldName'].unique():
+            idx = self.data['fieldName'] == field
+            sel = self.data[idx]
+            fig, ax = plt.subplots()
+            fig.suptitle('{}'.format(field))
+            for zcomp in sel['zcomp'].unique():
+                idxb = sel['zcomp'] == zcomp
+                selb = sel[idxb]
+                ax.plot(selb['z'], selb['nsn_eff'],
+                        label='$z_{complete}$'+'= {}'.format(zcomp))
+
+            ax.grid()
+            ax.set_xlabel('$z$')
+            ax.set_ylabel('N$_{SN}$')
+            ax.legend()
         plt.show()

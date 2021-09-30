@@ -300,7 +300,7 @@ class FoM(CosmoDist):
         idx = np.abs(data['z']-data['zcomp']) >= 0.
 
         self.data = data[idx].copy()
-        print('Number of SN', len(self.data))
+        # print('Number of SN', len(self.data))
         self.NSN = int(len(self.data)/rescale_factor)
 
     def plot_sn_vars(self):
@@ -469,7 +469,7 @@ class FitData:
     """
 
     def __init__(self, data):
-        print('Number of SN for fit', len(data))
+        # print('Number of SN for fit', len(data))
         # print set([d[name]['idr.subset'] for name in d.keys()]
 
         print(data.columns)
@@ -599,7 +599,7 @@ class FitData_mu:
     """
 
     def __init__(self, data, params_fit=['Om', 'w0']):
-        print('Number of SN for fit', len(data))
+        # print('Number of SN for fit', len(data))
         # print set([d[name]['idr.subset'] for name in d.keys()]
 
         Z_SN = data['z_SN']
@@ -620,9 +620,13 @@ class FitData_mu:
 
         """
         print('hello chi2', chi2, chi2/self.fit.ndf)
+        """
+
         print('fitting gzero', self.fit.gzero)
         gzero = self.fit.zfinal2()
-        """
+        print('resultat', gzero)
+        self.fit.gzero = gzero
+
         resa = self.fit.fitcosmo(Om, w0, wa)
         print(resa.columns)
         toprint = []
@@ -1154,11 +1158,12 @@ class FitCosmo_mu(CosmoDist):
         fitted parameters
         """
         res = self.zfinal1(gzero)
-        print('ici', res)
         om, w0,  wa = res.x[0], res.x[1], res.x[2]
-        chi2ndf = self.tchi2((om, w0, wa))-self.ndf
-        #print('jjj', om, w0, wa, chi2ndf)
-        return chi2ndf
+
+        res = self.tchi2((om, w0, wa, gzero))-self.ndf
+        # print('jjj', om, w0, wa, chi2ndf)
+        print('ici', om, w0,  wa, gzero, res)
+        return res
 
     def zfinal2(self):
         """
@@ -1175,21 +1180,26 @@ class FitCosmo_mu(CosmoDist):
         """
         Method to estimate cosmo fit parameters M, alpha, beta, Om, w0, wa
         """
-        self.gzero = gzero
-        return optimize.minimize(self.tchi2, (0.3, -1.0, 0.))
+        return optimize.minimize(self.tchi2, (0.3, -1.0, 0., gzero))
 
     def chi2(self, Om, w0, wa):
 
-        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2)+self.gzero**2))
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+self.gzero**2)))
+
+    def chi2_gzero(self, Om, w0, wa, gzero):
+
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+gzero**2)))
 
     def chi2_nowa(self, Om, w0):
 
-        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, self.wa))**2/(self.sigma_mu_SN**2)+self.gzero**2))
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, self.wa))**2/(self.sigma_mu_SN**2+self.gzero**2)))
 
     def tchi2(self, tup):
-        Om, w0, wa = tup
-        #print('tchi2', Om, w0, wa, self.gzero)
-        return self.chi2(Om, w0, wa)
+        Om, w0, wa, gzero = tup
+
+        rr = self.chi2_gzero(Om, w0, wa, gzero)
+        print('tchi2', Om, w0, wa, gzero, rr)
+        return rr
 
 
 class Sigma_Fisher(CosmoDist):
@@ -1518,9 +1528,9 @@ class Sigma_Fisher_mu(CosmoDist):
         """
         # get covariance matrix (from Hessian)
         res = self.matCov()
-        #resb = self.Hessian()
+        # resb = self.Hessian()
 
-        #print(res, resb)
+        # print(res, resb)
         if res is not None:
             return dict(zip(self.params_Fisher, [res[i] for i in range(len(res))]))
         else:
@@ -1554,7 +1564,7 @@ class Sigma_Fisher_mu(CosmoDist):
 
         # second order derivatives
 
-        #hpar = dict(zip(parName, [1.e-1, 1.e-1, 1.e-1, 1.e-1, 1.e-3, 1.e-3]))
+        # hpar = dict(zip(parName, [1.e-1, 1.e-1, 1.e-1, 1.e-1, 1.e-3, 1.e-3]))
         """
         hpar = dict(zip(parName, [1.e-5, 1.e-5, 1.e-5]))
         for j, pp in enumerate(parName):
@@ -1574,7 +1584,7 @@ class Sigma_Fisher_mu(CosmoDist):
                                     * self.data['d2_{}_{}'.format(pp, ppb)])
         """
         # Hessian
-        #H = 2.*(np.dot(J.T, J)+Hsec)
+        # H = 2.*(np.dot(J.T, J)+Hsec)
         H = np.dot(J.T, J)
         detmat = np.linalg.det(H)
         Cov = None

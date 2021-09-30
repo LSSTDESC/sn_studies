@@ -14,10 +14,10 @@ def update_config(fields, config, zcomp):
     return config
 
 
-def loadSN(fDir, dbName, tagprod, zlim=pd.DataFrame()):
+def loadSN(fDir, dbName, tagprod, zlim=pd.DataFrame(), nfich=-1):
 
     # load data
-    data = loadData(fDir, dbName, tagprod)
+    data = loadData(fDir, dbName, tagprod, nfich)
 
     # select data according to (zlim, season)
 
@@ -212,6 +212,9 @@ def simu_mu(simpars):
     group = simpars.groupby(pd.cut(simpars.z, bins)
                             ).apply(lambda x: randsimu(x))
 
+    group['sigma_bias'] = 0.
+    idx = group['z_SN'] >= float(zcomp)
+    group.loc[idx, 'sigma_bias'] = 0.01
     return group
 
 
@@ -230,6 +233,9 @@ def randsimu(grp, zstep=0.05):
 
     zmin = grp.name.left
     zmax = grp.name.right
+    if grp.empty:
+        return pd.DataFrame()
+    grp = grp.fillna(value=0.)
     nsn = int(grp['nsn_eff'].mean())
     sigma_mu = grp['sigma_mu_mean'].mean()
     sigma_mu_rms = grp['sigma_mu_rms'].mean()
@@ -248,6 +254,7 @@ def randsimu(grp, zstep=0.05):
     cosmo = CosmoDist(H0=70.)
     dist_mu = cosmo.mu_astro(z, 0.3, -1.0, 0.0)
     mu = [gauss(dist_mu[i], sigmu[i]) for i in range(len(dist_mu))]
+    #mu = [gauss(dist_mu[i], sigma_mu) for i in range(len(dist_mu))]
 
     df = pd.DataFrame(z, columns=['z_SN'])
     df['mu_SN'] = mu
@@ -256,7 +263,7 @@ def randsimu(grp, zstep=0.05):
     return df
 
 
-def loadData(dirFile, dbName, tagprod):
+def loadData(dirFile, dbName, tagprod, nfich=-1):
     """
     Function to load data from file
 
@@ -268,6 +275,8 @@ def loadData(dirFile, dbName, tagprod):
        OS name
     tagprod: str
         tag for the file to load
+    nfich: int, opt
+     number of files to load (default: -1: all files)
 
     Returns
     -----------
@@ -282,7 +291,9 @@ def loadData(dirFile, dbName, tagprod):
     # load the files
     params = dict(zip(['objtype'], ['astropyTable']))
 
-    res = multiproc(fis[:50], params, loopStack_params, 8).to_pandas()
+    if nfich > 0:
+        nfich = np.min([nfich, len(fis)])
+    res = multiproc(fis[:nfich], params, loopStack_params, 4).to_pandas()
     # res['fitstatus'] = res['fitstatus'].str.decode('utf-8')
 
     return res
@@ -310,22 +321,24 @@ def select(dd):
     return dd[idx].copy()
 
 
-def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS', 'WFD'],
-              nseasons=[2]*5+[10],
+def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'],
+              nseasons=2,
               max_season_length=180.,
-              survey_area=[9.6]*5+[50],
-              zsurvey=1., surveytype='full'):
+              survey_area=9.6,
+              zsurvey=1., surveytype='full',
+              nfields=[1, 1, 1, 1, 2],
+              zcomp=[0.9, 0.9, 0.7, 0.7, 0.7]):
 
     # fields = ['COSMOS']
-    nfields = dict(zip(fields, [1, 1, 1, 1, 2, 50]))
-    zcomp = dict(zip(fields, [0.9, 0.9, 0.7, 0.7, 0.7, 0.2]))
+    nfields = dict(zip(fields, nfields))
+    zcomp = dict(zip(fields, zcomp))
 
     # get scenario
     r = []
 
-    for io, field in enumerate(fields):
+    for field in fields:
         r.append((field, zcomp[field], max_season_length,
-                  nfields[field], survey_area[io], nseasons[io], zsurvey, surveytype))
+                  nfields[field], survey_area, nseasons, zsurvey, surveytype))
 
     config = pd.DataFrame(r, columns=[
         'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons', 'zsurvey', 'surveytype'])

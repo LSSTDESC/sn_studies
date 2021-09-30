@@ -400,6 +400,7 @@ class plotHubbleResiduals_mu(CosmoDist):
 
         # load SN
         data = pd.read_hdf(fichName)
+        self.ndata = len(data)
 
         self.data = data
         self.Z = data['z_SN']
@@ -407,7 +408,7 @@ class plotHubbleResiduals_mu(CosmoDist):
         self.sigma_mu = data['sigma_mu_SN']
         self.zmin, self.zmax = np.min(self.Z), np.max(self.Z)
 
-        print(fitparams)
+        # print(fitparams)
         self.Om = fitparams['Om']
         self.w0 = fitparams['w0']
         self.wa = fitparams['wa']
@@ -450,7 +451,7 @@ class plotHubbleResiduals_mu(CosmoDist):
         # FoM_val, rho = FoM(self.sigma_a, self.sigma_b, self.sigma_a_b)
         FoM_val, rho = FoM(self.sigma_a, self.sigma_b, self.sigma_a_b)
         fig = plt.figure(figsize=(12, 8))
-        ttit = 'FoM (95%)  = {} \n'.format(np.round(FoM_val, 2))
+        ttit = 'FoM (95%)  = {}  - NSN= {} \n'.format(np.round(FoM_val, 2), self.ndata)
         ttit += '{} \n'.format(self.lega)
         """
         ttit += '$\sigma_{w_0}$'+'= {}'.format(np.round(self.sigma_w0,3))
@@ -461,7 +462,7 @@ class plotHubbleResiduals_mu(CosmoDist):
 
         ax = fig.add_axes((.1, .3, .8, .6))
         self.plot_hubble(ax)
-        print('zmin and zmax', self.zmin, self.zmax)
+        #print('zmin and zmax', self.zmin, self.zmax)
         ax.set_xlim([self.zmin, self.zmax])
         axb = fig.add_axes((.1, .1, .8, .2))
         bottom_h = left_h = 0.1 + 0.8 + 0.02
@@ -515,13 +516,13 @@ class plotHubbleResiduals_mu(CosmoDist):
                 self.zmin, self.zmax, self.data, nbins, res_interp)
             io = x >= 0.3
             io &= x <= 0.4
-            print('mean residual', np.mean(residuals[io]))
+            #print('mean residual', np.mean(residuals[io]))
         else:
             x, y, yerr = self.Z, self.mu, self.sigma_mu
             residuals = mu_residual
             io = x >= 0.3
             io &= x <= 0.4
-            print('mean residual', np.mean(residuals[io]))
+            #print('mean residual', np.mean(residuals[io]))
         """
         ax.errorbar(x, y, yerr=yerr,
                     color='k', lineStyle='None', marker='o', ms=2)
@@ -531,7 +532,7 @@ class plotHubbleResiduals_mu(CosmoDist):
         axb.errorbar(x, residuals, yerr=None, color='k',
                      lineStyle='None', marker='o', ms=2)
         axbh.hist(residuals, bins=20, orientation='horizontal')
-        print('Residuals', np.mean(residuals), np.std(residuals))
+        #print('Residuals', np.mean(residuals), np.std(residuals))
         axb.errorbar(res['z'], res['mu']-res['mup'], color='r', ls='dotted')
         axb.errorbar(res['z'], res['mu']-res['mum'], color='r', ls='dotted')
 
@@ -570,10 +571,10 @@ class plotHubbleResiduals_mu(CosmoDist):
         residuals = group.diff_mu.mean()
         # plot_values = group.apply(lambda x: np.sum(
         #    x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
-        print(plot_values)
+        # print(plot_values)
         error_values = group.apply(
             lambda x: 1./np.sqrt(np.sum(1./x[erry]**2)))
-        print('error', error_values)
+        #print('error', error_values)
 
         return plot_centers, plot_values, error_values, residuals
 
