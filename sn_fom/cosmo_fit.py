@@ -1165,6 +1165,27 @@ class FitCosmo_mu(CosmoDist):
         print('ici', om, w0,  wa, gzero, res)
         return res
 
+    def chi2ndf_gzero(self, gzero):
+        """
+        Method to estimate the gzero parameter
+        to get a chisquare equal to 1
+
+        Parameters
+        ---------------
+        gzero: float
+          gzero param
+
+        Returns
+        ----------
+        fitted parameters
+        """
+        om, w0,  wa = 0.3, -1.0, 0.0
+
+        res = self.chi2_gzero(om, w0, wa, gzero)-self.ndf
+        # print('jjj', om, w0, wa, chi2ndf)
+        #print('ici', om, w0,  wa, gzero, res, self.ndf)
+        return res
+
     def zfinal2(self):
         """
         Method to estimate the gzero parameter
@@ -1174,13 +1195,14 @@ class FitCosmo_mu(CosmoDist):
         ----------
         gzero parameter
          """
-        return optimize.newton(self.chi2ndf, 0.1)
+        return optimize.newton(self.chi2ndf_gzero, 0.005)
 
     def zfinal1(self, gzero):
         """
         Method to estimate cosmo fit parameters M, alpha, beta, Om, w0, wa
         """
         return optimize.minimize(self.tchi2, (0.3, -1.0, 0., gzero))
+        # return optimize.minimize(self.tchi2, (0.3, -1.0, 0., gzero))
 
     def chi2(self, Om, w0, wa):
 
@@ -1390,7 +1412,10 @@ class Sigma_Fisher(CosmoDist):
         alpha = pars['alpha']
         beta = pars['beta']
 
-        return (grp.Mb-M+alpha*grp.x1-beta*grp.color-self.mu(grp.z, Om, w0, wa))/self.sigma_mu(grp, alpha, beta)
+        sigma_int = 0.011
+        res = (grp.Mb-M+alpha*grp.x1-beta*grp.color-self.mu(grp.z, Om,
+               w0, wa))**2/(self.sigma_mu(grp, alpha, beta)**2+sigma_int**2)
+        return np.sqrt(res)
 
     def derivative_grp(self, grp, func, params, parName, h=1.e-8):
 
@@ -1439,7 +1464,10 @@ class Sigma_Fisher(CosmoDist):
         alpha = pars['alpha']
         beta = pars['beta']
 
-        return (grp.Mb-M+alpha*grp.x1-beta*grp.color-self.mu(grp.z, Om, w0, wa))/self.sigma_mu(grp, alpha, beta)
+        sigma_int = 0.011
+        res = (grp.Mb-M+alpha*grp.x1-beta*grp.color-self.mu(grp.z, Om,
+               w0, wa))**2/(self.sigma_mu(grp, alpha, beta)**2+sigma_int**2)
+        return np.sqrt(res)
 
     def datatest(self, params, sigma=0.5):
 
@@ -1644,7 +1672,10 @@ class Sigma_Fisher_mu(CosmoDist):
         w0 = pars['w0']
         wa = pars['wa']
 
-        return (grp.mu_SN-self.mu(grp.z_SN, Om, w0, wa))/grp.sigma_mu_SN
+        sigma_int = 0.011
+        res = (grp.mu_SN-self.mu(grp.z_SN, Om, w0, wa))**2 / \
+            (grp.sigma_mu_SN**2+sigma_int**2)
+        return np.sqrt(res)
 
     def derivative_grp(self, grp, func, params, parName, h=1.e-8):
 
@@ -1690,7 +1721,10 @@ class Sigma_Fisher_mu(CosmoDist):
         w0 = pars['w0']
         wa = pars['wa']
 
-        return (grp.mu_SN-self.mu_astro(grp.z_SN, Om, w0, wa))/grp.sigma_mu_SN
+        sigma_int = 0.011
+        res = (grp.mu_SN-self.mu_astro(grp.z_SN, Om, w0, wa))**2 / \
+            (grp.sigma_mu_SN**2+sigma_int**2)
+        return np.sqrt(res)
 
     def chi2_indiv_2(self, grp, param, parNamea='', ha=0, parNameb='', hb=0):
 
