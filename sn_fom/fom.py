@@ -12,7 +12,7 @@ import os
 import pandas as pd
 
 parser = OptionParser(
-    description='Estimate zlim from simulation+fit data')
+    description='perform cosmo fit')
 parser.add_option("--fileDir", type="str",
                   default='/sps/lsst/users/gris/DD/Fit',
                   help="file directory [%default]")
@@ -22,9 +22,9 @@ parser.add_option("--dbName", type="str",
 parser.add_option("--fields", type="str",
                   default='COSMOS, XMM-LSS, ELAIS, CDFS, ADFS',
                   help="file directory [%default]")
-parser.add_option("--add_WFD", type=int,
-                  default=0,
-                  help="to add WFD SN [%default]")
+parser.add_option("--add_WFD", type=str,
+                  default='',
+                  help="name of the WFD SN file to add [%default]")
 parser.add_option("--nproc", type=int,
                   default=4,
                   help="number of procs for multiprocessing  [%default]")
@@ -73,8 +73,9 @@ nsn_bias = NSN_bias(fileDir, config, fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS'
 
 # load sn_wfd
 sn_wfd = pd.DataFrame()
-if add_WFD:
-    sn_wfd = SN_WFD(fileDir, sigma_mu_from_simu)
+if add_WFD != '':
+    sn_wfd = SN_WFD(fileDir, sigma_mu_from_simu,
+                    saveSN='{}.hdf5'.format(add_WFD), nfactor=10)
 
 print('hello dbNames', dbNames, fields, nseasons)
 tagName = ''
@@ -86,10 +87,8 @@ for ip, dd in enumerate(dbNames):
 tagName += '_{}'.format(nseasons)
 tagName += '_{}'.format(snType)
 
-if add_WFD:
-    tagName += '_with_WFD'
-else:
-    tagName += '_no_WFD'
+if add_WFD != '':
+    tagName += '_{}'.format(add_WFD)
 
 dirSN = '{}_{}'.format(dirSN, tagName)
 dirFit = '{}_{}'.format(dirFit, tagName)
@@ -110,7 +109,7 @@ parameter_to_fit = ['Om', 'w0', 'wa']
 if not os.path.isfile(fitparName):
     # get default configuration file
 
-    ffi = range(80)
+    ffi = range(24)
     params = {}
     params['fileDir'] = fileDir
     params['dbNames'] = dbNames
@@ -122,6 +121,7 @@ if not os.path.isfile(fitparName):
     params['params_fit'] = parameter_to_fit
     params['nsn_bias'] = nsn_bias
     params['sn_wfd'] = sn_wfd
+    params['sigma_bias'] = 0.0
 
     params_fit = multiproc(ffi, params, multifit, nproc)
 
@@ -175,6 +175,7 @@ for i, row in params_fit.iterrows():
     plotresi = plotHubbleResiduals_mu(
         row, snName, var_FoM=['w0', 'wa'], var_fit=parameter_to_fit)
     plotresi.plots()
+    plt.show()
     # plotresi.plot_sn_vars()
 
     data = pd.read_hdf(snName)
@@ -195,7 +196,8 @@ for i, row in params_fit.iterrows():
     data['sigma_mu'] = np.sqrt(data['sigma_mu'])
     data['mu'] = -M+data['mbfit']+alpha*data['x1_fit']-beta*data['color_fit']
     """
-    sig = Sigma_Fisher_mu(data, params=params, params_Fisher=parameter_to_fit)
+    sig = Sigma_Fisher_mu(
+        data, params=params, params_Fisher=parameter_to_fit)
     res_Fisher = sig()
     for pp in sig.params_Fisher:
         row['sigma_{}'.format(pp)] = np.sqrt(row['Cov_{}_{}'.format(pp, pp)])

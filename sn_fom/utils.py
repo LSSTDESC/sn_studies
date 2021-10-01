@@ -182,7 +182,7 @@ def nSN_bin_eff(data, nsn_per_bin):
     return df
 
 
-def simu_mu(simpars):
+def simu_mu(simpars, sigma_bias=0.01):
     """
     Function to simulate distance modulus
 
@@ -214,7 +214,7 @@ def simu_mu(simpars):
 
     group['sigma_bias'] = 0.
     idx = group['z_SN'] >= float(zcomp)
-    group.loc[idx, 'sigma_bias'] = 0.01
+    group.loc[idx, 'sigma_bias'] = sigma_bias
     return group
 
 
