@@ -22,7 +22,6 @@ class plotStat:
             r.append((io, fom, rho))
 
         res = np.rec.fromrecords(r, names=['iter', 'FoM', 'correl'])
-        print(res)
 
         fig, ax = plt.subplots()
         ax.plot(res['iter'], res['FoM'])
@@ -67,14 +66,11 @@ def FoM(sigma_w0, sigma_wa, sigma_w0_wa, coeff_CL=6.17):
 
 
     """
-    print('in FoM')
     rho = sigma_w0_wa/(sigma_w0*sigma_wa)
-    print('rhrhrhrh', rho)
     # get ellipse parameters
     a, b = ellipse_axis(sigma_w0, sigma_wa, sigma_w0_wa)
     area = coeff_CL*a*b
 
-    print('alors FoM', rho, a, b, area)
     return 1./area, rho
 
 
@@ -103,8 +99,6 @@ def ellipse_axis(sigx, sigy, sigxy):
         comm_b = 0.
     a_sq = comm_a+np.sqrt(comm_b)
     b_sq = comm_a-np.sqrt(comm_b)
-
-    print('ellipse', sigx, sigy, sigxy, comm_a, comm_b)
 
     return np.sqrt(a_sq), np.sqrt(b_sq)
 
@@ -152,11 +146,10 @@ class plotHubbleResiduals(CosmoDist):
         self.sigZ = data['z_fit']/(1.e5*data['z_fit'])
         self.X1 = data['x1_fit']
         self.X2 = data['color_fit']
-        print('Number of SN', len(data))
+
         self.zmin = np.min(self.Z)
         self.zmax = np.max(self.Z)
 
-        print(fitparams)
         self.Om = fitparams['Om']
         self.w0 = fitparams['w0']
         self.wa = fitparams['wa']
@@ -367,10 +360,8 @@ class plotHubbleResiduals(CosmoDist):
         residuals = group.diff_mu.mean()
         # plot_values = group.apply(lambda x: np.sum(
         #    x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
-        print(plot_values)
         error_values = group.apply(
             lambda x: 1./np.sqrt(np.sum(1./x[erry]**2)))
-        print('error', error_values)
 
         return plot_centers, plot_values, error_values, residuals
 
@@ -614,12 +605,10 @@ def binned_data(zmin, zmax, data, nbins, vary='mu', erry='sigma_mu'):
 
     # plot_values = group.apply(lambda x: np.sum(
     #    x[vary]/x[erry]**2)/np.sum(1./x[erry]**2))
-    print('plot values', plot_values)
     error_values = None
     if erry != '':
         error_values = group.apply(
             lambda x: 1./np.sqrt(np.sum(1./x[erry]**2)))
-        print('error', error_values)
 
     return plot_centers, plot_values, error_values
 
@@ -645,10 +634,8 @@ def plotFitRes(data):
     data[sigma_a] = np.sqrt(data[Cov_a])
     data[sigma_b] = np.sqrt(data[Cov_b])
 
-    print('hhhhhhhhhkokokoo', data[sigma_a], data[sigma_b])
     data['FoM'] = data.apply(lambda x: FoM(
         x[sigma_a], x[sigma_b], x[Cov_a_b])[0], axis=1)
-    print('FoM', data['FoM'])
     fig, ax = plt.subplots(ncols=2, nrows=2)
     idx = data['FoM'] < 1.e10
     sel = data[idx]
@@ -656,8 +643,6 @@ def plotFitRes(data):
     ax[0, 1].hist(sel[sigma_b], histtype='step', bins=100)
 
     ax[1, 0].hist(sel['FoM'], histtype='step', bins=50)
-
-    print('medians', data[[sigma_a, sigma_b, 'FoM']].median())
 
     plt.show()
 

@@ -3,7 +3,7 @@ import numpy as np
 # from . import np
 from sn_tools.sn_utils import multiproc
 from optparse import OptionParser
-from sn_fom.steps import multifit, Sigma_mu_obs, SN_WFD, NSN_bias
+from sn_fom.steps import multifit_mu, Sigma_mu_obs, SN_WFD, NSN_bias
 from sn_fom.plot import plotStat, plotHubbleResiduals, binned_data, plotFitRes, plotSN
 from sn_fom.plot import plotHubbleResiduals_mu
 from sn_fom.utils import getconfig
@@ -11,10 +11,42 @@ from sn_fom.cosmo_fit import Sigma_Fisher, Sigma_Fisher_mu
 import os
 import pandas as pd
 
+
+def plotFitResults(params_fit):
+
+    plotFitRes(params_fit)
+    plt.show()
+    fig, ax = plt.subplots()
+
+    for i, row in params_fit.iterrows():
+        snName = '{}.hdf5'.format(row['SNID'])
+        print('snname', snName)
+        plotresi = plotHubbleResiduals_mu(
+            row, snName, var_FoM=['Om', 'w0'], var_fit=parameter_to_fit)
+        plotresi.plots()
+        plt.show()
+
+
+def Fisher_mu(params_fit):
+
+    for i, row in params_fit.iterrows():
+        snName = '{}.hdf5'.format(row['SNID'])
+        data = pd.read_hdf(snName)
+        sig = Sigma_Fisher_mu(
+            data, params=params, params_Fisher=parameter_to_fit)
+        res_Fisher = sig()
+        for pp in sig.params_Fisher:
+            row['sigma_{}'.format(pp)] = np.sqrt(
+                row['Cov_{}_{}'.format(pp, pp)])
+            print(pp, row[pp], row['sigma_{}'.format(pp)],
+                  res_Fisher[pp], row['sigma_{}'.format(pp)]/res_Fisher[pp])
+        print('chi2', row['chi2'])
+
+
 parser = OptionParser(
     description='perform cosmo fit')
 parser.add_option("--fileDir", type="str",
-                  default='/sps/lsst/users/gris/DD/Fit',
+                  default='Fakes_nosigmaInt/Fit',
                   help="file directory [%default]")
 parser.add_option("--dbName", type="str",
                   default='descddf_v1.5_10yrs',
@@ -62,22 +94,25 @@ zsurvey = opts.zsurvey
 add_WFD = opts.add_WFD
 
 # load sigma_mu
-sigma_mu_from_simu = Sigma_mu_obs(fileDir, plot=False).data
+sigma_mu_from_simu = Sigma_mu_obs(fileDir,
+                                  outName='sigma_mu_from_simu.hdf5',
+                                  plot=False).data
 
 # load nsn_bias
 config = getconfig(nseasons=1, zsurvey=zsurvey,
                    surveytype=surveyType, nfields=[1, 1, 1, 1, 1])
 nsn_bias = NSN_bias(fileDir, config, fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'],
-                    dbNames=['DD_0.65', 'DD_0.70', 'DD_0.80', 'DD_0.90'],
+                    dbNames=['DD_0.65', 'DD_0.70', 'DD_0.75',
+                             'DD_0.80', 'DD_0.85', 'DD_0.90'],
                     plot=False).data
 
 # load sn_wfd
 sn_wfd = pd.DataFrame()
 if add_WFD != '':
+    nsn_mu_simu = int(add_WFD.split('_')[2].split('.')[0])
     sn_wfd = SN_WFD(fileDir, sigma_mu_from_simu,
-                    saveSN='{}.hdf5'.format(add_WFD), nfactor=10)
+                    saveSN='{}.hdf5'.format(add_WFD), nfich=-1, nsn=nsn_mu_simu)
 
-print('hello dbNames', dbNames, fields, nseasons)
 tagName = ''
 for ip, dd in enumerate(dbNames):
     tagName += '{}_{}'.format(dd, fields[ip].replace(',', '_'))
@@ -101,7 +136,6 @@ print('dirfit', dirFit)
 
 fitparName = '{}/FitParams.hdf5'.format(dirFit)
 
-print('hello', fitparName)
 config = getconfig(nseasons=nseasons, zsurvey=zsurvey,
                    surveytype=surveyType)
 
@@ -123,146 +157,14 @@ if not os.path.isfile(fitparName):
     params['sn_wfd'] = sn_wfd
     params['sigma_bias'] = 0.0
 
-    params_fit = multiproc(ffi, params, multifit, nproc)
-
-    print(params_fit)
+    params_fit = multiproc(ffi, params, multifit_mu, nproc)
 
     params_fit.to_hdf(fitparName, key='fitparams')
 
 params_fit = pd.read_hdf(fitparName)
+idx = params_fit['accuracy'] == 1
+params_fit = params_fit[idx]
+print('result', np.median(params_fit['sigma_w0']),
+      np.std(params_fit['sigma_w0']))
 
-
-"""
-# plot FoMs here
-plots = plotStat(params_fit)
-
-plots.plotFoM()
-"""
-print(params_fit.columns)
-Om = 0.3
-w0 = -1.0
-wa = 0.0
-alpha = 0.13
-beta = 3.1
-M = -19.0906
-#M = -18.97
-params = dict(zip(['M', 'alpha', 'beta', 'Om', 'w0', 'wa'],
-                  [M, alpha, beta, Om, w0, wa]))
-params = dict(zip(['Om', 'w0', 'wa'],
-                  [Om, w0, wa]))
-# params=dict(zip(['Om','w0','wa'],[Om,w0,wa]))
-
-
-#idx = params_fit['accuracy'] == 1
-#params_fit = params_fit[idx]
-print('params fit', len(params_fit))
-"""
-myplot = plotSN(params_fit, params)
-myplot()
-"""
-plotFitRes(params_fit)
-fig, ax = plt.subplots()
-"""
-figb, axb = plt.subplots()
-for i,row in params_fit.iterrows():
-    ax.plot(row['SNID'],np.sqrt(row['Cov_w0_w0']),'ko')
-    axb.plot(row['SNID'],np.sqrt(row['Cov_wa_wa']),'ko')
-plt.show()
-"""
-for i, row in params_fit.iterrows():
-    snName = '{}.hdf5'.format(row['SNID'])
-    print('snname', snName)
-    plotresi = plotHubbleResiduals_mu(
-        row, snName, var_FoM=['w0', 'wa'], var_fit=parameter_to_fit)
-    plotresi.plots()
-    plt.show()
-    # plotresi.plot_sn_vars()
-
-    data = pd.read_hdf(snName)
-    """
-    print('NSN', len(data), data.columns)
-    data['Mb'] = -2.5*np.log10(data['x0_fit'])+10.635
-    data['Cov_mbmb'] = (
-        2.5 / (data['x0_fit']*np.log(10)))**2*data['Cov_x0x0']
-
-    data['Cov_x1mb'] = -2.5*data['Cov_x0x1'] / \
-        (data['x0_fit']*np.log(10))
-
-    data['Cov_colormb'] = -2.5*data['Cov_x0color'] / \
-        (data['x0_fit']*np.log(10))
-    data['sigma_mu'] = data['Cov_mbmb']+alpha**2*data['Cov_x1x1']+beta**2*data['Cov_colorcolor'] + \
-        2*alpha*data['Cov_x1mb']-2.*beta*data['Cov_colormb'] - \
-        2.*alpha*beta*data['Cov_x1color']
-    data['sigma_mu'] = np.sqrt(data['sigma_mu'])
-    data['mu'] = -M+data['mbfit']+alpha*data['x1_fit']-beta*data['color_fit']
-    """
-    sig = Sigma_Fisher_mu(
-        data, params=params, params_Fisher=parameter_to_fit)
-    res_Fisher = sig()
-    for pp in sig.params_Fisher:
-        row['sigma_{}'.format(pp)] = np.sqrt(row['Cov_{}_{}'.format(pp, pp)])
-        print(pp, row[pp], row['sigma_{}'.format(pp)],
-              res_Fisher[pp], row['sigma_{}'.format(pp)]/res_Fisher[pp])
-    print('chi2', row['chi2'])
-    # print(row)
-    plt.show()
-    """
-    # ax.hist(np.sqrt(data['Cov_colorcolor']),histtype='step')
-    plot_centers, plot_values, error_values = binned_data(
-        0.005,0.905,data, 19,vary='mu',erry='')
-    ax.plot(plot_centers, plot_values,marker='.',lineStyle='None')
-    plt.show()
-    """
-print(test)
-
-
-# plot the result
-Om = params_fit['Om'].values[0]
-w0 = params_fit['w0'].values[0]
-wa = params_fit['wa'].values[0]
-M = params_fit['M'].values[0]
-alpha = params_fit['alpha'].values[0]
-beta = params_fit['beta'].values[0]
-
-fit.plot_hubble(0., Om, w0, wa, M, alpha, beta)
-
-plt.show()
-
-
-fom = FoM(fileDir, dbName, 'allSN', zcomp)
-fom.plot_sn_vars()
-# plt.show()
-
-Om = 0.3
-w0 = -1.0
-wa = 0.0
-alpha = 0.14
-beta = 3.1
-Mb = -19.0481
-Mb = -19.039
-
-
-h = 1.e-8
-varFish = ['dOm', 'dw0', 'dwa', 'dalpha', 'dbeta', 'dMb']
-parNames = ['Om', 'w0', 'wa', 'alpha', 'beta', 'Mb']
-parameters = dict(zip(parNames, [Om, w0, wa, alpha, beta, Mb]))
-epsilon = dict(zip(parNames, [0.]*len(parNames)))
-for i in range(1):
-    data = fom.data.sample(n=fom.NSN)
-    fom.plot_data_cosmo(data, alpha=alpha, beta=beta,
-                        Mb=Mb, binned=True, nbins=100)
-
-    Fisher = np.zeros((len(varFish), len(varFish)))
-    for vv in parNames:
-        epsilon[vv] = h
-        data['d{}'.format(vv)] = data.apply(
-            lambda x: deriv(x, fom, parameters, epsilon)/2/h, axis=1, result_type='expand')
-        epsilon[vv] = 0.0
-
-    for i, vva in enumerate(varFish):
-        for j, vvb in enumerate(varFish):
-            Fisher[i, j] = np.sum((data[vva]*data[vvb])/data['sigma_mu']**2)
-    print(Fisher)
-    res = np.sqrt(np.diag(faster_inverse(Fisher)))
-    print(res)
-    print(len(data), 1./(res[0]*res[1]))
+plotFitResults(params_fit)

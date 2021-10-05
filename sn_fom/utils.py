@@ -74,7 +74,7 @@ def selSN(sn_data, nsn_per_bin, x1_color):
     zvals[0] = 0.01
     zvals[-1] = zmax
 
-    #sel_data = select(sn_data)
+    # sel_data = select(sn_data)
     out_data = pd.DataFrame()
     for i in range(len(zvals)-1):
         zm = np.round(zvals[i], 2)
@@ -89,11 +89,11 @@ def selSN(sn_data, nsn_per_bin, x1_color):
         idb = np.abs(nsn_per_bin['z']-zp) < 1.e-5
         selz = nsn_per_bin[idb]
         nsn_expected = int(selz['nsn_survey'].values[0])
-        #nsn_simu = len(sn_data[ida])
-        #nsn_sel = len(sel_data[idc])
-        #nsn_choose = int(nsn_sel/nsn_simu*nsn_expected)
+        # nsn_simu = len(sn_data[ida])
+        # nsn_sel = len(sel_data[idc])
+        # nsn_choose = int(nsn_sel/nsn_simu*nsn_expected)
         nsn_choose = nsn_expected
-        #print('expected nsn',zp,nsn_expected)
+        # print('expected nsn',zp,nsn_expected)
         """
         if nsn_choose == 0:
             nsn_choose = 10
@@ -106,17 +106,17 @@ def selSN(sn_data, nsn_per_bin, x1_color):
         if nsn_choose > 0:
             if zp <= 0.2:
                 nsn_choose *= 20
-            #x1_color_vals = pdist(sn_data, x1_color, zrange, nsn_choose)
-            #print('my choice here',zm,zp,x1_color_vals)
+            # x1_color_vals = pdist(sn_data, x1_color, zrange, nsn_choose)
+            # print('my choice here',zm,zp,x1_color_vals)
             selected_data = pd.DataFrame(sn_data_z)
             selected_data['inum'] = selected_data.reset_index().index
 
             # select(x1,color) selected data according to dist
 
-            #selected_data = select_x1_color(sn_data_z, x1_color_vals)
+            # selected_data = select_x1_color(sn_data_z, x1_color_vals)
 
             choice = np.random.choice(len(selected_data), nsn_choose)
-            #print('choice', choice, len(selected_data), nsn_choose)
+            # print('choice', choice, len(selected_data), nsn_choose)
             # print(selected_data)
             io = selected_data['inum'].isin(choice)
             out_data = pd.concat((out_data, selected_data[io]))
@@ -182,7 +182,7 @@ def nSN_bin_eff(data, nsn_per_bin):
     return df
 
 
-def simu_mu(simpars, sigma_bias=0.01):
+def simu_mu(simpars, sigmaInt=0.12, sigma_bias=0.01):
     """
     Function to simulate distance modulus
 
@@ -207,10 +207,13 @@ def simu_mu(simpars, sigma_bias=0.01):
         zmax = zcomp
 
     zmax = np.round(zmax, 2)
-    zstep = 0.05
-    bins = np.arange(0, zmax+zstep, 0.05)
+    zst = np.mean(np.diff(simpars['z']))/2
+
+    zmin = 0.
+    zmax += 2*zst
+    bins = np.arange(zmin, zmax, 2.*zst)
     group = simpars.groupby(pd.cut(simpars.z, bins)
-                            ).apply(lambda x: randsimu(x))
+                            ).apply(lambda x: randsimu(x, sigmaInt))
 
     group['sigma_bias'] = 0.
     idx = group['z_SN'] >= float(zcomp)
@@ -218,16 +221,17 @@ def simu_mu(simpars, sigma_bias=0.01):
     return group
 
 
-def randsimu(grp, zstep=0.05):
+def randsimu(grp, sigmaInt=0.12):
     """
     function to randomly simulate z, mu, sigmu distributions
 
     Parameters
     ---------------
-    grp: pandas df group 
+    grp: pandas df group
       simu parameters to use
-    zstep: float
-      z bin value
+    sigmaInt: float, opt
+     sigma_int to be added quadratically to sugma_mu to generate distance moduli
+     (default: 0.12)
 
     """
 
@@ -239,6 +243,8 @@ def randsimu(grp, zstep=0.05):
     nsn = int(grp['nsn_eff'].mean())
     sigma_mu = grp['sigma_mu_mean'].mean()
     sigma_mu_rms = grp['sigma_mu_rms'].mean()
+    # mu_mean = grp['mu_mean'].mean()
+    # mu_rms = grp['mu_rms'].mean()
 
     if nsn < 1:
         return pd.DataFrame()
@@ -248,18 +254,18 @@ def randsimu(grp, zstep=0.05):
     # sigma_mu from gaussian
     from random import gauss
     sigmu = [gauss(sigma_mu, sigma_mu_rms) for i in range(nsn)]
-
     # distance modulus
     from sn_fom.cosmo_fit import CosmoDist
     cosmo = CosmoDist(H0=70.)
     dist_mu = cosmo.mu_astro(z, 0.3, -1.0, 0.0)
-    mu = [gauss(dist_mu[i], sigmu[i]) for i in range(len(dist_mu))]
-    #mu = [gauss(dist_mu[i], sigma_mu) for i in range(len(dist_mu))]
+    mu = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2))
+          for i in range(len(dist_mu))]
 
     df = pd.DataFrame(z, columns=['z_SN'])
     df['mu_SN'] = mu
     df['sigma_mu_SN'] = sigma_mu
 
+    #print('hello', zmin, zmax, len(df))
     return df
 
 
@@ -402,7 +408,7 @@ def pdist_deprecated(x1_color, zrange, nsn_choose):
     imin = df['inum'].min()
     imax = df['inum'].max()
     norm = np.sum(df['weight'])
-    #print(imin, imax,len(df))
+    # print(imin, imax,len(df))
     ichoice = np.random.choice(
         range(imin, imax+1), nsn_choose, p=df['weight']/norm)
 
@@ -414,7 +420,7 @@ def select_x1_color(df, x1_color_vals):
     x1_color_vals = x1_color_vals.groupby(
         ['x1', 'color']).size().to_frame('size').reset_index()
     x1_color_vals['size'] = x1_color_vals['size'].astype(int)
-    #print('for selection',x1_color_vals)
+    # print('for selection',x1_color_vals)
     new_df = pd.DataFrame()
 
     for i, vv in x1_color_vals.iterrows():
@@ -427,16 +433,16 @@ def select_x1_color(df, x1_color_vals):
             if len(seldf) <= vv['size']:  # take all here
                 new_df = pd.concat((new_df, seldf))
             else:  # take random here
-                #print('choice', len(seldf),nsn_th)
+                # print('choice', len(seldf),nsn_th)
                 choice = np.random.choice(len(seldf), nsn_th)
-                #print('choice', choice,len(seldf), nsn_th)
+                # print('choice', choice,len(seldf), nsn_th)
                 io = seldf['inum'].isin(choice)
                 new_df = pd.concat((new_df, seldf[io]))
 
     return new_df
 
 
-def transformSN(fileDir, dbName, snType, alpha, beta):
+def transformSN(fileDir, dbName, snType, alpha, beta, Mb):
 
     data_sn = loadSN(fileDir, dbName, snType)
     data_sn = select(pd.DataFrame(data_sn))
@@ -452,7 +458,10 @@ def transformSN(fileDir, dbName, snType, alpha, beta):
         2*alpha*data_sn['Cov_x1mb']-2.*beta*data_sn['Cov_colormb'] - \
         2.*alpha*beta*data_sn['Cov_x1color']
     data_sn['sigma_mu'] = np.sqrt(data_sn['var_mu'])
+    data_sn['mu'] = data_sn['Mb']-Mb+alpha * \
+        data_sn['x1_fit']-beta*data_sn['color_fit']
 
+    print('hello', data_sn['Mb']/data_sn['mu'])
     return data_sn
 
 

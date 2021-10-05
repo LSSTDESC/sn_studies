@@ -606,7 +606,8 @@ class FitData_mu:
         mu_SN = data['mu_SN']
         sigma_mu_SN = data['sigma_mu_SN']
         sigma_bias = data['sigma_bias']
-
+        self.nsn_DD = len(data[data['snType'] == 'DD'])
+        self.nsn_WFD = len(data[data['snType'] == 'WFD'])
         # instance of the fit functions here
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_bias,
                                params_fit=params_fit)
@@ -617,19 +618,18 @@ class FitData_mu:
         w0 = -1.0
         wa = 0.0
         self.fit.sigma_int = 0.0
+        """
         chi2 = self.fit.chi2(Om, w0, wa)
 
+        print('chi2', chi2, chi2/self.fit.ndf)
         """
-        print('hello chi2', chi2, chi2/self.fit.ndf)
-        """
-
-        print('fitting sigma_int', self.fit.sigma_int)
+        #print('fitting sigma_int', self.fit.sigma_int)
         sigma_int = self.fit.zfinal2()
-        print('resultat', sigma_int)
+        #print('sigmaInt', sigma_int)
         self.fit.sigma_int = sigma_int
 
         resa = self.fit.fitcosmo(Om, w0, wa)
-        print(resa.columns)
+        # print(resa.columns)
         toprint = []
         for vv in self.fit.params_fit:
             toprint.append(vv)
@@ -637,6 +637,8 @@ class FitData_mu:
         toprint.append('chi2_ndf')
         #print('fit minuit done', resa[toprint])
         resa['sigma_int'] = sigma_int
+        resa['nsn_DD'] = self.nsn_DD
+        resa['nsn_WFD'] = self.nsn_WFD
         return resa
 
 
@@ -656,7 +658,7 @@ class FitCosmo(CosmoDist):
                  H0=72, c=299792.458):
         super().__init__(H0, c)
 
-        print('Number of SN for fit', nsn)
+        #print('Number of SN for fit', nsn)
         # print set([d[name]['idr.subset'] for name in d.keys()]
 
         self.Z = Z
@@ -867,14 +869,14 @@ class FitCosmo(CosmoDist):
         for key, vals in values.items():
             dictout[key] = [vals]
         m.hesse()   # run covariance estimator
-        for key, vals in m.covariance.items():
-            what = '{}_{}'.format(key[0], key[1])
-            dictout['Cov_{}'.format(what)] = [vals]
+        if m.covariance is not None:
+            for key, vals in m.covariance.items():
+                what = '{}_{}'.format(key[0], key[1])
+                dictout['Cov_{}'.format(what)] = [vals]
 
         dictout['accuracy'] = [m.accurate]
         dictout['chi2'] = [m.fval]
         dictout['ndf'] = [self.ndf]
-        print('hello chi2', m.fval, self.ndf)
         dictout['fitter'] = ['minuit']
         if 'wa' not in self.params_fit:
             dictout['wa'] = [wa]
@@ -1075,11 +1077,11 @@ class FitCosmo_mu(CosmoDist):
 
     def __init__(self, Z, mu, sigma_mu, sigma_bias,
                  params_fit=['Om', 'w0'],
-                 H0=70, c=299792.458):
+                 H0=70., c=299792.458):
         super().__init__(H0, c)
 
         nsn = len(Z)
-        print('Number of SN for fit', nsn)
+        #print('Number of SN for fit', nsn)
 
         self.Z_SN = Z
         self.mu_SN = mu
@@ -1124,10 +1126,10 @@ class FitCosmo_mu(CosmoDist):
         for key, vals in values.items():
             dictout[key] = [vals]
         m.hesse()   # run covariance estimator
-
-        for key, vals in m.covariance.items():
-            what = '{}_{}'.format(key[0], key[1])
-            dictout['Cov_{}'.format(what)] = [vals]
+        if m.covariance is not None:
+            for key, vals in m.covariance.items():
+                what = '{}_{}'.format(key[0], key[1])
+                dictout['Cov_{}'.format(what)] = [vals]
 
         dictout['accuracy'] = [m.accurate]
         dictout['chi2'] = [m.fval]
@@ -1137,8 +1139,9 @@ class FitCosmo_mu(CosmoDist):
         if 'wa' not in self.params_fit:
             dictout['wa'] = [wa]
         for vv in self.params_fit:
-            dictout['sigma_{}'.format(vv)] = np.sqrt(
-                dictout['Cov_{}_{}'.format(vv, vv)])
+            vvb = 'Cov_{}_{}'.format(vv, vv)
+            if vvb in list(dictout.keys()):
+                dictout['sigma_{}'.format(vv)] = np.sqrt(dictout[vvb])
 
         df = pd.DataFrame.from_dict(dictout)
         df['chi2_ndf'] = df['chi2']/df['ndf']
@@ -1182,8 +1185,6 @@ class FitCosmo_mu(CosmoDist):
         om, w0,  wa = 0.3, -1.0, 0.0
 
         res = self.chi2_sigma_int(om, w0, wa, sigma_int)-self.ndf
-        # print('jjj', om, w0, wa, chi2ndf)
-        # print('ici', om, w0,  wa, sigma_int, res, self.ndf)
         return res
 
     def zfinal2(self):
@@ -1205,22 +1206,20 @@ class FitCosmo_mu(CosmoDist):
         # return optimize.minimize(self.tchi2, (0.3, -1.0, 0., sigma_int))
 
     def chi2(self, Om, w0, wa):
-
-        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2)))
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2)))
 
     def chi2_sigma_int(self, Om, w0, wa, sigma_int):
 
-        return np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+sigma_int**2+self.sigma_bias**2))
+        return np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+sigma_int**2))
 
     def chi2_nowa(self, Om, w0):
 
-        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, self.wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2)))
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, self.wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2)))
 
     def tchi2(self, tup):
         Om, w0, wa, sigma_int = tup
 
         rr = self.chi2_sigma_int(Om, w0, wa, sigma_int)
-        print('tchi2', Om, w0, wa, sigma_int, rr)
         return rr
 
 
@@ -1603,7 +1602,7 @@ class Sigma_Fisher_mu(CosmoDist):
         wa = pars['wa']
 
         res = (grp.mu_SN-self.mu(grp.z_SN, Om, w0, wa))**2 / \
-            (grp.sigma_mu_SN**2+self.sigma_int**2+grp.sigma_bias**2)
+            (grp.sigma_mu_SN**2+self.sigma_int**2)
         return np.sqrt(res)
 
     def derivative_grp(self, grp, func, params, parName, h=1.e-8):
@@ -1628,13 +1627,13 @@ class Sigma_Fisher_mu(CosmoDist):
         wa = pars['wa']
 
         res = (grp.mu_SN-self.mu_astro(grp.z_SN, Om, w0, wa))**2 / \
-            (grp.sigma_mu_SN**2+self.sigma_int**2+grp.sigma_bias**2)
+            (grp.sigma_mu_SN**2+self.sigma_int**2)
         return np.sqrt(res)
 
     def chi2(self, Om, w0, wa):
 
         res = np.sum((self.mu_SN-self.mu_astro(self.z_SN, Om, w0, wa))**2 /
-                     (self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2))
+                     (self.sigma_mu_SN**2+self.sigma_int**2))
         return res
 
     def chi2ndf_sigma_int(self, sigma_int):
@@ -1653,7 +1652,7 @@ class Sigma_Fisher_mu(CosmoDist):
         """
         Om, w0,  wa = 0.3, -1.0, 0.0
         rr = np.sum((self.mu_SN-self.mu_astro(self.z_SN, Om, w0, wa))
-                    ** 2/(self.sigma_mu_SN**2+sigma_int**2+self.sigma_bias**2))
+                    ** 2/(self.sigma_mu_SN**2+sigma_int**2))
         res = rr-self.ndf
         return res
 

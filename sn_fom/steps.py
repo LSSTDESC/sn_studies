@@ -6,7 +6,103 @@ import pandas as pd
 from . import np
 
 
-def fit_SN(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=pd.DataFrame(), params_fit=['Om', 'w0', 'wa'], saveSN='', sigma_bias=0.01):
+class fit_SN_mu:
+
+    def __init__(self, dbNames, config, fields,
+                 snType, sigmu, nsn_bias,
+                 sn_wfd=pd.DataFrame(),
+                 params_fit=['Om', 'w0', 'wa'],
+                 saveSN='', sigmaInt=0.12, sigma_bias=0.01):
+
+        self.dbNames = dbNames
+        self.config = config
+        self.fields = fields
+        self.sigmu = sigmu
+        self.snType = snType
+        self.nsn_bias = nsn_bias
+        self.sn_wfd = sn_wfd
+        self.params_fir = params_fit
+        self.saveSN = saveSN
+        self.sigmaInt = sigmaInt
+        self.sigma_bias = sigma_bias
+
+        # simulate supernovae here - DDF
+        data_sn = self.simul_SN()
+
+        # add WFD SN if required
+        #print('NSN DD:', len(data_sn), 'WFD:', len(sn_wfd))
+        data_sn['snType'] = 'DD'
+        if not sn_wfd.empty:
+            sn_wfd['snType'] = 'WFD'
+            data_sn = pd.concat((data_sn, sn_wfd))
+
+        if saveSN != '':
+            data_sn.to_hdf(saveSN, key='sn')
+
+        # cosmo fit here
+        SNID = ''
+        if saveSN != '':
+            SNID = saveSN.split('.hdf5')[0]
+
+        # second step: fit the data
+
+        # FitCosmo instance
+        fit = FitData_mu(data_sn, params_fit=params_fit)
+
+        # make the fit and get the parameters
+        params_fit = fit()
+
+        if SNID != '':
+            params_fit['SNID'] = SNID
+
+        self.params_fit = params_fit
+
+    def simul_SN(self):
+
+        data_sn = pd.DataFrame()
+        for i, dbName in enumerate(self.dbNames):
+            fields_to_process = self.fields[i].split(',')
+            idx = self.config['fieldName'].isin(fields_to_process)
+            # dd = getSN(fileDir, dbName, config[idx], fields_to_process, snType)
+            idxb = self.sigmu['dbName'] == dbName
+            idxa = self.nsn_bias['zcomp'] == dbName.split('_')[1]
+            dd = self.getSN_mu_simu(dbName, fields_to_process,
+                                    self.sigmu[idxb], self.nsn_bias[idxa], self.config[idx])
+            data_sn = pd.concat((data_sn, dd))
+            #print('there', dbName, fields_to_process, dd.size)
+        # print(test)
+        return data_sn
+
+    def getSN_mu_simu(self, dbName, fields, sigmu, nsn_bias, config):
+
+        zcomp = dbName.split('_')[1]
+
+        SN = pd.DataFrame()
+        for field in fields:
+            idx = nsn_bias['fieldName'] == field
+            nsn_eff = pd.DataFrame(np.copy(nsn_bias[idx].to_records()))
+            ia = config['fieldName'] == field
+            selconfig = config[ia]
+            nseasons = selconfig['nseasons'].to_list()[0]
+            nfields = selconfig['nfields'].to_list()[0]
+            nsn_eff['nsn_eff'] *= nseasons*nfields
+            simuparams = nsn_eff.merge(
+                sigmu, left_on=['z'], right_on=['z'])
+            # simulate distance modulus (and error) here
+            # print(field, 'nsn to simulate', np.sum(
+            #    simuparams['nsn_eff']), nseasons, nfields)
+            res = simu_mu(simuparams, self.sigmaInt, self.sigma_bias)
+            #print(field, 'nsn simulated', len(res))
+            SN = pd.concat((SN, res))
+
+        #print('total number of SN', len(SN))
+
+        SN = SN.droplevel('z')
+
+        return SN
+
+
+def fit_SN_deprecated(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=pd.DataFrame(), params_fit=['Om', 'w0', 'wa'], saveSN='', sigma_bias=0.01):
 
     # simulate supernovae here - DDF
     data_sn = simul_SN(dbNames, config, fields, snType,
@@ -14,7 +110,9 @@ def fit_SN(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=pd.DataFrame
 
     # add WFD SN if required
     print('NSN DD:', len(data_sn), 'WFD:', len(sn_wfd))
+    data_sn['snType'] = 'DD'
     if not sn_wfd.empty:
+        sn_wfd['snType'] = 'WFD'
         data_sn = pd.concat((data_sn, sn_wfd))
 
     if saveSN != '':
@@ -38,7 +136,7 @@ def fit_SN(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=pd.DataFrame
     return params_fit
 
 
-def simul_SN(dbNames, config, fields, snType, sigmu, nsn_bias, saveSN='', sigma_bias=0.01):
+def simul_SN_deprecated(dbNames, config, fields, snType, sigmu, nsn_bias, saveSN='', sigma_bias=0.01):
 
     data_sn = pd.DataFrame()
     for i, dbName in enumerate(dbNames):
@@ -64,8 +162,6 @@ def fit_SN_old(fileDir, dbNames, config, fields, snType, params_fit=['Om', 'w0',
     idxb = sigmu['dbName'] == 'WFD_0.20'
     wfd = getSN_mu_simu_wfd(fileDir, 'WFD_0.20', sigmu[idxb])
 
-    print(wfd)
-    print(test)
     for i, dbName in enumerate(dbNames):
         fields_to_process = fields[i].split(',')
         idx = config['fieldName'].isin(fields_to_process)
@@ -102,7 +198,6 @@ def multifit(index, params, j=0, output_q=None):
     fields = params['fields']
     saveSN = params['dirSN']
     snType = params['snType']
-    sigma_mu_from_simu = params['sigma_mu']
     params_for_fit = params['params_fit']
     nsn_bias = params['nsn_bias']
     sn_wfd = params['sn_wfd']
@@ -116,6 +211,37 @@ def multifit(index, params, j=0, output_q=None):
                         fields, snType,
                         sigma_mu_from_simu, nsn_bias, sn_wfd, params_for_fit, saveSN=saveSN_f, sigma_bias=sigma_bias)
         params_fit = pd.concat((params_fit, fitpar))
+
+    if output_q is not None:
+        return output_q.put({j: params_fit})
+    else:
+        return params_fit
+
+
+def multifit_mu(index, params, j=0, output_q=None):
+
+    fileDir = params['fileDir']
+    dbNames = params['dbNames']
+    config = params['config']
+    fields = params['fields']
+    snDir = params['dirSN']
+    snType = params['snType']
+    sigma_mu_from_simu = params['sigma_mu']
+    params_for_fit = params['params_fit']
+    nsn_bias = params['nsn_bias']
+    sn_wfd = params['sn_wfd']
+    sigma_bias = params['sigma_bias']
+    params_fit = pd.DataFrame()
+    np.random.seed(123456+j)
+    for i in index:
+        if snDir != '':
+            saveSN_f = '{}/SN_{}.hdf5'.format(snDir, i)
+
+        fitpar = fit_SN_mu(dbNames, config,
+                           fields, snType, sigma_mu_from_simu,
+                           nsn_bias, sn_wfd, params_for_fit,
+                           saveSN=saveSN_f, sigma_bias=sigma_bias)
+        params_fit = pd.concat((params_fit, fitpar.params_fit))
 
     if output_q is not None:
         return output_q.put({j: params_fit})
@@ -154,7 +280,7 @@ def getSN(fileDir, dbName, config, fields, snType):
     return data_sn
 
 
-def getSN_mu_simu(dbName, fields, sigmu, nsn_bias, config, sigma_bias=0.01):
+def getSN_mu_simu_deprecated(dbName, fields, sigmu, nsn_bias, config, sigma_bias=0.01):
 
     zcomp = dbName.split('_')[1]
 
@@ -212,9 +338,10 @@ def getSN_mu_simu_old(fileDir, dbName, config, fields, sigmu_from_simu):
     return SN
 
 
-def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu, nfich=-1, nfactor=1):
+def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu, nfich=-1, nsn=5000, sigmaInt=0.12):
 
     zst = np.mean(np.diff(sigmu_from_simu['z']))/2
+    print('alors man', zst)
     zmin = 0.
     zmax = sigmu_from_simu['z'].max()+zst
     bins = np.arange(zmin, zmax, 2.*zst)
@@ -226,11 +353,11 @@ def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu, nfich=-1, nfactor=1):
     data_sn = data_sn[idx]
     # get the effective (bias effect) number of expected SN per bin
     group = data_sn.groupby(pd.cut(data_sn.z, bins))
-    print(group.size())
+    nsn_simu = len(data_sn)
     plot_centers = (bins[:-1] + bins[1:])/2
     nsn_eff = pd.DataFrame(plot_centers, columns=['z'])
     nsn_eff['nsn_eff'] = group.size().to_list()
-    nsn_eff['nsn_eff'] *= nfactor
+    nsn_eff['nsn_eff'] *= nsn/nsn_simu
     nsn_eff['surveytype'] = 'full'
     nsn_eff['zcomp'] = 0.2
     nsn_eff['zsurvey'] = 0.2
@@ -243,16 +370,19 @@ def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu, nfich=-1, nfactor=1):
     plt.show()
     """
 
-    print('total number of SN', np.sum(nsn_eff['nsn_eff']))
+    #print('total number of SN to simulate', np.sum(nsn_eff['nsn_eff']))
     # merge with sigmu_from_simu
     nsn_eff = nsn_eff.round({'z': 6})
     sigmu_from_simu = sigmu_from_simu.round({'z': 6})
     simuparams = nsn_eff.merge(sigmu_from_simu, left_on=['z'], right_on=['z'])
 
+    # print(simuparams)
     # print('after merging', simuparams)
     # simulate distance modulus (and error) here
 
-    SN = simu_mu(simuparams)
+    SN = simu_mu(simuparams, sigmaInt=0.12)
+
+    #print('after simu', len(SN))
 
     SN = SN.droplevel('z')
 
@@ -267,12 +397,13 @@ class Sigma_mu_obs:
     """
 
     def __init__(self, fileDir,
-                 dbNames=['DD_0.90', 'DD_0.65',
-                          'DD_0.70', 'DD_0.80', 'WFD_0.20'],
-                 snTypes=['allSN']*4+['WFD'],
+                 dbNames=['DD_0.65', 'DD_0.70',
+                          'DD_0.75', 'DD_0.80',
+                          'DD_0.85', 'DD_0.90', 'WFD_0.20'],
+                 snTypes=['allSN']*6+['WFD'],
                  outName='sigma_mu_from_simu.hdf5',
                  plot=False,
-                 alpha=0.13, beta=3.1):
+                 alpha=0.13, beta=3.1, Mb=-19.0):
 
         self.fileDir = fileDir
         self.dbNames = dbNames
@@ -280,6 +411,7 @@ class Sigma_mu_obs:
         self.outName = outName
         self.alpha = alpha
         self.beta = beta
+        self.Mb = Mb
 
         import os
         if not os.path.isfile(outName):
@@ -308,8 +440,10 @@ class Sigma_mu_obs:
 
             snType = self.snTypes[io]
             data_sn = transformSN(self.fileDir, dbName,
-                                  snType, self.alpha, self.beta)
+                                  snType, self.alpha, self.beta, self.Mb)
             bdata = binned_data(zmin, zmax, nbins, data_sn)
+            bdatab = binned_data(zmin, zmax, nbins, data_sn, 'mu')
+            bdata = bdata.merge(bdatab, left_on=['z'], right_on=['z'])
             bdata['dbName'] = dbName
             df = pd.concat((df, bdata))
         return df
@@ -330,7 +464,7 @@ class Sigma_mu_obs:
         plt.show()
 
 
-def SN_WFD(fileDir, sigmu=pd.DataFrame(), saveSN='SN_WFD.hdf5', nfich=-1, nfactor=1):
+def SN_WFD(fileDir, sigmu=pd.DataFrame(), saveSN='SN_WFD.hdf5', nfich=-1, nsn=5000, sigmaInt=0.12):
 
     import os
     if not os.path.isfile(saveSN):
@@ -339,7 +473,7 @@ def SN_WFD(fileDir, sigmu=pd.DataFrame(), saveSN='SN_WFD.hdf5', nfich=-1, nfacto
 
         idxb = sigmu['dbName'] == 'WFD_0.20'
         wfd = getSN_mu_simu_wfd(fileDir, 'WFD_0.20',
-                                sigmu[idxb], nfich=nfich, nfactor=nfactor)
+                                sigmu[idxb], nfich=nfich, nsn=nsn, sigmaInt=sigmaInt)
         wfd.to_hdf(saveSN, key='sn_wfd')
 
     sn = pd.read_hdf(saveSN)
