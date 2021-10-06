@@ -327,13 +327,36 @@ def select(dd):
     return dd[idx].copy()
 
 
-def getconfig(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'],
-              nseasons=2,
-              max_season_length=180.,
-              survey_area=9.6,
-              zsurvey=1., surveytype='full',
-              nfields=[1, 1, 1, 1, 2],
-              zcomp=[0.9, 0.9, 0.7, 0.7, 0.7]):
+def getconfig(dbNames, fields, nseasons, npointings,
+              max_season_length=180., survey_area=9.6,
+              zsurvey=1., surveytype='full'):
+
+    r = []
+    for i, dbName in enumerate(dbNames):
+        zcomp = float(dbName.split('_')[1])
+        ff = fields[i].split(',')
+        ns = nseasons[i].split(',')
+        np = npointings[i].split(',')
+        for j, field in enumerate(ff):
+            fieldName = field
+            nseas = int(ns[j])
+            nfields = int(np[j])
+            r.append((fieldName, zcomp, max_season_length,
+                      nfields, survey_area, nseas, zsurvey, surveytype))
+
+    config = pd.DataFrame(r, columns=[
+        'fieldName', 'zcomp', 'max_season_length', 'nfields', 'survey_area', 'nseasons', 'zsurvey', 'surveytype'])
+
+    return config
+
+
+def getconfig_deprecated(fields=['COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'],
+                         nseasons=2,
+                         max_season_length=180.,
+                         survey_area=9.6,
+                         zsurvey=1., surveytype='full',
+                         nfields=[1, 1, 1, 1, 2],
+                         zcomp=[0.9, 0.9, 0.7, 0.7, 0.7]):
 
     # fields = ['COSMOS']
     nfields = dict(zip(fields, nfields))

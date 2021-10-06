@@ -27,7 +27,7 @@ def plotFitResults(params_fit):
         plt.show()
 
 
-def Fisher_mu(params_fit):
+def Fisher_mu(params_fit, params):
 
     for i, row in params_fit.iterrows():
         snName = '{}.hdf5'.format(row['SNID'])
@@ -41,6 +41,53 @@ def Fisher_mu(params_fit):
             print(pp, row[pp], row['sigma_{}'.format(pp)],
                   res_Fisher[pp], row['sigma_{}'.format(pp)]/res_Fisher[pp])
         print('chi2', row['chi2'])
+
+
+def prepareOut(dirSN, dirFit, dbNames, fields, add_WFD):
+    """
+    Method to prepare output dir
+
+    Parameters
+    --------------
+    dirSN: str
+      location dir of the simulated SN
+    dirFit: str
+      location dir of fit values
+    dbNames: list(str)
+      list of DbNames to process
+    fields: list(str)
+      list of fields to consider
+    add_WFD: str
+        WFD file name
+
+    Returns
+    ----------
+    dirSN: str
+      location dir of the simulated SN
+    dirFit: str
+      location dir of fit values
+
+    """
+    tagName = ''
+    for ip, dd in enumerate(dbNames):
+        tagName += '{}_{}'.format(dd, fields[ip].replace(',', '_'))
+        if ip < len(dbNames)-1:
+            tagName += '_'
+
+    tagName += '_{}'.format(nseasons)
+    tagName += '_{}'.format(snType)
+
+    if add_WFD != '':
+        tagName += '_{}'.format(add_WFD)
+
+    dirSN = '{}_{}'.format(dirSN, tagName)
+    dirFit = '{}_{}'.format(dirFit, tagName)
+
+    for vv in [dirSN, dirFit]:
+        if not os.path.isdir(vv):
+            os.mkdir(vv)
+
+    return dirSN, dirFit
 
 
 parser = OptionParser(
@@ -60,9 +107,12 @@ parser.add_option("--add_WFD", type=str,
 parser.add_option("--nproc", type=int,
                   default=4,
                   help="number of procs for multiprocessing  [%default]")
-parser.add_option("--nseasons", type=int,
-                  default=2,
+parser.add_option("--nseasons", type=str,
+                  default='2,2,2,2,2',
                   help="number of seasons per field  - DDFs [%default]")
+parser.add_option("--npointings", type=str,
+                  default='1,1,1,1,2',
+                  help="number of pointings per field  - DDFs [%default]")
 parser.add_option("--dirSN", type=str,
                   default='fake_SN',
                   help="location dir of simulated SN used to estimate cosmo parameters  [%default]")
@@ -87,11 +137,13 @@ fields = opts.fields.split('/')
 nproc = opts.nproc
 dirSN = opts.dirSN
 dirFit = opts.dirFit
-nseasons = opts.nseasons
+nseasons = opts.nseasons.split('/')
+npointings = opts.npointings.split('/')
 snType = opts.snType
 surveyType = opts.surveyType
 zsurvey = opts.zsurvey
 add_WFD = opts.add_WFD
+
 
 # load sigma_mu
 sigma_mu_from_simu = Sigma_mu_obs(fileDir,
@@ -99,8 +151,11 @@ sigma_mu_from_simu = Sigma_mu_obs(fileDir,
                                   plot=False).data
 
 # load nsn_bias
-config = getconfig(nseasons=1, zsurvey=zsurvey,
-                   surveytype=surveyType, nfields=[1, 1, 1, 1, 1])
+# special config file needed here: 1 season, 1 pointing per field
+config = getconfig(['DD_0.90'],
+                   ['COSMOS,XMM-LSS,CDFS,ADFS,ELAIS'],
+                   ['1,1,1,1,1'],
+                   ['1,1,1,1,1'])
 nsn_bias = NSN_bias(fileDir, config, fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'],
                     dbNames=['DD_0.65', 'DD_0.70', 'DD_0.75',
                              'DD_0.80', 'DD_0.85', 'DD_0.90'],
@@ -113,37 +168,20 @@ if add_WFD != '':
     sn_wfd = SN_WFD(fileDir, sigma_mu_from_simu,
                     saveSN='{}.hdf5'.format(add_WFD), nfich=-1, nsn=nsn_mu_simu)
 
-tagName = ''
-for ip, dd in enumerate(dbNames):
-    tagName += '{}_{}'.format(dd, fields[ip].replace(',', '_'))
-    if ip < len(dbNames)-1:
-        tagName += '_'
+dirSN, dirFit = prepareOut(dirSN, dirFit, dbNames, fields, add_WFD)
 
-tagName += '_{}'.format(nseasons)
-tagName += '_{}'.format(snType)
 
-if add_WFD != '':
-    tagName += '_{}'.format(add_WFD)
-
-dirSN = '{}_{}'.format(dirSN, tagName)
-dirFit = '{}_{}'.format(dirFit, tagName)
-
-for vv in [dirSN, dirFit]:
-    if not os.path.isdir(vv):
-        os.mkdir(vv)
-
-print('dirfit', dirFit)
-
-fitparName = '{}/FitParams.hdf5'.format(dirFit)
-
-config = getconfig(nseasons=nseasons, zsurvey=zsurvey,
+# get default config file here
+config = getconfig(dbNames, fields, nseasons, npointings, zsurvey=zsurvey,
                    surveytype=surveyType)
 
+
+fitparName = '{}/FitParams.hdf5'.format(dirFit)
 parameter_to_fit = ['Om', 'w0', 'wa']
 if not os.path.isfile(fitparName):
     # get default configuration file
 
-    ffi = range(24)
+    ffi = range(16)
     params = {}
     params['fileDir'] = fileDir
     params['dbNames'] = dbNames
@@ -168,3 +206,10 @@ print('result', np.median(params_fit['sigma_w0']),
       np.std(params_fit['sigma_w0']))
 
 plotFitResults(params_fit)
+"""
+Om = 0.3
+w0 = -1.0
+wa = 0.0
+params = dict(zip(parameter_to_fit, [Om, w0, wa]))
+Fisher_mu(params_fit, params)
+"""
