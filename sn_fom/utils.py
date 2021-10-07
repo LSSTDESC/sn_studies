@@ -484,7 +484,6 @@ def transformSN(fileDir, dbName, snType, alpha, beta, Mb):
     data_sn['mu'] = data_sn['Mb']-Mb+alpha * \
         data_sn['x1_fit']-beta*data_sn['color_fit']
 
-    print('hello', data_sn['Mb']/data_sn['mu'])
     return data_sn
 
 
