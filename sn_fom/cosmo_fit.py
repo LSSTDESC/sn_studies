@@ -116,7 +116,7 @@ class CosmoDist:
 
     """
 
-    def __init__(self, H0=72, c=2.99792e5):
+    def __init__(self, H0=70, c=2.99792e5):
 
         self.H0 = H0
         self.c = c
