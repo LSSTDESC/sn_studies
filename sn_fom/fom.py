@@ -74,7 +74,14 @@ def prepareOut(dirSN, dirFit, dbNames, fields, add_WFD):
         if ip < len(dbNames)-1:
             tagName += '_'
 
-    tagName += '_{}'.format(nseasons)
+    #tagName += '_{}'.format(nseasons)
+    #    print('ho', nseasons)
+    #    print(test)
+    for seas in nseasons:
+        ns = seas.split(',')
+        tagName += '_'
+        tagName += '_'.join(ns)
+
     tagName += '_{}'.format(snType)
 
     if add_WFD != '':
@@ -181,7 +188,7 @@ parameter_to_fit = ['Om', 'w0', 'wa']
 if not os.path.isfile(fitparName):
     # get default configuration file
 
-    ffi = range(16)
+    ffi = range(80)
     params = {}
     params['fileDir'] = fileDir
     params['dbNames'] = dbNames
@@ -194,6 +201,7 @@ if not os.path.isfile(fitparName):
     params['nsn_bias'] = nsn_bias
     params['sn_wfd'] = sn_wfd
     params['sigma_bias'] = 0.0
+    params['sigmaInt'] = 0.12
 
     params_fit = multiproc(ffi, params, multifit_mu, nproc)
 

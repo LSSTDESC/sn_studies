@@ -196,6 +196,7 @@ def simu_mu(simpars, sigmaInt=0.12, sigma_bias=0.01):
     pandas df with simulated values
 
     """
+
     surveytype = np.unique(simpars['surveytype']).item()
     zcomp = np.unique(simpars['zcomp']).item()
     zsurvey = np.unique(simpars['zsurvey']).item()
@@ -265,7 +266,7 @@ def randsimu(grp, sigmaInt=0.12):
     df['mu_SN'] = mu
     df['sigma_mu_SN'] = sigma_mu
 
-    #print('hello', zmin, zmax, len(df))
+    # print('hello', zmin, zmax, len(df))
     return df
 
 
@@ -516,9 +517,15 @@ def binned_data(zmin, zmax, nbins, data, var='sigma_mu'):
     group = data.groupby(pd.cut(data.z, bins))
     plot_centers = (bins[:-1] + bins[1:])/2
     plot_values = group[var].mean().to_list()
-    error_values = group[var].std().to_list()
+    sigma_var = 'sigma_{}'.format(var)
+    if sigma_var in data.columns:
+        error_values = group.apply(
+            lambda x: np.sqrt(np.sum(x[sigma_var].values**2))/len(x))
+        print('err', error_values)
+    else:
+        error_values = 0.
 
     df = pd.DataFrame(plot_centers, columns=['z'])
     df['{}_mean'.format(var)] = plot_values
-    df['{}_rms'.format(var)] = error_values
+    df['{}_sigma'.format(var)] = error_values
     return df

@@ -618,14 +618,16 @@ class FitData_mu:
         w0 = -1.0
         wa = 0.0
         self.fit.sigma_int = 0.0
+
         """
         chi2 = self.fit.chi2(Om, w0, wa)
 
         print('chi2', chi2, chi2/self.fit.ndf)
         """
+
         #print('fitting sigma_int', self.fit.sigma_int)
         sigma_int = self.fit.zfinal2()
-        #print('sigmaInt', sigma_int)
+        print('sigmaInt', sigma_int)
         self.fit.sigma_int = sigma_int
 
         resa = self.fit.fitcosmo(Om, w0, wa)
@@ -635,10 +637,11 @@ class FitData_mu:
             toprint.append(vv)
             toprint.append('sigma_{}'.format(vv))
         toprint.append('chi2_ndf')
-        #print('fit minuit done', resa[toprint])
+        print('fit minuit done', resa[toprint])
         resa['sigma_int'] = sigma_int
         resa['nsn_DD'] = self.nsn_DD
         resa['nsn_WFD'] = self.nsn_WFD
+
         return resa
 
 

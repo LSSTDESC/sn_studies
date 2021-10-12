@@ -8,12 +8,13 @@ from . import np
 
 class fit_SN_mu:
 
-    def __init__(self, dbNames, config, fields,
+    def __init__(self, fileDir, dbNames, config, fields,
                  snType, sigmu, nsn_bias,
                  sn_wfd=pd.DataFrame(),
                  params_fit=['Om', 'w0', 'wa'],
                  saveSN='', sigmaInt=0.12, sigma_bias=0.01):
 
+        self.fileDir = fileDir
         self.dbNames = dbNames
         self.config = config
         self.fields = fields
@@ -30,12 +31,13 @@ class fit_SN_mu:
         data_sn = self.simul_SN()
 
         # add WFD SN if required
-        #print('NSN DD:', len(data_sn), 'WFD:', len(sn_wfd))
+        # print('NSN DD:', len(data_sn), 'WFD:', len(sn_wfd))
         data_sn['snType'] = 'DD'
         if not sn_wfd.empty:
             sn_wfd['snType'] = 'WFD'
             data_sn = pd.concat((data_sn, sn_wfd))
 
+        #data_sn = self.binned_SN(data_sn, sigmaInt)
         if saveSN != '':
             data_sn.to_hdf(saveSN, key='sn')
 
@@ -51,11 +53,57 @@ class fit_SN_mu:
 
         # make the fit and get the parameters
         params_fit = fit()
-
+        print('no binning', params_fit)
+        """
+        # try a binned cosmology here
+        binned_sn = self.binned_SN(data_sn)
+        print('binned sn', binned_sn)
+        # FitCosmo instance
+        fit = FitData_mu(binned_sn, params_fit=params_fit)
+        # make the fit and get the parameters
+        params_fit = fit()
+        print('binned', params_fit)
+        """
+        # print(test)
         if SNID != '':
             params_fit['SNID'] = SNID
 
         self.params_fit = params_fit
+
+    def binned_SN(self, data, sigmaInt=0.12, zmin=0.0, zmax=1.0, nbins=20):
+
+        zmin = 0.0
+        zmax = 1.
+        """
+        nbins = 168
+        bins = np.linspace(zmin, zmax, nbins)
+        """
+        bins = np.arange(0.01, 0.2, 0.01).tolist()
+        bins += np.arange(0.2, 0.8, 0.05).tolist()
+        bins += np.arange(0.8, zmax+0.01, 0.01).tolist()
+        bins = np.array(bins)
+        #bins = np.array(bins_lowz+bin_bins_highz)
+
+        group = data.groupby(pd.cut(data.z_SN, bins))
+        bin_centers = (bins[:-1] + bins[1:])/2
+        #bin_values = group['mu_SN'].mean().to_list()
+        bin_values = group.apply(
+            lambda x: np.sum(x['mu_SN']/(x['sigma_mu_SN']**2+sigmaInt**2) /
+                             (np.sum(1./(x['sigma_mu_SN']**2+sigmaInt**2)))))
+
+        error_values = group.apply(
+            lambda x: np.sum(1./x['sigma_mu_SN']**2))
+
+        df = pd.DataFrame(bin_centers, columns=['z_SN'])
+        df['mu_SN'] = bin_values.values
+        df['sigma_mu_SN'] = 1./np.sqrt(error_values.values)
+        df['sigma_bias'] = group['sigma_bias'].mean().to_list()
+        df['snType'] = 'DD'
+        print(df)
+        idx = df['z_SN'] <= 0.2
+        df.loc[idx, 'snType'] = 'WFD'
+
+        return df
 
     def simul_SN(self):
 
@@ -69,7 +117,7 @@ class fit_SN_mu:
             dd = self.getSN_mu_simu(dbName, fields_to_process,
                                     self.sigmu[idxb], self.nsn_bias[idxa], self.config[idx])
             data_sn = pd.concat((data_sn, dd))
-            #print('there', dbName, fields_to_process, dd.size)
+            # print('there', dbName, fields_to_process, dd.size)
         # print(test)
         return data_sn
 
@@ -78,6 +126,8 @@ class fit_SN_mu:
         zcomp = dbName.split('_')[1]
 
         SN = pd.DataFrame()
+        # sn_simu = transformSN(self.fileDir, dbName, 'allSN',
+        #                      alpha=0.13, beta=3.1, Mb=-19.)
         for field in fields:
             idx = nsn_bias['fieldName'] == field
             nsn_eff = pd.DataFrame(np.copy(nsn_bias[idx].to_records()))
@@ -86,20 +136,54 @@ class fit_SN_mu:
             nseasons = selconfig['nseasons'].to_list()[0]
             nfields = selconfig['nfields'].to_list()[0]
             nsn_eff['nsn_eff'] *= nseasons*nfields
+            # sigmu = self.get_sigmu_from_simu(sn_simu, nsn_eff)
             simuparams = nsn_eff.merge(
                 sigmu, left_on=['z'], right_on=['z'])
             # simulate distance modulus (and error) here
             # print(field, 'nsn to simulate', np.sum(
             #    simuparams['nsn_eff']), nseasons, nfields)
             res = simu_mu(simuparams, self.sigmaInt, self.sigma_bias)
-            #print(field, 'nsn simulated', len(res))
+            # print(field, 'nsn simulated', len(res))
             SN = pd.concat((SN, res))
 
-        #print('total number of SN', len(SN))
+        # print('total number of SN', len(SN))
 
         SN = SN.droplevel('z')
 
         return SN
+
+    def get_sigmu_from_simu(self, sn_simu, nsn_bias):
+
+        zstep = np.mean(nsn_bias['z'].diff())
+        nbins = len(nsn_bias)
+        zmin = nsn_bias['z'].min()-zstep/2
+        zmax = nsn_bias['z'].max()+zstep/2
+        bins = np.linspace(zmin, zmax, nbins+1)
+        bin_centers = (bins[:-1] + bins[1:])/2
+        group = sn_simu.groupby(pd.cut(sn_simu.z, bins))
+        r = []
+
+        for group_name, df_group in group:
+            zgmin = group_name.left
+            zgmax = group_name.right
+            zgmean = 0.5*(zgmin+zgmax)
+            idf = np.abs(nsn_bias['z']-zgmean) < 1.e-8
+            nsn_for_simu = int(nsn_bias[idf]['nsn_eff'])
+            # grab randomly some sn here
+            if nsn_for_simu < 1:
+                nsn_for_simu = 1
+            df_sample = df_group.sample(n=nsn_for_simu)
+            """
+            import matplotlib.pyplot as plt
+            plt.hist(df_sample['x1_fit'], histtype='step')
+            plt.show()
+            """
+            sigma_mu = np.sqrt(1./np.sum(df_sample['sigma_mu']**2))
+            r.append((zgmean, sigma_mu))
+
+        res = pd.DataFrame(r, columns=['z', 'sigma_mu_mean'])
+        res['sigma_mu_rms'] = 0.
+        return res
 
 
 def fit_SN_deprecated(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=pd.DataFrame(), params_fit=['Om', 'w0', 'wa'], saveSN='', sigma_bias=0.01):
@@ -231,16 +315,17 @@ def multifit_mu(index, params, j=0, output_q=None):
     nsn_bias = params['nsn_bias']
     sn_wfd = params['sn_wfd']
     sigma_bias = params['sigma_bias']
+    sigmaInt = params['sigmaInt']
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
     for i in index:
         if snDir != '':
             saveSN_f = '{}/SN_{}.hdf5'.format(snDir, i)
 
-        fitpar = fit_SN_mu(dbNames, config,
+        fitpar = fit_SN_mu(fileDir, dbNames, config,
                            fields, snType, sigma_mu_from_simu,
                            nsn_bias, sn_wfd, params_for_fit,
-                           saveSN=saveSN_f, sigma_bias=sigma_bias)
+                           saveSN=saveSN_f, sigmaInt=sigmaInt, sigma_bias=sigma_bias)
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
     if output_q is not None:
@@ -370,7 +455,7 @@ def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu, nfich=-1, nsn=5000, sigm
     plt.show()
     """
 
-    #print('total number of SN to simulate', np.sum(nsn_eff['nsn_eff']))
+    # print('total number of SN to simulate', np.sum(nsn_eff['nsn_eff']))
     # merge with sigmu_from_simu
     nsn_eff = nsn_eff.round({'z': 6})
     sigmu_from_simu = sigmu_from_simu.round({'z': 6})
@@ -382,7 +467,7 @@ def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu, nfich=-1, nsn=5000, sigm
 
     SN = simu_mu(simuparams, sigmaInt=0.12)
 
-    #print('after simu', len(SN))
+    # print('after simu', len(SN))
 
     SN = SN.droplevel('z')
 
@@ -484,7 +569,7 @@ def SN_WFD(fileDir, sigmu=pd.DataFrame(), saveSN='SN_WFD.hdf5', nfich=-1, nsn=50
 class NSN_bias:
     """
     class to estimate the number of observed SN as a function of the redshift.
-    These numbers are estimated from a set of simulated+fitted LCs=SN
+    These numbers are estimated from a set of simulated+fitted LCs = SN
 
     Parameters
     ---------------
@@ -493,14 +578,13 @@ class NSN_bias:
     config_fields: list(str), opt
     sigmu: pandas df
       z, sigma_mu, sigma_mu_err for simulated SN
-      list of fields to process (default: ['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'])
+      list of fields to process(default: ['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'])
     dbNames: list(str), opt
-      list of configurations to consider (default: ['DD_0.65', 'DD_0.70', 'DD_0.80', 'DD_0.90'])
+      list of configurations to consider(default: ['DD_0.65', 'DD_0.70', 'DD_0.80', 'DD_0.90'])
     plot: bool, opt
-     to plot the results (default: False)
+     to plot the results(default: False)
     outName: str, opt
-      output name (default: nsn_bias.hdf5)
-
+      output name(default: nsn_bias.hdf5)
 
     """
 
