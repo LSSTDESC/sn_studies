@@ -618,13 +618,11 @@ class FitData_mu:
         w0 = -1.0
         wa = 0.0
         self.fit.sigma_int = 0.0
-
         """
         chi2 = self.fit.chi2(Om, w0, wa)
 
-        print('chi2', chi2, chi2/self.fit.ndf)
+        print('chi2', chi2, chi2/self.fit.ndf, self.fit.ndf)
         """
-
         #print('fitting sigma_int', self.fit.sigma_int)
         sigma_int = self.fit.zfinal2()
         #print('sigmaInt', sigma_int)

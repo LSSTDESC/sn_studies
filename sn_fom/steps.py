@@ -12,7 +12,7 @@ class fit_SN_mu:
                  snType, sigmu, nsn_bias,
                  sn_wfd=pd.DataFrame(),
                  params_fit=['Om', 'w0', 'wa'],
-                 saveSN='', sigmaInt=0.12, sigma_bias=0.01):
+                 saveSN='', sigmaInt=0.12, sigma_bias=0.01, binned_cosmology=False):
 
         self.fileDir = fileDir
         self.dbNames = dbNames
@@ -37,7 +37,9 @@ class fit_SN_mu:
             sn_wfd['snType'] = 'WFD'
             data_sn = pd.concat((data_sn, sn_wfd))
 
-        #data_sn = self.binned_SN(data_sn, sigmaInt)
+        if binned_cosmology:
+            data_sn = self.binned_SN(data_sn, sigmaInt)
+
         if saveSN != '':
             data_sn.to_hdf(saveSN, key='sn')
 
@@ -53,7 +55,7 @@ class fit_SN_mu:
 
         # make the fit and get the parameters
         params_fit = fit()
-        #print('no binning', params_fit)
+        # print('no binning', params_fit)
         """
         # try a binned cosmology here
         binned_sn = self.binned_SN(data_sn)
@@ -78,18 +80,22 @@ class fit_SN_mu:
         nbins = 168
         bins = np.linspace(zmin, zmax, nbins)
         """
-        bins = np.arange(0.01, 0.2, 0.01).tolist()
-        bins += np.arange(0.2, 0.8, 0.05).tolist()
-        bins += np.arange(0.8, zmax+0.01, 0.01).tolist()
-        bins = np.array(bins)
-        #bins = np.array(bins_lowz+bin_bins_highz)
+        bins = [0.01, 0.2]
+        #bins += np.arange(0.2, 0.2, 0.01).tolist()
+        bins += np.arange(0.2, 0.8-0.01, 0.01).tolist()
+        bins += np.arange(0.8, zmax+0.005, 0.005).tolist()
+        bins = np.array(np.unique(bins))
+        # rint(len(bins))
+        # bins = np.array(bins_lowz+bin_bins_highz)
 
         group = data.groupby(pd.cut(data.z_SN, bins))
+        # print(group.size())
         bin_centers = (bins[:-1] + bins[1:])/2
-        #bin_values = group['mu_SN'].mean().to_list()
+        # bin_values = group['mu_SN'].mean().to_list()
+
         bin_values = group.apply(
-            lambda x: np.sum(x['mu_SN']/(x['sigma_mu_SN']**2+sigmaInt**2) /
-                             (np.sum(1./(x['sigma_mu_SN']**2+sigmaInt**2)))))
+            lambda x: np.sum(x['mu_SN']/(x['sigma_mu_SN']**2+sigmaInt**2)) /
+            (np.sum(1./(x['sigma_mu_SN']**2+sigmaInt**2))))
 
         error_values = group.apply(
             lambda x: np.sum(1./x['sigma_mu_SN']**2))
@@ -99,7 +105,8 @@ class fit_SN_mu:
         df['sigma_mu_SN'] = 1./np.sqrt(error_values.values)
         df['sigma_bias'] = group['sigma_bias'].mean().to_list()
         df['snType'] = 'DD'
-        print(df)
+        # print(df)
+        # print(test)
         idx = df['z_SN'] <= 0.2
         df.loc[idx, 'snType'] = 'WFD'
 
@@ -316,6 +323,8 @@ def multifit_mu(index, params, j=0, output_q=None):
     sn_wfd = params['sn_wfd']
     sigma_bias = params['sigma_bias']
     sigmaInt = params['sigmaInt']
+    binned_cosmology = params['binned_cosmology']
+
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
     for i in index:
@@ -327,7 +336,8 @@ def multifit_mu(index, params, j=0, output_q=None):
         fitpar = fit_SN_mu(fileDir, dbNames, config,
                            fields, snType, sigma_mu_from_simu,
                            nsn_bias, sn_wfd, params_for_fit,
-                           saveSN=saveSN_f, sigmaInt=sigmaInt, sigma_bias=sigma_bias)
+                           saveSN=saveSN_f, sigmaInt=sigmaInt,
+                           sigma_bias=sigma_bias, binned_cosmology=binned_cosmology)
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
     if output_q is not None:

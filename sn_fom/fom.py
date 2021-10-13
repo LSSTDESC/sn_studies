@@ -93,7 +93,7 @@ def prepareOut(dirSN, dirFit, dbNames, fields, add_WFD, tagIt=False):
     for vv in [dirSN, dirFit]:
         if vv != '':
             if not os.path.isdir(vv):
-                os.mkdir(vv)
+                os.makedirs(vv)
 
     return dirSN, dirFit
 
@@ -145,6 +145,9 @@ parser.add_option("--sigmaInt", type=float,
 parser.add_option("--configName", type=str,
                   default='config1',
                   help="configName for output [%default]")
+parser.add_option("--binned_cosmology", type=int,
+                  default=0,
+                  help="to perform a binned cosmology  [%default]")
 
 opts, args = parser.parse_args()
 
@@ -163,6 +166,7 @@ add_WFD = opts.add_WFD
 nMC = opts.nMC
 sigmaInt = opts.sigmaInt
 configName = opts.configName
+binned_cosmology = opts.binned_cosmology
 
 # load sigma_mu
 sigma_mu_from_simu = Sigma_mu_obs(fileDir,
@@ -214,6 +218,7 @@ if not os.path.isfile(fitparName):
     params['sn_wfd'] = sn_wfd
     params['sigma_bias'] = 0.0
     params['sigmaInt'] = sigmaInt
+    params['binned_cosmology'] = binned_cosmology
 
     params_fit = multiproc(ffi, params, multifit_mu, nproc)
 
