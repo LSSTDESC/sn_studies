@@ -627,7 +627,7 @@ class FitData_mu:
 
         #print('fitting sigma_int', self.fit.sigma_int)
         sigma_int = self.fit.zfinal2()
-        print('sigmaInt', sigma_int)
+        #print('sigmaInt', sigma_int)
         self.fit.sigma_int = sigma_int
 
         resa = self.fit.fitcosmo(Om, w0, wa)
@@ -637,7 +637,7 @@ class FitData_mu:
             toprint.append(vv)
             toprint.append('sigma_{}'.format(vv))
         toprint.append('chi2_ndf')
-        print('fit minuit done', resa[toprint])
+        #print('fit minuit done', resa[toprint])
         resa['sigma_int'] = sigma_int
         resa['nsn_DD'] = self.nsn_DD
         resa['nsn_WFD'] = self.nsn_WFD
@@ -866,23 +866,27 @@ class FitCosmo(CosmoDist):
                        alpha=alpha, beta=beta)
 
         # perform the fit here
-        m.migrad()
         dictout = {}
-        values = m.values
-        for key, vals in values.items():
-            dictout[key] = [vals]
-        m.hesse()   # run covariance estimator
-        if m.covariance is not None:
-            for key, vals in m.covariance.items():
-                what = '{}_{}'.format(key[0], key[1])
-                dictout['Cov_{}'.format(what)] = [vals]
+        try:
+            m.migrad()
+            values = m.values
 
-        dictout['accuracy'] = [m.accurate]
-        dictout['chi2'] = [m.fval]
-        dictout['ndf'] = [self.ndf]
-        dictout['fitter'] = ['minuit']
-        if 'wa' not in self.params_fit:
-            dictout['wa'] = [wa]
+            for key, vals in values.items():
+                dictout[key] = [vals]
+                m.hesse()   # run covariance estimator
+            if m.covariance is not None:
+                for key, vals in m.covariance.items():
+                    what = '{}_{}'.format(key[0], key[1])
+                    dictout['Cov_{}'.format(what)] = [vals]
+
+                dictout['accuracy'] = [m.accurate]
+                dictout['chi2'] = [m.fval]
+                dictout['ndf'] = [self.ndf]
+                dictout['fitter'] = ['minuit']
+            if 'wa' not in self.params_fit:
+                dictout['wa'] = [wa]
+        except (RuntimeError, TypeError, NameError):
+            print('Fit crash')
 
         return pd.DataFrame.from_dict(dictout)
 

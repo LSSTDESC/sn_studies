@@ -520,12 +520,13 @@ def binned_data(zmin, zmax, nbins, data, var='sigma_mu'):
     sigma_var = 'sigma_{}'.format(var)
     if sigma_var in data.columns:
         error_values = group.apply(
-            lambda x: np.sqrt(np.sum(x[sigma_var].values**2))/len(x))
-        print('err', error_values)
+            lambda x: 1./np.sqrt(np.sum(1./x[sigma_var]**2)))
+        print('err', error_values[:])
     else:
         error_values = 0.
 
     df = pd.DataFrame(plot_centers, columns=['z'])
     df['{}_mean'.format(var)] = plot_values
+    print(type(error_values))
     df['{}_sigma'.format(var)] = error_values
     return df

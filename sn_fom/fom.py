@@ -43,7 +43,7 @@ def Fisher_mu(params_fit, params):
         print('chi2', row['chi2'])
 
 
-def prepareOut(dirSN, dirFit, dbNames, fields, add_WFD):
+def prepareOut(dirSN, dirFit, dbNames, fields, add_WFD, tagIt=False):
     """
     Method to prepare output dir
 
@@ -59,6 +59,8 @@ def prepareOut(dirSN, dirFit, dbNames, fields, add_WFD):
       list of fields to consider
     add_WFD: str
         WFD file name
+    tagIt: bool, opt
+      to tag the output dir or not (default: False)
 
     Returns
     ----------
@@ -68,31 +70,30 @@ def prepareOut(dirSN, dirFit, dbNames, fields, add_WFD):
       location dir of fit values
 
     """
-    tagName = ''
-    for ip, dd in enumerate(dbNames):
-        tagName += '{}_{}'.format(dd, fields[ip].replace(',', '_'))
-        if ip < len(dbNames)-1:
+    if tagIt:
+        tagName = ''
+        for ip, dd in enumerate(dbNames):
+            tagName += '{}_{}'.format(dd, fields[ip].replace(',', '_'))
+            if ip < len(dbNames)-1:
+                tagName += '_'
+
+        for seas in nseasons:
+            ns = seas.split(',')
             tagName += '_'
+            tagName += '_'.join(ns)
 
-    #tagName += '_{}'.format(nseasons)
-    #    print('ho', nseasons)
-    #    print(test)
-    for seas in nseasons:
-        ns = seas.split(',')
-        tagName += '_'
-        tagName += '_'.join(ns)
+        tagName += '_{}'.format(snType)
 
-    tagName += '_{}'.format(snType)
+        if add_WFD != '':
+            tagName += '_{}'.format(add_WFD)
 
-    if add_WFD != '':
-        tagName += '_{}'.format(add_WFD)
-
-    dirSN = '{}_{}'.format(dirSN, tagName)
-    dirFit = '{}_{}'.format(dirFit, tagName)
+        dirSN = '{}_{}'.format(dirSN, tagName)
+        dirFit = '{}_{}'.format(dirFit, tagName)
 
     for vv in [dirSN, dirFit]:
-        if not os.path.isdir(vv):
-            os.mkdir(vv)
+        if vv != '':
+            if not os.path.isdir(vv):
+                os.mkdir(vv)
 
     return dirSN, dirFit
 
@@ -135,6 +136,15 @@ parser.add_option("--surveyType", type=str,
 parser.add_option("--zsurvey", type=float,
                   default=1.0,
                   help="zmax for the survey [%default]")
+parser.add_option("--nMC", type=int,
+                  default=100,
+                  help="number of cosmo trials [%default]")
+parser.add_option("--sigmaInt", type=float,
+                  default=0.12,
+                  help="sigmaInt for cosmo MC [%default]")
+parser.add_option("--configName", type=str,
+                  default='config1',
+                  help="configName for output [%default]")
 
 opts, args = parser.parse_args()
 
@@ -150,7 +160,9 @@ snType = opts.snType
 surveyType = opts.surveyType
 zsurvey = opts.zsurvey
 add_WFD = opts.add_WFD
-
+nMC = opts.nMC
+sigmaInt = opts.sigmaInt
+configName = opts.configName
 
 # load sigma_mu
 sigma_mu_from_simu = Sigma_mu_obs(fileDir,
@@ -183,25 +195,25 @@ config = getconfig(dbNames, fields, nseasons, npointings, zsurvey=zsurvey,
                    surveytype=surveyType)
 
 
-fitparName = '{}/FitParams.hdf5'.format(dirFit)
-parameter_to_fit = ['Om', 'w0', 'wa']
+fitparName = '{}/FitParams_{}.hdf5'.format(dirFit, configName)
+parameter_to_fit = ['Om', 'w0']
 if not os.path.isfile(fitparName):
     # get default configuration file
 
-    ffi = range(80)
+    ffi = range(nMC)
     params = {}
     params['fileDir'] = fileDir
     params['dbNames'] = dbNames
     params['config'] = config
     params['fields'] = fields
-    params['dirSN'] = dirSN
+    params['dirSN'] = ''
     params['snType'] = snType
     params['sigma_mu'] = sigma_mu_from_simu
     params['params_fit'] = parameter_to_fit
     params['nsn_bias'] = nsn_bias
     params['sn_wfd'] = sn_wfd
     params['sigma_bias'] = 0.0
-    params['sigmaInt'] = 0.12
+    params['sigmaInt'] = sigmaInt
 
     params_fit = multiproc(ffi, params, multifit_mu, nproc)
 
@@ -213,7 +225,7 @@ params_fit = params_fit[idx]
 print('result', np.median(params_fit['sigma_w0']),
       np.std(params_fit['sigma_w0']))
 
-plotFitResults(params_fit)
+# plotFitResults(params_fit)
 """
 Om = 0.3
 w0 = -1.0

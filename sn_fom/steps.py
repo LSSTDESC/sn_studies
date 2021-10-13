@@ -53,7 +53,7 @@ class fit_SN_mu:
 
         # make the fit and get the parameters
         params_fit = fit()
-        print('no binning', params_fit)
+        #print('no binning', params_fit)
         """
         # try a binned cosmology here
         binned_sn = self.binned_SN(data_sn)
@@ -321,6 +321,8 @@ def multifit_mu(index, params, j=0, output_q=None):
     for i in index:
         if snDir != '':
             saveSN_f = '{}/SN_{}.hdf5'.format(snDir, i)
+        else:
+            saveSN_f = ''
 
         fitpar = fit_SN_mu(fileDir, dbNames, config,
                            fields, snType, sigma_mu_from_simu,
