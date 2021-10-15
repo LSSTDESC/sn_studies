@@ -536,7 +536,6 @@ class Sigma_mu_obs:
                 nbins = 20
 
             snType = self.snTypes[io]
-            print('looking for', self.fileDir,dbName)
             data_sn = transformSN(self.fileDir, dbName,
                                   snType, self.alpha, self.beta, self.Mb)
             bdata = binned_data(zmin, zmax, nbins, data_sn)
@@ -553,7 +552,7 @@ class Sigma_mu_obs:
             idx = df['dbName'] == dbName
             bdata = df[idx]
             ax.errorbar(bdata['z'], bdata['sigma_mu_mean'],
-                        yerr=bdata['sigma_mu_rms'], label=dbName)
+                        yerr=bdata['sigma_mu_sigma'], label=dbName)
 
         ax.legend()
         ax.grid()
