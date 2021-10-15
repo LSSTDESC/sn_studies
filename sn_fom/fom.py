@@ -148,6 +148,9 @@ parser.add_option("--configName", type=str,
 parser.add_option("--binned_cosmology", type=int,
                   default=0,
                   help="to perform a binned cosmology  [%default]")
+parser.add_option("--dbNames_all",type=str,
+                  default='DD_0.50,DD_0.55,DD_0.60,DD_0.65,DD_0.70,DD_0.75,DD_0.80,DD_0.85,DD_0.90',
+                  help="dbNames to consider to estimate reference files [%default]")
 
 opts, args = parser.parse_args()
 
@@ -167,9 +170,13 @@ nMC = opts.nMC
 sigmaInt = opts.sigmaInt
 configName = opts.configName
 binned_cosmology = opts.binned_cosmology
+dbNames_all = opts.dbNames_all .split(',')
+
 
 # load sigma_mu
 sigma_mu_from_simu = Sigma_mu_obs(fileDir,
+                                  dbNames=dbNames_all+['WFD_0.20'],
+                                  snTypes=['allSN']*len(dbNames_all)+['WFD'],
                                   outName='sigma_mu_from_simu.hdf5',
                                   plot=False).data
 
@@ -180,8 +187,7 @@ config = getconfig(['DD_0.90'],
                    ['1,1,1,1,1'],
                    ['1,1,1,1,1'])
 nsn_bias = NSN_bias(fileDir, config, fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'],
-                    dbNames=['DD_0.65', 'DD_0.70', 'DD_0.75',
-                             'DD_0.80', 'DD_0.85', 'DD_0.90'],
+                    dbNames=dbNames_all,
                     plot=False).data
 
 # load sn_wfd

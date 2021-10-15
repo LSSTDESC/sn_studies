@@ -75,7 +75,7 @@ def add_config(fi, prefix,nultra,fields,
         li += append(nseasons,nultra)
         li += append(pointings,nultra)
         li += 'conf_{}_{}_{}'.format(iconf,runtype,suffix)
-        fi.write(li+' \n')
+        fi.write(li+'\n')
         print(li)
 
     return iconf

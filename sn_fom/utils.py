@@ -243,7 +243,8 @@ def randsimu(grp, sigmaInt=0.12):
     grp = grp.fillna(value=0.)
     nsn = int(grp['nsn_eff'].mean())
     sigma_mu = grp['sigma_mu_mean'].mean()
-    sigma_mu_rms = grp['sigma_mu_rms'].mean()
+    #sigma_mu_rms = grp['sigma_mu_rms'].mean()
+    sigma_mu_rms = grp['sigma_mu_sigma'].mean()
     # mu_mean = grp['mu_mean'].mean()
     # mu_rms = grp['mu_rms'].mean()
 
