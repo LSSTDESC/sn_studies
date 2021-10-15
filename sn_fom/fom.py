@@ -148,7 +148,7 @@ parser.add_option("--configName", type=str,
 parser.add_option("--binned_cosmology", type=int,
                   default=0,
                   help="to perform a binned cosmology  [%default]")
-parser.add_option("--dbNames_all",type=str,
+parser.add_option("--dbNames_all", type=str,
                   default='DD_0.50,DD_0.55,DD_0.60,DD_0.65,DD_0.70,DD_0.75,DD_0.80,DD_0.85,DD_0.90',
                   help="dbNames to consider to estimate reference files [%default]")
 
