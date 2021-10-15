@@ -23,7 +23,7 @@ def append(fields,nultra=0):
         lia += '{},'.format(field)
     lia += '{};'.format(fields[-1])
     
-    if nultra > 1 and len(fields)>nultra:
+    if nultra >= 1 and len(fields)>nultra:
         r = []
         for match in re.finditer(',',lia):
             r.append(match.start())
@@ -61,7 +61,7 @@ def add_config(fi, prefix,nultra,fields,
 
 
     """
-    zcomp = np.arange(0.50,0.95,0.05)
+    zcomp = np.arange(0.55,0.95,0.05)
     nfields = np.sum(pointings)
     print('# {} fields'.format(nfields))
     fi.write('# {} fields \n'.format(nfields))
@@ -69,7 +69,9 @@ def add_config(fi, prefix,nultra,fields,
         iconf += 1
         li = prefix
         if len(fields) > nultra:
-            li += '/DD_{}'.format(np.round(z,2)).ljust(8,'0')
+            if nultra > 0:
+                li += '/'
+            li += 'DD_{}'.format(np.round(z,2)).ljust(7,'0')
         li += ';'
         li += append(fields,nultra)
         li += append(nseasons,nultra)
@@ -77,6 +79,9 @@ def add_config(fi, prefix,nultra,fields,
         li += 'conf_{}_{}_{}'.format(iconf,runtype,suffix)
         fi.write(li+'\n')
         print(li)
+        if nfields == nultra or nfields==1:
+            break
+        
 
     return iconf
 
@@ -120,6 +125,7 @@ if ultraDeepFields == ['']:
     run_type = 'universal'
     prefix = ''
     suffix = np.unique(list(map(int,nseasons)))[0]
+    nultra = 0
 else:
     suffix = '_'.join(z_ultra)+'_'+'_'.join(nseasons_ultra)
 
