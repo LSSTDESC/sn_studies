@@ -135,26 +135,33 @@ fi = open(cvsName,'w')
 bandeau = 'dbName;fields;nseasons;npointings;configName'
 fi.write(bandeau +'\n')
 
-pointings_max = [1,1,1,1,2]
-pointings_uni = [1,1,1,1,1]
+fields_pointings = ['COSMOS','XMM-LSS','CDFS','ELAIS','ADFS']
+pointings_max = dict(zip(fields_pointings,[1,1,1,1,2]))
+pointings_uni = dict(zip(fields_pointings,[1,1,1,1,1]))
 
 configs = {}
 
 configs[0] = {}
 configs[0]['fields'] = fields
 configs[0]['nseasons'] = nseasons
-configs[0]['npointings'] = pointings_max
+pp = []
+for fil in fields:
+    pp.append(pointings_max[fil])
+configs[0]['npointings'] = pp
 
 configs[1] = {}
 configs[1]['fields'] = fields
 configs[1]['nseasons'] = nseasons
-configs[1]['npointings'] = pointings_uni
+pp_uni = []
+for fil in fields:
+    pp_uni.append(pointings_uni[fil])
+configs[1]['npointings'] = pp_uni
 
 for i in range(len(fields)-1):
     configs[i+2] = {}
     configs[i+2]['fields'] = fields[:-i-1]
     configs[i+2]['nseasons'] = nseasons[:-i-1]
-    configs[i+2]['npointings'] = pointings_uni[:-i-1]
+    configs[i+2]['npointings'] = pp_uni[:-i-1]
 
 
 iconf = 0
