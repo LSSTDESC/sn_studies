@@ -295,13 +295,13 @@ def loadData(dirFile, dbName, tagprod, nfich=-1):
     print('search path', search_path)
     fis = glob.glob(search_path)
 
-    # print(fis)
     # load the files
     params = dict(zip(['objtype'], ['astropyTable']))
 
     if nfich > 0:
         nfich = np.min([nfich, len(fis)])
-    res = multiproc(fis[:nfich], params, loopStack_params, 4).to_pandas()
+
+    res = multiproc(fis[:nfich], params, loopStack_params, 8).to_pandas()
     # res['fitstatus'] = res['fitstatus'].str.decode('utf-8')
 
     return res

@@ -81,7 +81,7 @@ class fit_SN_mu:
         bins = np.linspace(zmin, zmax, nbins)
         """
         bins = [0.01, 0.2]
-        #bins += np.arange(0.2, 0.2, 0.01).tolist()
+        # bins += np.arange(0.2, 0.2, 0.01).tolist()
         bins += np.arange(0.2, 0.8-0.01, 0.01).tolist()
         bins += np.arange(0.8, zmax+0.005, 0.005).tolist()
         bins = np.array(np.unique(bins))
@@ -631,6 +631,7 @@ class NSN_bias:
         data_sn = pd.DataFrame()
 
         for i, dbName in enumerate(self.dbNames):
+            print('processing', dbName)
             for field in self.fields:
                 idx = self.config['fieldName'].isin([field])
                 dd = self.getNSN_bias(dbName, self.config[idx], [field])
@@ -669,6 +670,7 @@ class NSN_bias:
         nsn_per_bin = nsn_bin(nsn_scen.data)
 
         # get SN from simu
+        print('loading SN')
         data_sn = loadSN(self.fileDir, dbName, 'allSN')
 
         # get the effective (bias effect) number of expected SN per bin
@@ -686,19 +688,33 @@ class NSN_bias:
 
         """
         import matplotlib.pyplot as plt
+        from scipy.interpolate import make_interp_spline
+
         for field in self.data['fieldName'].unique():
             idx = self.data['fieldName'] == field
             sel = self.data[idx]
             fig, ax = plt.subplots()
+            zcomps = sel['zcomp'].unique()
+            zcomps = ['0.90', '0.80', '0.70', '0.65']
+            ls = dict(
+                zip(zcomps, ['solid', 'dotted', 'dashed', 'dashdot']))
             fig.suptitle('{}'.format(field))
-            for zcomp in sel['zcomp'].unique():
+            for zcomp in zcomps:
                 idxb = sel['zcomp'] == zcomp
-                selb = sel[idxb]
-                ax.plot(selb['z'], selb['nsn_eff'],
-                        label='$z_{complete}$'+'= {}'.format(zcomp))
-
+                selb = sel[idxb].to_records(index=False)
+                # ax.plot(selb['z'], selb['nsn_eff'],
+                #        label='$z_{complee}$'+'= {}'.format(zcomp))
+                xnew = np.linspace(
+                    np.min(selb['z']), np.max(selb['z']), 100)
+                spl = make_interp_spline(
+                    selb['z'], selb['nsn_eff'], k=3)  # type: BSpline
+                spl_smooth = spl(xnew)
+                ax.plot(xnew, spl_smooth,
+                        label='$z_{complete}$'+'= {}'.format(zcomp), ls=ls[zcomp], lw=3)
             ax.grid()
             ax.set_xlabel('$z$')
-            ax.set_ylabel('N$_{SN}$')
+            ax.set_ylabel('N$_{\mathrm{SN}}$')
             ax.legend()
+            ax.set_xlim([0.05, None])
+            ax.set_ylim([0.0, None])
         plt.show()

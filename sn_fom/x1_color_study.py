@@ -1,7 +1,7 @@
 from optparse import OptionParser
 from sn_fom.utils import transformSN, binned_data
 from sn_fom.cosmo_fit import CosmoDist
-import matplotlib.pyplot as plt
+from sn_fom import plt
 import pandas as pd
 import numpy as np
 import os
@@ -150,8 +150,8 @@ def plot_test_b(dd, dbName='DD_0.65'):
         bdata['dbName'] = dbName
         #print(config, bdata[['mu_mean', 'z']])
         df_dict[config] = bdata
-        print('heeeee', bdata[['mu_mean', 'mu_sigma']])
-        print(test)
+        #print('heeeee', bdata[['mu_mean', 'mu_sigma']])
+        # print(test)
 
     cosmo = CosmoDist()
 
@@ -235,6 +235,54 @@ def plot_test_b(dd, dbName='DD_0.65'):
     fig, ax = plt.subplots()
     ax.plot(dfsyst['z'], dfsyst['sigma_mu'])
     plt.show()
+
+
+def plot_sigma_mu(dd):
+
+    zmin = 0.1
+    zmax = 1.1
+    nbins = 20
+
+    dres = pd.DataFrame()
+    for key, val in dd.items():
+        da = binned_data(zmin, zmax, nbins, val)
+        da['dbName'] = key
+        dres = pd.concat((dres, da))
+
+    fig, ax = plt.subplots()
+    dbNames = ['DD_0.90', 'DD_0.80', 'DD_0.70', 'DD_0.65']
+    ls = dict(zip(dbNames, ['solid', 'dotted', 'dashed', 'dashdot']))
+
+    for dbName in dbNames:
+        idx = dres['dbName'] == dbName
+        sel = dres[idx]
+        sel = sel.sort_values(by=['z'])
+        zcomp = dbName.split('_')[-1]
+        ax.plot(sel['z'], sel['sigma_mu_mean'],
+                label='$z_{complete}$'+'= {}'.format(zcomp), ls=ls[dbName], lw=3)
+
+    ax.grid()
+    ax.set_ylabel('<$\sigma_\mu$>')
+    ax.set_xlabel('$z$')
+    ax.legend()
+
+    plt.show()
+
+
+def plot_nsn_bias(fileDir, dbNames):
+
+    # special config file needed here: 1 season, 1 pointing per field
+    from sn_fom.utils import getconfig
+    from sn_fom.steps import NSN_bias
+    print('baouh', dbNames)
+    config = getconfig(['DD_0.90'],
+                       ['COSMOS,XMM-LSS,CDFS,ADFS,ELAIS'],
+                       ['1,1,1,1,1'],
+                       ['1,1,1,1,1'])
+    nsn_bias = NSN_bias(fileDir, config,
+                        fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'],
+                        dbNames=dbNames,
+                        plot=True, outName='toplot_bias.hdf5').data
 
 
 def plot_x1_color(var, dbName, dd, x1_color, config='nosigmaInt', zrange='highz', zmin=0.0, zmax=1.2, zstep=0.02):
@@ -511,9 +559,11 @@ binned = opts.binned
 # load and transform the data
 
 data = {}
+
 for dbName in dbNames:
     data[dbName] = getSN(fileDir, dbName, fakes, alpha,
                          beta, Mb, binned=binned)
+
 
 if not binned:
     var = 'color'
@@ -527,9 +577,9 @@ if not binned:
     #plot_x1_color(var, 'DD_0.65', data, x1_color_th, zrange=zrange)
     print('hhh', data['DD_0.65']['config'])
     #plot_x1_color_diff(var, 'DD_0.65', data, zmax=0.1)
-    plot_test_b(data, dbName='DD_0.90')
-
-
+    #plot_test_b(data, dbName='DD_0.90')
+    # plot_sigma_mu(data)
+    plot_nsn_bias('Fakes_nosigmaInt/Fit', data.keys())
 if binned:
     plot_diff('DD_0.65', data)
 
