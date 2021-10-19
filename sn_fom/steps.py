@@ -3,6 +3,7 @@ from sn_fom.utils import loadSN, selSN, update_config, getDist, transformSN, bin
 from sn_fom.utils import nSN_bin_eff, simu_mu, select
 from sn_fom.nsn_scenario import NSN_config, nsn_bin
 import pandas as pd
+from scipy.interpolate import interp1d
 from . import np
 
 
@@ -30,12 +31,25 @@ class fit_SN_mu:
         # simulate supernovae here - DDF
         data_sn = self.simul_SN()
 
+        # add bias corr and resimulate
+        data_sn = self.add_sigbias_resimulate(data_sn, sigmaInt)
+        """
+        print('after bias corr', data_sn)
+        import matplotlib.pyplot as plt
+        plt.plot(data_sn['z_SN'], data_sn['sigma_bias_stat'], 'ko')
+        plt.show()
+        """
+        #data_sn['sigma_bias_stat'] = 0.0
         # add WFD SN if required
         # print('NSN DD:', len(data_sn), 'WFD:', len(sn_wfd))
         data_sn['snType'] = 'DD'
         if not sn_wfd.empty:
             sn_wfd['snType'] = 'WFD'
+            sn_wfd['dbName'] = 'WFD'
+            sn_wfd['sigma_bias_stat'] = 0.0
             data_sn = pd.concat((data_sn, sn_wfd))
+
+        # print(test)
 
         if binned_cosmology:
             data_sn = self.binned_SN(data_sn, sigmaInt)
@@ -123,6 +137,7 @@ class fit_SN_mu:
             idxa = self.nsn_bias['zcomp'] == dbName.split('_')[1]
             dd = self.getSN_mu_simu(dbName, fields_to_process,
                                     self.sigmu[idxb], self.nsn_bias[idxa], self.config[idx])
+            dd['dbName'] = dbName
             data_sn = pd.concat((data_sn, dd))
             # print('there', dbName, fields_to_process, dd.size)
         # print(test)
@@ -191,6 +206,82 @@ class fit_SN_mu:
         res = pd.DataFrame(r, columns=['z', 'sigma_mu_mean'])
         res['sigma_mu_rms'] = 0.
         return res
+
+    def bias_stat_error(self, data):
+        """
+        Method to estimate the statistical uncertainty due to the Malmquist bias
+
+        Parameters
+        --------------
+        data: pandas df
+          data to process
+
+        Returns
+        ----------
+        original pandas df plus the stat uncertainty due to the Malmquist bias
+
+        """
+
+        df_tot = pd.DataFrame()
+        for dbName in data['dbName'].unique():
+            idx = data['dbName'] == dbName
+            sel = data[idx]
+            if 'DD' in dbName:
+                idxs = self.sigmu['dbName'] == dbName
+                sel_sigmu = self.sigmu[idxs]
+                mu_interp = interp1d(
+                    sel_sigmu['z'], sel_sigmu['mu_mean'], bounds_error=False, fill_value=0.)
+                sigmu_interp = interp1d(
+                    sel_sigmu['z'], sel_sigmu['sigma_mu_mean'], bounds_error=False, fill_value=0.)
+                # get the redshift completeness value
+                zcomp = float(dbName.split('_')[-1])
+                # consider only SN with z>zcomp
+                idxb = sel['z_SN'] >= zcomp
+                selSN = sel[idxb]
+                # get the number of SN per bin
+                zmin = zcomp
+                zmax = 1.1
+                zstep = 0.05
+                bins = np.arange(zmin, zmax+zstep, zstep)
+                io = bins <= zmax
+                bins = bins[io]
+
+                grouped = selSN.groupby(pd.cut(selSN.z_SN, bins))
+                dd = pd.DataFrame()
+                for name, group in grouped:
+                    zmean = np.mean([name.left, name.right])
+                    group['sigma_bias_stat'] = group['mu_SN']*sigmu_interp(
+                        zmean)/mu_interp(zmean)
+                    group['sigma_bias_stat'] /= np.sqrt(len(group))
+                    dd = pd.concat((dd, group))
+                # selSN['size'] = selSN.groupby(
+                #    pd.cut(selSN.z_SN, bins)).transform('size')
+                df_tot = pd.concat((df_tot, dd))
+                df_tot = pd.concat((df_tot, sel[~idxb]))
+            else:
+                df_tot = pd.concat((df_tot, sel))
+
+        #print('after', df_tot)
+        return df_tot
+
+    def add_sigbias_resimulate(self, data_sn, sigmaInt):
+
+        # add a column sigma_bias_stat for all
+
+        data_sn['sigma_bias_stat'] = 0.0
+        data_sn = self.bias_stat_error(data_sn)
+
+        # re-estimate the distance moduli including the bias error - for DD only - faster
+        from sn_fom.cosmo_fit import CosmoDist
+        from random import gauss
+        cosmo = CosmoDist(H0=70.)
+        dist_mu = cosmo.mu_astro(data_sn['z_SN'], 0.3, -1.0, 0.0)
+        sigmu = np.array(data_sn['sigma_mu_SN'])
+        sigbias = np.array(data_sn['sigma_bias_stat'])
+        #print('hello', len(dist_mu), len(sigmu), sigbias)
+        data_sn['mu_SN'] = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2+sigbias[i]**2))
+                            for i in range(len(dist_mu))]
+        return data_sn
 
 
 def fit_SN_deprecated(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=pd.DataFrame(), params_fit=['Om', 'w0', 'wa'], saveSN='', sigma_bias=0.01):
@@ -424,7 +515,8 @@ def getSN_mu_simu_old(fileDir, dbName, config, fields, sigmu_from_simu):
 
     # merge with sigmu_from_simu
 
-    simuparams = nsn_eff.merge(sigmu_from_simu, left_on=['z'], right_on=['z'])
+    simuparams = nsn_eff.merge(sigmu_from_simu, left_on=[
+        'z'], right_on=['z'])
 
     # simulate distance modulus (and error) here
 
@@ -471,7 +563,8 @@ def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu, nfich=-1, nsn=5000, sigm
     # merge with sigmu_from_simu
     nsn_eff = nsn_eff.round({'z': 6})
     sigmu_from_simu = sigmu_from_simu.round({'z': 6})
-    simuparams = nsn_eff.merge(sigmu_from_simu, left_on=['z'], right_on=['z'])
+    simuparams = nsn_eff.merge(sigmu_from_simu, left_on=[
+        'z'], right_on=['z'])
 
     # print(simuparams)
     # print('after merging', simuparams)
