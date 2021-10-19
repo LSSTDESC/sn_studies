@@ -605,7 +605,7 @@ class FitData_mu:
         Z_SN = data['z_SN']
         mu_SN = data['mu_SN']
         sigma_mu_SN = data['sigma_mu_SN']
-        sigma_bias = data['sigma_bias']
+        sigma_bias = data['sigma_bias_stat']
         self.nsn_DD = len(data[data['snType'] == 'DD'])
         self.nsn_WFD = len(data[data['snType'] == 'WFD'])
         # instance of the fit functions here
@@ -1211,15 +1211,15 @@ class FitCosmo_mu(CosmoDist):
         # return optimize.minimize(self.tchi2, (0.3, -1.0, 0., sigma_int))
 
     def chi2(self, Om, w0, wa):
-        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2)))
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2)))
 
     def chi2_sigma_int(self, Om, w0, wa, sigma_int):
 
-        return np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+sigma_int**2))
+        return np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+sigma_int**2+self.sigma_bias**2))
 
     def chi2_nowa(self, Om, w0):
 
-        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, self.wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2)))
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, self.wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2)))
 
     def tchi2(self, tup):
         Om, w0, wa, sigma_int = tup
