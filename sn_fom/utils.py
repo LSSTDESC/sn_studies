@@ -489,7 +489,7 @@ def transformSN(fileDir, dbName, snType, alpha, beta, Mb):
     return data_sn
 
 
-def binned_data(zmin, zmax, nbins, data, var='sigma_mu'):
+def binned_data(zmin, zmax, nbins, data, var='sigma_mu', sigma_var=''):
     """
     function  to transform a set of data to binned data
 
@@ -518,16 +518,16 @@ def binned_data(zmin, zmax, nbins, data, var='sigma_mu'):
     group = data.groupby(pd.cut(data.z, bins))
     plot_centers = (bins[:-1] + bins[1:])/2
     plot_values = group[var].mean().to_list()
-    sigma_var = 'sigma_{}'.format(var)
+    #sigma_var = 'sigma_{}'.format(var)
+    #print('toto', sigma_var, 'and', data.columns)
     if sigma_var in data.columns:
         error_values = group.apply(
-            lambda x: 1./np.sqrt(np.sum(1./x[sigma_var]**2)))
-        print('err', error_values[:])
+            lambda x: 1./np.sqrt(np.sum(1./x[sigma_var]**2))).values
+        #print('err', error_values[:])
     else:
         error_values = 0.
 
     df = pd.DataFrame(plot_centers, columns=['z'])
     df['{}_mean'.format(var)] = plot_values
-    print(type(error_values))
     df['{}_sigma'.format(var)] = error_values
     return df

@@ -605,7 +605,8 @@ class FitData_mu:
         Z_SN = data['z_SN']
         mu_SN = data['mu_SN']
         sigma_mu_SN = data['sigma_mu_SN']
-        sigma_bias = data['sigma_bias_stat']
+        sigma_bias = np.sqrt(data['sigma_bias_stat']
+                             ** 2+data['sigma_bias_x1_color']**2)
         self.nsn_DD = len(data[data['snType'] == 'DD'])
         self.nsn_WFD = len(data[data['snType'] == 'WFD'])
         # instance of the fit functions here

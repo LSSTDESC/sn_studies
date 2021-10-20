@@ -13,7 +13,9 @@ class fit_SN_mu:
                  snType, sigmu, nsn_bias,
                  sn_wfd=pd.DataFrame(),
                  params_fit=['Om', 'w0', 'wa'],
-                 saveSN='', sigmaInt=0.12, sigma_bias=0.01, binned_cosmology=False):
+                 saveSN='', sigmaInt=0.12,
+                 sigma_bias_x1_color=pd.DataFrame(),
+                 binned_cosmology=False):
 
         self.fileDir = fileDir
         self.dbNames = dbNames
@@ -26,7 +28,7 @@ class fit_SN_mu:
         self.params_fir = params_fit
         self.saveSN = saveSN
         self.sigmaInt = sigmaInt
-        self.sigma_bias = sigma_bias
+        self.sigma_bias_x1_color = sigma_bias_x1_color
 
         # simulate supernovae here - DDF
         data_sn = self.simul_SN()
@@ -47,6 +49,7 @@ class fit_SN_mu:
             sn_wfd['snType'] = 'WFD'
             sn_wfd['dbName'] = 'WFD'
             sn_wfd['sigma_bias_stat'] = 0.0
+            sn_wfd['sigma_bias_x1_color'] = 0.0
             data_sn = pd.concat((data_sn, sn_wfd))
 
         # print(test)
@@ -164,7 +167,7 @@ class fit_SN_mu:
             # simulate distance modulus (and error) here
             # print(field, 'nsn to simulate', np.sum(
             #    simuparams['nsn_eff']), nseasons, nfields)
-            res = simu_mu(simuparams, self.sigmaInt, self.sigma_bias)
+            res = simu_mu(simuparams, self.sigmaInt)
             # print(field, 'nsn simulated', len(res))
             SN = pd.concat((SN, res))
 
@@ -207,7 +210,7 @@ class fit_SN_mu:
         res['sigma_mu_rms'] = 0.
         return res
 
-    def bias_stat_error(self, data):
+    def add_bias_stat(self, data):
         """
         Method to estimate the statistical uncertainty due to the Malmquist bias
 
@@ -261,15 +264,35 @@ class fit_SN_mu:
             else:
                 df_tot = pd.concat((df_tot, sel))
 
-        #print('after', df_tot)
         return df_tot
+
+    def add_bias_x1_color(self, df_tot):
+
+        df_fi = pd.DataFrame()
+        for dbName in df_tot['dbName'].unique():
+            idx = df_tot['dbName'] == dbName
+            sel = df_tot[idx].copy()
+            idm = self.sigma_bias_x1_color['dbName'] == dbName
+            sel_bias = self.sigma_bias_x1_color[idm]
+            if not sel_bias.empty:
+                interpo = interp1d(
+                    sel_bias['z'], sel_bias['delta_mu_bias'], bounds_error=False, fill_value=0.)
+                zrange = sel['z_SN'].to_list()
+                sel.loc[:, 'sigma_bias_x1_color'] = interpo(zrange)
+            df_fi = pd.concat((df_fi, sel))
+
+        return df_fi
 
     def add_sigbias_resimulate(self, data_sn, sigmaInt):
 
         # add a column sigma_bias_stat for all
 
         data_sn['sigma_bias_stat'] = 0.0
-        data_sn = self.bias_stat_error(data_sn)
+        data_sn['sigma_bias_x1_color'] = 0.0
+        # add bias stat
+        data_sn = self.add_bias_stat(data_sn)
+        # add bias x1_color
+        data_sn = self.add_bias_x1_color(data_sn)
 
         # re-estimate the distance moduli including the bias error - for DD only - faster
         from sn_fom.cosmo_fit import CosmoDist
@@ -278,8 +301,9 @@ class fit_SN_mu:
         dist_mu = cosmo.mu_astro(data_sn['z_SN'], 0.3, -1.0, 0.0)
         sigmu = np.array(data_sn['sigma_mu_SN'])
         sigbias = np.array(data_sn['sigma_bias_stat'])
+        sigx1color = np.array(data_sn['sigma_bias_x1_color'])
         #print('hello', len(dist_mu), len(sigmu), sigbias)
-        data_sn['mu_SN'] = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2+sigbias[i]**2))
+        data_sn['mu_SN'] = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2+sigbias[i]**2+sigx1color[i]**2))
                             for i in range(len(dist_mu))]
         return data_sn
 
@@ -383,7 +407,7 @@ def multifit(index, params, j=0, output_q=None):
     params_for_fit = params['params_fit']
     nsn_bias = params['nsn_bias']
     sn_wfd = params['sn_wfd']
-    sigma_bias = params['sigma_bias']
+    sigma_bias_x1_color = params['sigma_bias_x1_color']
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
     for i in index:
@@ -391,7 +415,10 @@ def multifit(index, params, j=0, output_q=None):
             saveSN_f = '{}/SN_{}.hdf5'.format(saveSN, i)
         fitpar = fit_SN(dbNames, config,
                         fields, snType,
-                        sigma_mu_from_simu, nsn_bias, sn_wfd, params_for_fit, saveSN=saveSN_f, sigma_bias=sigma_bias)
+                        sigma_mu_from_simu, nsn_bias,
+                        sn_wfd, params_for_fit,
+                        saveSN=saveSN_f,
+                        sigma_bias_x1_color=sigma_bias_x1_color)
         params_fit = pd.concat((params_fit, fitpar))
 
     if output_q is not None:
@@ -412,7 +439,7 @@ def multifit_mu(index, params, j=0, output_q=None):
     params_for_fit = params['params_fit']
     nsn_bias = params['nsn_bias']
     sn_wfd = params['sn_wfd']
-    sigma_bias = params['sigma_bias']
+    sigma_bias_x1_color = params['sigma_bias_x1_color']
     sigmaInt = params['sigmaInt']
     binned_cosmology = params['binned_cosmology']
 
@@ -428,7 +455,8 @@ def multifit_mu(index, params, j=0, output_q=None):
                            fields, snType, sigma_mu_from_simu,
                            nsn_bias, sn_wfd, params_for_fit,
                            saveSN=saveSN_f, sigmaInt=sigmaInt,
-                           sigma_bias=sigma_bias, binned_cosmology=binned_cosmology)
+                           sigma_bias_x1_color=sigma_bias_x1_color,
+                           binned_cosmology=binned_cosmology)
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
     if output_q is not None:
@@ -786,7 +814,7 @@ class NSN_bias:
         for field in self.data['fieldName'].unique():
             idx = self.data['fieldName'] == field
             sel = self.data[idx]
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(12, 9))
             zcomps = sel['zcomp'].unique()
             zcomps = ['0.90', '0.80', '0.70', '0.65']
             ls = dict(

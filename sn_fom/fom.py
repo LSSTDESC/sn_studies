@@ -222,7 +222,7 @@ if not os.path.isfile(fitparName):
     params['params_fit'] = parameter_to_fit
     params['nsn_bias'] = nsn_bias
     params['sn_wfd'] = sn_wfd
-    params['sigma_bias'] = 0.0
+    params['sigma_bias_x1_color'] = pd.read_hdf('sigma_mu_bias_x1_color.hdf5')
     params['sigmaInt'] = sigmaInt
     params['binned_cosmology'] = binned_cosmology
 
