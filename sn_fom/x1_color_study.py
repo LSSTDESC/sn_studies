@@ -5,6 +5,7 @@ from sn_fom import plt
 import pandas as pd
 import numpy as np
 import os
+from scipy.ndimage.filters import gaussian_filter
 
 
 def plotSN(dbName, config, data, var='Cov_colorcolor'):
@@ -120,46 +121,172 @@ def plot_test(data):
     plt.show()
 
 
-def plot_test_b(dd, dbName='DD_0.65'):
+class Syste_x1_color:
+
+    def __init__(self, dd, dbName='DD_0.65', nsigma=1):
+
+        zcomp = dbName.split('_')[1]
+        self.data = dd[dbName]
+
+        self.zmin = 0.1
+        self.zmax = 1.0
+        self.zstep = 0.07
+
+        nsigma = str(nsigma)
+        self.configs = ['nosigmaInt',
+                        'x1_plus_{}_sigma'.format(nsigma),
+                        'x1_minus_{}_sigma'.format(nsigma),
+                        'color_plus_{}_sigma'.format(nsigma),
+                        'color_minus_{}_sigma'.format(nsigma)]
+
+        """
+        corresp = dict(zip(configs, ['nominal',
+                                     '$x_1 + {}\sigma$'.format(nsigma),
+                                     '$x_1 -{}\sigma$'.format(nsigma),
+                                     '$c + {}\sigma$'.format(nsigma),
+                                     '$c -{}\sigma$'.format(nsigma)]))
+        """
+
+    def __call__(self):
+
+        # get binned data
+        df_dict = self.get_binned_data(self.data, self.configs)
+
+        # get diff wrt nominal
+        df_syst = self.get_diff_nominal(df_dict, self.configs)
+
+        # finally: get impact on sigma_mu
+        df_syst = self.get_bias(df_syst)
+        df_syst['dbName'] = dbName
+
+        return df_syst[['dbName', 'z', 'delta_mu_bias']]
+
+    def get_binned_data(self, data, configs):
+
+        nbins = int(self.zmax/self.zstep)
+        bins = np.linspace(self.zmin, self.zmax, nbins)
+        df_dict = {}
+        vars_fit = ['x1_fit', 'color_fit', 'Mb']
+        vars = ['x1', 'color']+vars_fit
+        corr_cov = dict(zip(vars_fit, ['x1', 'color', 'Mb']))
+        for config in configs:
+            idx = data['config'] == config
+            data_sn = data[idx]
+            data_sn = data_sn.rename(columns={"Cov_mbmb": "Cov_MbMb"})
+            for vv in ['x1_fit', 'color_fit', 'Mb']:
+                data_sn['sigma_{}'.format(vv)] = np.sqrt(
+                    data_sn['Cov_{}{}'.format(corr_cov[vv], corr_cov[vv])])
+            bdata = pd.DataFrame()
+            for vv in vars:
+                bdatab = binned_data(self.zmin, self.zmax, nbins, data_sn,
+                                     vv, 'sigma_{}'.format(vv))
+                if bdata.empty:
+                    bdata = bdatab
+                else:
+                    bdata = bdata.merge(bdatab, left_on=['z'], right_on=['z'])
+
+            bdata['dbName'] = dbName
+            df_dict[config] = bdata
+
+        return df_dict
+
+    def get_diff_nominal(self, df_dict, configs):
+
+        dfsyst = pd.DataFrame()
+        ref = df_dict['nosigmaInt']
+        for config in configs[1:]:
+            df = df_dict[config]
+            for vv in ['x1', 'color']:
+                if vv in config and 'plus' in config:
+                    diff = gaussian_filter(df['{}_fit_mean'.format(
+                        vv)], 3)-gaussian_filter(ref['{}_fit_mean'.format(vv)], 3)
+                    diff_mb = gaussian_filter(
+                        df['Mb_mean'], 3)-gaussian_filter(ref['Mb_mean'], 3)
+
+                    dfg = pd.DataFrame(diff, columns=[
+                        'delta_{}'.format(vv)])
+                    dfg['delta_Mb_{}'.format(vv)] = diff_mb
+                    dfg['z'] = df['z']
+
+                    if dfsyst.empty:
+                        dfsyst = dfg
+                    else:
+                        dfsyst = dfsyst.merge(
+                            dfg, left_on=['z'], right_on=['z'])
+
+        return dfsyst
+
+    def get_bias(self, dfsyst):
+
+        alpha = 0.13
+        beta = 3.1
+        dfsyst['delta_mu_x1'] = dfsyst['delta_Mb_x1']+alpha*dfsyst['delta_x1']
+        dfsyst['delta_mu_color'] = dfsyst['delta_Mb_color'] - \
+            beta*dfsyst['delta_color']
+
+        dfsyst['delta_mu_bias'] = np.sqrt(
+            dfsyst['delta_mu_x1']**2+dfsyst['delta_mu_color']**2)
+
+        return dfsyst
+
+
+def plot_test_b(dd, dbName='DD_0.65', nsigma=1):
 
     zcomp = dbName.split('_')[1]
     data = dd[dbName]
     zmin = 0.1
     zmax = 1.0
-    zstep = 0.05
+    zstep = 0.07
 
     nbins = int(zmax/zstep)
     bins = np.linspace(zmin, zmax, nbins)
 
+    nsigma = str(nsigma)
     configs = ['nosigmaInt',
-               'x1_plus_1_sigma', 'x1_minus_1_sigma',
-               'color_plus_1_sigma', 'color_minus_1_sigma']
-    corresp = dict(zip(configs, ['nominal', '$x_1 + 1\sigma$', '$x_1 -1\sigma$',
-                                 '$c + 1\sigma$', '$c -1\sigma$']))
+               'x1_plus_{}_sigma'.format(nsigma),
+               'x1_minus_{}_sigma'.format(nsigma),
+               'color_plus_{}_sigma'.format(nsigma),
+               'color_minus_{}_sigma'.format(nsigma)]
+
+    corresp = dict(zip(configs, ['nominal',
+                                 '$x_1 + {}\sigma$'.format(nsigma),
+                                 '$x_1 -{}\sigma$'.format(nsigma),
+                                 '$c + {}\sigma$'.format(nsigma),
+                                 '$c -{}\sigma$'.format(nsigma)]))
 
     df_dict = {}
+    vars_fit = ['x1_fit', 'color_fit', 'Mb']
+    vars = ['x1', 'color']+vars_fit
+    corr_cov = dict(zip(vars_fit, ['x1', 'color', 'Mb']))
     for config in configs:
         idx = data['config'] == config
         data_sn = data[idx]
-        print(config, data_sn.columns)
+        data_sn = data_sn.rename(columns={"Cov_mbmb": "Cov_MbMb"})
+        print(config, len(data_sn))
+        for vv in ['x1_fit', 'color_fit', 'Mb']:
+            data_sn['sigma_{}'.format(vv)] = np.sqrt(
+                data_sn['Cov_{}{}'.format(corr_cov[vv], corr_cov[vv])])
         bdata = binned_data(zmin, zmax, nbins, data_sn, 'mu')
-        for vv in ['x1', 'x1_fit', 'color', 'color_fit', 'Mb', 'Cov_x1mb', 'Cov_colormb', 'Cov_x1color']:
-            bdatab = binned_data(zmin, zmax, nbins, data_sn, vv)
+        for vv in vars:
+            bdatab = binned_data(zmin, zmax, nbins, data_sn,
+                                 vv, 'sigma_{}'.format(vv))
             bdata = bdata.merge(bdatab, left_on=['z'], right_on=['z'])
-
-        bdata['dbName'] = dbName
-        #print(config, bdata[['mu_mean', 'z']])
-        df_dict[config] = bdata
-        #print('heeeee', bdata[['mu_mean', 'mu_sigma']])
         # print(test)
-
+        bdata['dbName'] = dbName
+        # print(config, bdata[['mu_mean', 'z']])
+        df_dict[config] = bdata
+        # print('heeeee', bdata[['mu_mean', 'mu_sigma']])
+        # print(test)
+    # print(test)
     cosmo = CosmoDist()
 
     fig, ax = plt.subplots()
     ref = df_dict['nosigmaInt']
+
     for config in configs:
         df = df_dict[config]
-        #print(config, df['mu_mean'])
+
+        # print(config, df['mu_mean'])
         mu_th = cosmo.mu_astro(df['z'], 0.3, -1.0, 0.0)
         df_th = pd.DataFrame(mu_th, columns=['mu_th'])
         df_th['z'] = df['z']
@@ -171,25 +298,25 @@ def plot_test_b(dd, dbName='DD_0.65'):
     fig.suptitle('$z_{complete} $ = '+'{}'.format(zcomp))
     for config in configs:
         df = df_dict[config]
-        #print(config, df['mu_mean'])
-        print(config, df[['z', 'x1_fit_mean', 'color_fit_mean']])
-        ax[0].plot(df['z'], df['x1_fit_mean'], label=corresp[config])
-        ax[1].plot(df['z'], df['color_fit_mean'], label=corresp[config])
-        ax[2].plot(df['z'], df['Mb_mean'], label=corresp[config])
+        for key, val in enumerate(['x1_fit_mean', 'color_fit_mean', 'Mb_mean']):
+            ax[key].plot(df['z'], gaussian_filter(
+                df[val], 3), label=corresp[config])
 
     ax[0].grid()
     ax[1].grid()
+    ax[2].grid()
     ax[0].legend()
     ax[0].set_ylabel('$<x_1>$')
     ax[1].set_ylabel('$<c>$')
     ax[2].set_ylabel('$<M_b>$')
     ax[2].set_xlabel('$z$')
 
+    """
     fig, ax = plt.subplots(nrows=3)
     fig.suptitle('$z_{complete} $ = '+'{}'.format(zcomp))
     for config in configs:
         df = df_dict[config]
-        #print(config, df['mu_mean'])
+        # print(config, df['mu_mean'])
         ax[0].plot(df['z'], df['Cov_x1mb_mean'], label=corresp[config])
         ax[1].plot(df['z'], df['Cov_colormb_mean'], label=corresp[config])
         ax[2].plot(df['z'], df['Cov_x1color_mean'], label=corresp[config])
@@ -201,24 +328,24 @@ def plot_test_b(dd, dbName='DD_0.65'):
     ax[1].set_ylabel('$<c>$')
     ax[2].set_ylabel('$<M_b>$')
     ax[2].set_xlabel('$z$')
-
+    """
     dfsyst = pd.DataFrame()
     ref = df_dict['nosigmaInt']
     for config in configs[1:]:
         df = df_dict[config]
         for vv in ['x1', 'color']:
             if vv in config and 'plus' in config:
-                print(config)
-                diff = df['{}_fit_mean'.format(
-                    vv)]-ref['{}_fit_mean'.format(vv)]
-                diff_mb = df['Mb_mean']-ref['Mb_mean']
-                diff_sigmu = df['sigma_mu_mean']-ref['sigma_mu_mean']
-                #print('here', vv, df['{}_diff'.format(vv)])
-                dfg = pd.DataFrame(diff.values, columns=[
-                                   'sigma_{}'.format(vv)])
-                dfg['sigma_Mb_{}'.format(vv)] = diff_mb
+                diff = gaussian_filter(df['{}_fit_mean'.format(
+                    vv)], 3)-gaussian_filter(ref['{}_fit_mean'.format(vv)], 3)
+                diff_mb = gaussian_filter(
+                    df['Mb_mean'], 3)-gaussian_filter(ref['Mb_mean'], 3)
+                # diff_sigmu = df['sigma_mu_mean']-ref['sigma_mu_mean']
+                # print('here', vv, df['{}_diff'.format(vv)])
+                dfg = pd.DataFrame(diff, columns=[
+                    'delta_{}'.format(vv)])
+                dfg['delta_Mb_{}'.format(vv)] = diff_mb
                 dfg['z'] = df['z']
-                dfg['sigma_mu_{}'.format(vv)] = diff_sigmu
+                # dfg['sigma_mu_{}'.format(vv)] = diff_sigmu
                 if dfsyst.empty:
                     dfsyst = dfg
                 else:
@@ -227,13 +354,23 @@ def plot_test_b(dd, dbName='DD_0.65'):
     print(dfsyst)
     alpha = 0.13
     beta = 3.1
-    dfsyst['sigma_mu'] = dfsyst['sigma_Mb_x1']**2 + dfsyst['sigma_Mb_color']**2 + \
-        alpha**2*dfsyst['sigma_x1']**2+beta**2*dfsyst['sigma_color']**2
-    dfsyst['sigma_mu'] = np.sqrt(dfsyst['sigma_mu'])
+    dfsyst['delta_mu_x1'] = dfsyst['delta_Mb_x1']+alpha*dfsyst['delta_x1']
+    dfsyst['delta_mu_color'] = dfsyst['delta_Mb_color'] - \
+        beta*dfsyst['delta_color']
+    # dfsyst['delta_mu_x1'] = alpha*dfsyst['delta_x1']
+    # dfsyst['delta_mu_color'] = -beta*dfsyst['delta_color']
+
+    dfsyst['delta_mu'] = np.sqrt(
+        dfsyst['delta_mu_x1']**2+dfsyst['delta_mu_color']**2)
+    """
     dfsyst['sigma_mu'] = np.sqrt(
         dfsyst['sigma_mu_x1']**2+dfsyst['sigma_mu_color']**2)
-    fig, ax = plt.subplots()
-    ax.plot(dfsyst['z'], dfsyst['sigma_mu'])
+    """
+    fig, ax = plt.subplots(nrows=3)
+    ax[0].plot(dfsyst['z'], dfsyst['delta_mu_x1'])
+    ax[1].plot(dfsyst['z'], dfsyst['delta_mu_color'])
+    ax[2].plot(dfsyst['z'], dfsyst['delta_mu'])
+    print('mean systematic on mu', dfsyst['delta_mu'].median())
     plt.show()
 
 
@@ -249,7 +386,7 @@ def plot_sigma_mu(dd):
         da['dbName'] = key
         dres = pd.concat((dres, da))
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(12, 9))
     dbNames = ['DD_0.90', 'DD_0.80', 'DD_0.70', 'DD_0.65']
     ls = dict(zip(dbNames, ['solid', 'dotted', 'dashed', 'dashdot']))
 
@@ -274,7 +411,7 @@ def plot_nsn_bias(fileDir, dbNames):
     # special config file needed here: 1 season, 1 pointing per field
     from sn_fom.utils import getconfig
     from sn_fom.steps import NSN_bias
-    print('baouh', dbNames)
+
     config = getconfig(['DD_0.90'],
                        ['COSMOS,XMM-LSS,CDFS,ADFS,ELAIS'],
                        ['1,1,1,1,1'],
@@ -421,8 +558,6 @@ def plot_diff(dbName, data):
 
     dd = data[dbName]
 
-    print('aoaoao', dd['dbName'].unique(), dd['config'].unique())
-
     refconf = 'nosigmaInt'
     idx = dd['config'] == refconf
     ref = dd[idx]
@@ -497,12 +632,12 @@ def bin_df(data, varlist=['mu', 'sigma_mu']):
     return dfres
 
 
-def getSN(fileDir, dbName, fakes, alpha, beta, Mb, binned=False):
+def getSN(fileDir, dbName, fakes, alpha, beta, Mb, nsigma=1, binned=False):
 
     outName = 'allSN_{}'.format(dbName)
     if binned:
         outName += '_binned'
-    outName += '_1_sigma'
+    outName += '_{}_sigma'.format(nsigma)
     outName += '.hdf5'
 
     if not os.path.isfile(outName):
@@ -529,7 +664,7 @@ parser.add_option("--fileDir", type="str",
                   default='.',
                   help="main file directory [%default]")
 parser.add_option("--fakes", type="str",
-                  default='Fakes_nosigmaInt,Fakes_x1_plus_1_sigma,Fakes_x1_minus_1_sigma,Fakes_color_plus_1_sigma,Fakes_color_minus_1_sigma',
+                  default='Fakes_nosigmaInt',
                   help="fake name directory [%default]")
 parser.add_option("--dbNames", type="str",
                   default='DD_0.90,DD_0.85,DD_0.80,DD_0.75,DD_0.70,DD_0.65',
@@ -546,6 +681,10 @@ parser.add_option("--Mb", type=float,
 parser.add_option("--binned", type=int,
                   default=1,
                   help="to get binned data [%default]")
+parser.add_option("--nsigma", type=int,
+                  default=1,
+                  help="nsigma for syste estimation [%default]")
+
 opts, args = parser.parse_args()
 
 fileDir = opts.fileDir
@@ -555,14 +694,45 @@ alpha = opts.alpha
 beta = opts.beta
 Mb = opts.Mb
 binned = opts.binned
+nsigma = opts.nsigma
 
 # load and transform the data
 
 data = {}
 
+fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma),
+          'Fakes_x1_minus_{}_sigma'.format(nsigma),
+          'Fakes_color_plus_{}_sigma'.format(nsigma),
+          'Fakes_color_minus_{}_sigma'.format(nsigma)]
+
 for dbName in dbNames:
     data[dbName] = getSN(fileDir, dbName, fakes, alpha,
-                         beta, Mb, binned=binned)
+                         beta, Mb, nsigma=nsigma, binned=0)
+
+
+df_syste = pd.DataFrame()
+
+for dbName in dbNames:
+    syste = Syste_x1_color(data, dbName=dbName, nsigma=nsigma)
+    res = syste()
+    df_syste = pd.concat((df_syste, res))
+
+df_syste.to_hdf('sigma_mu_bias_x1_color.hdf5', key='bias')
+
+fig, ax = plt.subplots()
+zcomplete = '$z_{complete}$'
+
+for dbName in df_syste['dbName'].unique():
+    idx = df_syste['dbName'] == dbName
+    sel_syste = df_syste[idx].to_records(index=False)
+    zcomp = dbName.split('_')[1]
+    ax.plot(sel_syste['z'], sel_syste['delta_mu_bias'],
+            label='{} = {}'.format(zcomplete, zcomp))
+
+ax.grid()
+ax.legend()
+plt.show()
+print(test)
 
 
 if not binned:
@@ -572,14 +742,15 @@ if not binned:
     plt.show()
     """
     zrange = 'highz'
-    #x1_color_th = plot_x1_color_th(var, zrange=zrange)
+    # x1_color_th = plot_x1_color_th(var, zrange=zrange)
 
-    #plot_x1_color(var, 'DD_0.65', data, x1_color_th, zrange=zrange)
+    # plot_x1_color(var, 'DD_0.65', data, x1_color_th, zrange=zrange)
     print('hhh', data['DD_0.65']['config'])
-    #plot_x1_color_diff(var, 'DD_0.65', data, zmax=0.1)
-    #plot_test_b(data, dbName='DD_0.90')
+    print(test)
+    # plot_x1_color_diff(var, 'DD_0.65', data, zmax=0.1)
+    plot_test_b(data, dbName='DD_0.80', nsigma=nsigma)
     # plot_sigma_mu(data)
-    plot_nsn_bias('Fakes_nosigmaInt/Fit', data.keys())
+    # plot_nsn_bias('Fakes_nosigmaInt/Fit', data.keys())
 if binned:
     plot_diff('DD_0.65', data)
 
