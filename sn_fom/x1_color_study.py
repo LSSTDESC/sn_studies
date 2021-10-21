@@ -8,6 +8,73 @@ import os
 from scipy.ndimage.filters import gaussian_filter
 
 
+def sigma_photoz(Om=0.3, w0=-1.0, wa=0., sigma_phot=0.002, plot=False):
+
+    cosmo = CosmoDist()
+
+    zstep = 0.01
+    zmin = 0.1
+    zmax = 1.2+zstep
+    z = np.arange(zmin, zmax, zstep)
+    h = 1.e-8
+    zh = np.arange(zmin+h, zmax+h, zstep)
+    cref = cosmo.mu_astro(z, Om, w0, wa)
+    # ctest = cosmo.mu(z, Om, w0, wa)
+    ch = cosmo.mu_astro(zh, Om, w0, wa)
+    deriv_mu = (ch-cref)/h
+    res = pd.DataFrame(z, columns=['z'])
+    res['sigma_photoz'] = sigma_phot*(1.+z)*deriv_mu
+
+    """
+    norm = cosmo.c/cosmo.H0
+    norm *= 1.e6
+    deriv_dl = cosmo.dL(z, Om, w0, wa)/(1.+z) + \
+        cosmo.integrand(z, norm, Om, w0, wa)*(1.+z)
+    deriv_mu_true = (5./np.log(10))*deriv_dl/cosmo.dL(z, Om, w0, wa)
+
+    print(deriv_mu/deriv_mu_true, np.log(10))
+    """
+    if plot:
+        fig, ax = plt.subplots()
+        ax.plot(res['z'], res['sigma_photoz'])
+
+        ax.grid()
+        ax.set_xlabel('$z$')
+        ax.set_ylabel('$\sigma_{photo-z}$')
+        plt.show()
+
+    return res
+
+
+def estimate_syste(data, dbNames, nsigma, plot=False):
+
+    df_syste = pd.DataFrame()
+
+    for dbName in dbNames:
+        print('processing', dbName)
+        syste = Syste_x1_color(data, dbName=dbName, nsigma=nsigma)
+        res = syste()
+        df_syste = pd.concat((df_syste, res))
+
+    df_syste.to_hdf('sigma_mu_bias_x1_color.hdf5', key='bias')
+
+    if plot:
+        fig, ax = plt.subplots()
+        zcomplete = '$z_{complete}$'
+
+        for dbName in df_syste['dbName'].unique():
+            idx = df_syste['dbName'] == dbName
+            sel_syste = df_syste[idx].to_records(index=False)
+            sel_syste.sort(order='z')
+            zcomp = dbName.split('_')[1]
+            ax.plot(sel_syste['z'], sel_syste['delta_mu_bias'],
+                    label='{} = {}'.format(zcomplete, zcomp))
+
+        ax.grid()
+        ax.legend()
+        plt.show()
+
+
 def plotSN(dbName, config, data, var='Cov_colorcolor'):
 
     data = data[dbName]
@@ -127,7 +194,7 @@ class Syste_x1_color:
 
         zcomp = dbName.split('_')[1]
         self.data = dd[dbName]
-
+        self.dbName = dbName
         self.zmin = 0.1
         self.zmax = 1.0
         self.zstep = 0.07
@@ -157,9 +224,19 @@ class Syste_x1_color:
 
         # finally: get impact on sigma_mu
         df_syst = self.get_bias(df_syst)
-        df_syst['dbName'] = dbName
+        df_syst['dbName'] = self.dbName
+        df_syst = df_syst[['dbName', 'z', 'delta_mu_bias']]
+        df_syst = df_syst.sort_values(by=['z'])
+        last_df = df_syst.iloc[-1]
+        first_df = df_syst.iloc[0]
+        r = []
+        r.append((self.dbName, 1., last_df['delta_mu_bias']))
+        r.append((self.dbName, 0.01, first_df['delta_mu_bias']))
+        dd_app = pd.DataFrame(r, columns=[
+            'dbName', 'z', 'delta_mu_bias'])
+        df_syst = df_syst.append(dd_app)
 
-        return df_syst[['dbName', 'z', 'delta_mu_bias']]
+        return df_syst
 
     def get_binned_data(self, data, configs):
 
@@ -710,28 +787,10 @@ for dbName in dbNames:
                          beta, Mb, nsigma=nsigma, binned=0)
 
 
-df_syste = pd.DataFrame()
+# bias syste x1_color
+estimate_syste(data, dbNames, nsigma, plot=True)
 
-for dbName in dbNames:
-    syste = Syste_x1_color(data, dbName=dbName, nsigma=nsigma)
-    res = syste()
-    df_syste = pd.concat((df_syste, res))
-
-df_syste.to_hdf('sigma_mu_bias_x1_color.hdf5', key='bias')
-
-fig, ax = plt.subplots()
-zcomplete = '$z_{complete}$'
-
-for dbName in df_syste['dbName'].unique():
-    idx = df_syste['dbName'] == dbName
-    sel_syste = df_syste[idx].to_records(index=False)
-    zcomp = dbName.split('_')[1]
-    ax.plot(sel_syste['z'], sel_syste['delta_mu_bias'],
-            label='{} = {}'.format(zcomplete, zcomp))
-
-ax.grid()
-ax.legend()
-plt.show()
+# sigma_photoz()
 print(test)
 
 
