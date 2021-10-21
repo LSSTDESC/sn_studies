@@ -294,6 +294,11 @@ class fit_SN_mu:
         # add bias x1_color
         data_sn = self.add_bias_x1_color(data_sn)
 
+        # plot to cross-check
+        #import matplotlib.pyplot as plt
+        #plt.plot(data_sn['z_SN'], data_sn['sigma_bias_x1_color'], 'ko')
+        # plt.show()
+
         # re-estimate the distance moduli including the bias error - for DD only - faster
         from sn_fom.cosmo_fit import CosmoDist
         from random import gauss
