@@ -182,7 +182,7 @@ class CosmoDist:
         norm = self.c/self.H0
         norm *= 1.e6
 
-        def integrand(x): return norm*self.cosmo_func(x, Om, w0, wa)
+        def integrand(x): return self.integrand(x, norm, Om, w0, wa)
 
         if (hasattr(z, '__iter__')):
             s = np.zeros(len(z))
@@ -191,6 +191,10 @@ class CosmoDist:
             return s
         else:
             return (1+z)*quad(integrand, 0.0, z, limit=100)[0]
+
+    def integrand(self, z, norm, Om, w0, wa):
+
+        return norm*self.cosmo_func(z, Om, w0, wa)
 
     def mu_old(self, z, Om=0.3, w0=-1.0, wa=0.0):
         """
