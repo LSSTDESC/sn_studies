@@ -129,12 +129,16 @@ parser.add_option('--runtype', type=str, default='deep_rolling',
 
 opts, args = parser.parse_args()
 
-fis = glob.glob('{}/*.hdf5'.format(opts.fileDir))
+confName = opts.config.split('.')[0].split('FitParams_conf_')[-1]
+confName = '_'.join(vv for vv in confName.split('_')[2:])
+
+fis = glob.glob('{}/*{}*.hdf5'.format(opts.fileDir, confName))
 cosmo_scen = pd.read_csv(opts.config, delimiter=';', comment='#')
 
 outName = opts.config.replace('config_', '').replace('csv', 'hdf5')
 
 if not os.path.isfile(outName):
+    print('moving to summ')
     res = make_summary(fis, cosmo_scen, runtype=opts.runtype)
     res.to_hdf(outName, key='cosmo')
 
