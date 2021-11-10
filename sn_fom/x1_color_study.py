@@ -788,10 +788,10 @@ for dbName in dbNames:
 
 
 # bias syste x1_color
-estimate_syste(data, dbNames, nsigma, plot=True)
+#estimate_syste(data, dbNames, nsigma, plot=True)
 
 # sigma_photoz()
-print(test)
+# print(test)
 
 
 if not binned:
@@ -805,11 +805,11 @@ if not binned:
 
     # plot_x1_color(var, 'DD_0.65', data, x1_color_th, zrange=zrange)
     print('hhh', data['DD_0.65']['config'])
-    print(test)
+    # print(test)
     # plot_x1_color_diff(var, 'DD_0.65', data, zmax=0.1)
-    plot_test_b(data, dbName='DD_0.80', nsigma=nsigma)
+    #plot_test_b(data, dbName='DD_0.80', nsigma=nsigma)
     # plot_sigma_mu(data)
-    # plot_nsn_bias('Fakes_nosigmaInt/Fit', data.keys())
+    plot_nsn_bias('Fakes_nosigmaInt/Fit', data.keys())
 if binned:
     plot_diff('DD_0.65', data)
 

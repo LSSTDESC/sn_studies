@@ -834,6 +834,7 @@ class NSN_bias:
                     np.min(selb['z']), np.max(selb['z']), 100)
                 spl = make_interp_spline(
                     selb['z'], selb['nsn_eff'], k=3)  # type: BSpline
+                print('NSN', zcomp, np.cumsum(selb['nsn_eff'])[-1])
                 spl_smooth = spl(xnew)
                 ax.plot(xnew, spl_smooth,
                         label='$z_{complete}$'+'= {}'.format(zcomp), ls=ls[zcomp], lw=3)
