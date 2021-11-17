@@ -151,6 +151,9 @@ parser.add_option("--binned_cosmology", type=int,
 parser.add_option("--dbNames_all", type=str,
                   default='DD_0.50,DD_0.55,DD_0.60,DD_0.65,DD_0.70,DD_0.75,DD_0.80,DD_0.85,DD_0.90',
                   help="dbNames to consider to estimate reference files [%default]")
+parser.add_option("--fit_parameters", type=str, default='Om,w0,wa',
+                  help="parameters to fit [%default]")
+
 
 opts, args = parser.parse_args()
 
@@ -206,7 +209,7 @@ config = getconfig(dbNames, fields, nseasons, npointings, zsurvey=zsurvey,
 
 
 fitparName = '{}/FitParams_{}.hdf5'.format(dirFit, configName)
-parameter_to_fit = ['Om', 'w0']
+parameter_to_fit = opts.fit_parameters.split(',')
 if not os.path.isfile(fitparName):
     # get default configuration file
 
