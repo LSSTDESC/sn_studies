@@ -628,9 +628,9 @@ class FitData_mu:
 
         print('chi2', chi2, chi2/self.fit.ndf, self.fit.ndf)
         """
-        #print('fitting sigma_int', self.fit.sigma_int)
+        # print('fitting sigma_int', self.fit.sigma_int)
         sigma_int = self.fit.zfinal2()
-        #print('sigmaInt', sigma_int)
+        # print('sigmaInt', sigma_int)
         self.fit.sigma_int = sigma_int
 
         resa = self.fit.fitcosmo(Om, w0, wa)
@@ -640,7 +640,7 @@ class FitData_mu:
             toprint.append(vv)
             toprint.append('sigma_{}'.format(vv))
         toprint.append('chi2_ndf')
-        #print('fit minuit done', resa[toprint])
+        # print('fit minuit done', resa[toprint])
         resa['sigma_int'] = sigma_int
         resa['nsn_DD'] = self.nsn_DD
         resa['nsn_WFD'] = self.nsn_WFD
@@ -664,7 +664,7 @@ class FitCosmo(CosmoDist):
                  H0=72, c=299792.458):
         super().__init__(H0, c)
 
-        #print('Number of SN for fit', nsn)
+        # print('Number of SN for fit', nsn)
         # print set([d[name]['idr.subset'] for name in d.keys()]
 
         self.Z = Z
@@ -1091,7 +1091,7 @@ class FitCosmo_mu(CosmoDist):
         super().__init__(H0, c)
 
         nsn = len(Z)
-        #print('Number of SN for fit', nsn)
+        # print('Number of SN for fit', nsn)
 
         self.Z_SN = Z
         self.mu_SN = mu
@@ -1130,31 +1130,35 @@ class FitCosmo_mu(CosmoDist):
             m = Minuit(self.chi2, Om=Om, w0=w0, wa=wa)
 
         # perform the fit here
-        m.migrad()
-        dictout = {}
-        values = m.values
-        for key, vals in values.items():
-            dictout[key] = [vals]
-        m.hesse()   # run covariance estimator
-        if m.covariance is not None:
-            for key, vals in m.covariance.items():
-                what = '{}_{}'.format(key[0], key[1])
-                dictout['Cov_{}'.format(what)] = [vals]
+        df = pd.DataFrame()
+        try:
+            m.migrad()
+            dictout = {}
+            values = m.values
+            for key, vals in values.items():
+                dictout[key] = [vals]
+            m.hesse()   # run covariance estimator
+            if m.covariance is not None:
+                for key, vals in m.covariance.items():
+                    what = '{}_{}'.format(key[0], key[1])
+                    dictout['Cov_{}'.format(what)] = [vals]
 
-        dictout['accuracy'] = [m.accurate]
-        dictout['chi2'] = [m.fval]
-        dictout['ndf'] = [self.ndf]
+            dictout['accuracy'] = [m.accurate]
+            dictout['chi2'] = [m.fval]
+            dictout['ndf'] = [self.ndf]
 
-        dictout['fitter'] = ['minuit']
-        if 'wa' not in self.params_fit:
-            dictout['wa'] = [wa]
-        for vv in self.params_fit:
-            vvb = 'Cov_{}_{}'.format(vv, vv)
-            if vvb in list(dictout.keys()):
-                dictout['sigma_{}'.format(vv)] = np.sqrt(dictout[vvb])
+            dictout['fitter'] = ['minuit']
+            if 'wa' not in self.params_fit:
+                dictout['wa'] = [wa]
+            for vv in self.params_fit:
+                vvb = 'Cov_{}_{}'.format(vv, vv)
+                if vvb in list(dictout.keys()):
+                    dictout['sigma_{}'.format(vv)] = np.sqrt(dictout[vvb])
 
-        df = pd.DataFrame.from_dict(dictout)
-        df['chi2_ndf'] = df['chi2']/df['ndf']
+            df = pd.DataFrame.from_dict(dictout)
+            df['chi2_ndf'] = df['chi2']/df['ndf']
+        except (RuntimeError, TypeError, NameError, ValueError):
+            print('Fit crash')
 
         return df
 
