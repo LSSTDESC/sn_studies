@@ -1123,15 +1123,15 @@ class FitCosmo_mu(CosmoDist):
         fitted parameters
 
         """
-        if 'wa' not in self.params_fit:
-            self.wa = wa
-            m = Minuit(self.chi2_nowa, Om=Om, w0=w0)
-        else:
-            m = Minuit(self.chi2, Om=Om, w0=w0, wa=wa)
 
         # perform the fit here
         df = pd.DataFrame()
         try:
+            if 'wa' not in self.params_fit:
+                self.wa = wa
+                m = Minuit(self.chi2_nowa, Om=Om, w0=w0)
+            else:
+                m = Minuit(self.chi2, Om=Om, w0=w0, wa=wa)
             m.migrad()
             dictout = {}
             values = m.values
