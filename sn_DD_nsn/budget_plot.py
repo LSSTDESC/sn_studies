@@ -56,7 +56,8 @@ def plotcontour(ax, Nfields, Nseasons, cadence, nvmin, nvmax, slmin, slmax, colo
     #zzv = [0.03, 0.05, 0.07, 0.09, 0.11, 0.13, 0.15]
     zzv = [0.03, 0.05, 0.08, 0.10, 0.15]
     zzvc = [100.*zz for zz in zzv]
-    CS = plt.contour(NV, SL, BUD, zzv, colors=color, linestyles=ls)
+    CS = plt.contour(NV, SL, BUD, zzv, colors=color,
+                     linestyles=ls, linewidths=3)
 
     fmt = {}
     strs = ['$%3.2f$' % zz for zz in zzv]
@@ -78,7 +79,7 @@ fig, ax = plt.subplots(figsize=(12, 10))
 plotcontour(ax, Nfields, Nseasons, cadence, nvmin, nvmax, slmin, slmax)
 #coords = [62.0, 208.05]
 coords = [36.46, 208.05]
-ax.plot(coords, [180.]*2,  'ko')
+ax.plot(coords, [180.]*2,  'ko', markersize=9.)
 
 
 Nseasons = 10
@@ -86,7 +87,7 @@ plotcontour(ax, Nfields, Nseasons, cadence, nvmin,
             nvmax, slmin, slmax, color='r', ls='dashed')
 #coords = [12.41, 41.5]
 coords = [7.3, 41.5]
-ax.plot(coords, [180.]*2,  'ro')
+ax.plot(coords, [180.]*2,  'ro', markersize=9.)
 
 
 ax.set_xlabel('$\mathrm{N_{visits}}$', weight='normal')
