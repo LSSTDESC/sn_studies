@@ -162,8 +162,12 @@ class fit_SN_mu:
             nfields = selconfig['nfields'].to_list()[0]
             nsn_eff['nsn_eff'] *= nseasons*nfields
             # sigmu = self.get_sigmu_from_simu(sn_simu, nsn_eff)
+            #print('aoooaooo', sigmu['z'], nsn_eff['z'])
+            sigmu = sigmu.round({'z': 3})
+            nsn_eff = nsn_eff.round({'z': 3})
             simuparams = nsn_eff.merge(
                 sigmu, left_on=['z'], right_on=['z'])
+            #print('there man after merge', simuparams)
             # simulate distance modulus (and error) here
             # print(field, 'nsn to simulate', np.sum(
             #    simuparams['nsn_eff']), nseasons, nfields)
@@ -655,8 +659,8 @@ class Sigma_mu_obs:
 
         df = pd.DataFrame()
         for io, dbName in enumerate(self.dbNames):
-            zmax = 1.0
-            nbins = 21
+            zmax = 1.2
+            nbins = 25  # 25 for 0.05 z-bin
             if 'WFD' in dbName:
                 zmax = 0.20
                 nbins = 20
@@ -754,19 +758,22 @@ class NSN_bias:
          pandas df with the following columns
 
          """
-        data_sn = pd.DataFrame()
+        data_sn_df = pd.DataFrame()
 
         for i, dbName in enumerate(self.dbNames):
             print('processing', dbName)
+            #print('loading SN')
+            data_sn = loadSN(self.fileDir, dbName, 'allSN')
             for field in self.fields:
                 idx = self.config['fieldName'].isin([field])
-                dd = self.getNSN_bias(dbName, self.config[idx], [field])
-                data_sn = pd.concat((data_sn, dd))
+                dd = self.getNSN_bias(
+                    dbName, data_sn, self.config[idx], [field])
+                data_sn_df = pd.concat((data_sn_df, dd))
                 print('SN inter', dbName, len(dd))
 
-        return data_sn
+        return data_sn_df
 
-    def getNSN_bias(self, dbName, config, fields):
+    def getNSN_bias(self, dbName, data_sn, config, fields):
         """
         Method to estimate the number of SN per redshift bin
         for a configuration and a field
@@ -796,8 +803,6 @@ class NSN_bias:
         nsn_per_bin = nsn_bin(nsn_scen.data)
 
         # get SN from simu
-        print('loading SN')
-        data_sn = loadSN(self.fileDir, dbName, 'allSN')
 
         # get the effective (bias effect) number of expected SN per bin
 
@@ -825,6 +830,8 @@ class NSN_bias:
             ls = dict(
                 zip(zcomps, ['solid', 'dotted', 'dashed', 'dashdot']))
             fig.suptitle('{}'.format(field))
+            print(type(sel))
+            sel = sel.fillna(0)
             for zcomp in zcomps:
                 idxb = sel['zcomp'] == zcomp
                 selb = sel[idxb].to_records(index=False)

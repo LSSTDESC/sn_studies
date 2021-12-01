@@ -134,7 +134,7 @@ parser.add_option("--surveyType", type=str,
                   default='full',
                   help="type of survey (full, complete) [%default]")
 parser.add_option("--zsurvey", type=float,
-                  default=1.0,
+                  default=1.2,
                   help="zmax for the survey [%default]")
 parser.add_option("--nMC", type=int,
                   default=100,
@@ -153,6 +153,8 @@ parser.add_option("--dbNames_all", type=str,
                   help="dbNames to consider to estimate reference files [%default]")
 parser.add_option("--fit_parameters", type=str, default='Om,w0,wa',
                   help="parameters to fit [%default]")
+parser.add_option("--Ny", type=int, default=80,
+                  help="y-band visits max at 0.9 [%default]")
 
 
 opts, args = parser.parse_args()
@@ -174,13 +176,21 @@ sigmaInt = opts.sigmaInt
 configName = opts.configName
 binned_cosmology = opts.binned_cosmology
 dbNames_all = opts.dbNames_all .split(',')
+Ny = opts.Ny
 
+"""
+dbC = []
+for dbN in dbNames_all:
+    dbC.append(dbN+'_Ny_{}'.format(Ny))
 
+dbNames_all = dbC
+"""
 # load sigma_mu
 sigma_mu_from_simu = Sigma_mu_obs(fileDir,
                                   dbNames=dbNames_all+['WFD_0.20'],
                                   snTypes=['allSN']*len(dbNames_all)+['WFD'],
-                                  outName='sigma_mu_from_simu.hdf5',
+                                  outName='sigma_mu_from_simu_Ny_{}.hdf5'.format(
+                                      Ny),
                                   plot=False).data
 
 # load nsn_bias
@@ -189,9 +199,10 @@ config = getconfig(['DD_0.90'],
                    ['COSMOS,XMM-LSS,CDFS,ADFS,ELAIS'],
                    ['1,1,1,1,1'],
                    ['1,1,1,1,1'])
+
 nsn_bias = NSN_bias(fileDir, config, fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'],
                     dbNames=dbNames_all,
-                    plot=False).data
+                    plot=False, outName='nsn_bias_Ny_{}.hdf5'.format(Ny)).data
 
 # load sn_wfd
 sn_wfd = pd.DataFrame()

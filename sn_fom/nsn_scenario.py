@@ -110,7 +110,7 @@ class SeasonLength:
         tab = Mod_z('{}/{}'.format(fDir, fName)).nvisits
         res = {}
         resb = {}
-        print(tab)
+        # print(tab)
         for cad in np.unique(tab['cadence']):
             idx = tab['cadence'] == cad
             sel = tab[idx]
@@ -145,7 +145,7 @@ class SeasonLength:
             idx = tab['name'] == fieldName
             sel = tab[idx]
             res[fieldName] = interp1d(sel['nvisits'], sel['season_length'],
-                                      bounds_error=False, fill_value=0.)
+                                      bounds_error=False, fill_value=180.)
         return res
 
     def __call__(self, config, cadence=1):
@@ -200,7 +200,7 @@ class NSN_scenario:
         from sn_tools.sn_rate import SN_Rate
 
         self.rateSN = SN_Rate(H0=70., Om0=0.3,
-                              min_rf_phase=-15., max_rf_phase=30)
+                              min_rf_phase=-10., max_rf_phase=25)
 
     def __call__(self, config):
 
@@ -230,7 +230,8 @@ class NSN_scenario:
         nfields = sel['nfields'].item()
         surveytype = sel['surveytype'].item()
 
-        print(fieldName, zcomp, season_length, area, nseasons, nfields)
+        print('nsn_scenario', fieldName, zcomp,
+              season_length, area, nseasons, nfields, zsurvey)
 
         zmin = 0.05
         zstep = 0.05

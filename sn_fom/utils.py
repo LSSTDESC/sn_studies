@@ -157,7 +157,8 @@ def nSN_bin_eff(data, nsn_per_bin):
 
     zmax = np.round(zmax, 2)
     zstep = 0.05
-    bins = np.arange(0, zmax+zstep, 0.05)
+    bins = np.arange(0, zmax+zstep, zstep)
+
     group = data.groupby(pd.cut(data.z, bins))
     group_sel = sel_data.groupby(pd.cut(sel_data.z, bins))
 
@@ -331,7 +332,7 @@ def select(dd):
 
 def getconfig(dbNames, fields, nseasons, npointings,
               max_season_length=180., survey_area=9.6,
-              zsurvey=1., surveytype='full'):
+              zsurvey=1.2, surveytype='full'):
 
     r = []
     for i, dbName in enumerate(dbNames):
