@@ -611,7 +611,14 @@ class FitData_mu:
         sigma_mu_SN = data['sigma_mu_SN']
         sigma_bias = np.sqrt(data['sigma_bias_stat']
                              ** 2+data['sigma_bias_x1_color']**2)
+        self.nsn_DD_fields = {}
+        for fieldName in data['fieldName'].unique():
+            if fieldName != 'WFD':
+                idx = data['fieldName'] == fieldName
+                sel = data[idx]
+                self.nsn_DD_fields[fieldName] = len(sel)
         self.nsn_DD = len(data[data['snType'] == 'DD'])
+
         self.nsn_WFD = len(data[data['snType'] == 'WFD'])
         # instance of the fit functions here
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_bias,
@@ -644,6 +651,8 @@ class FitData_mu:
         resa['sigma_int'] = sigma_int
         resa['nsn_DD'] = self.nsn_DD
         resa['nsn_WFD'] = self.nsn_WFD
+        for key, vals in self.nsn_DD_fields.items():
+            resa['nsn_DD_{}'.format(key)] = vals
 
         return resa
 
