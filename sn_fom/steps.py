@@ -48,6 +48,7 @@ class fit_SN_mu:
         if not sn_wfd.empty:
             sn_wfd['snType'] = 'WFD'
             sn_wfd['dbName'] = 'WFD'
+            sn_wfd['fieldName'] = 'WFD'
             sn_wfd['sigma_bias_stat'] = 0.0
             sn_wfd['sigma_bias_x1_color'] = 0.0
             data_sn = pd.concat((data_sn, sn_wfd))
@@ -173,6 +174,7 @@ class fit_SN_mu:
             #    simuparams['nsn_eff']), nseasons, nfields)
             res = simu_mu(simuparams, self.sigmaInt)
             # print(field, 'nsn simulated', len(res))
+            res['fieldName'] = field
             SN = pd.concat((SN, res))
 
         # print('total number of SN', len(SN))
@@ -328,6 +330,7 @@ def fit_SN_deprecated(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=p
     data_sn['snType'] = 'DD'
     if not sn_wfd.empty:
         sn_wfd['snType'] = 'WFD'
+        sn_wfd['fieldName'] = 'WFD'
         data_sn = pd.concat((data_sn, sn_wfd))
 
     if saveSN != '':
