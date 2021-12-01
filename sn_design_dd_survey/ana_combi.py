@@ -299,7 +299,7 @@ class CombiChoice:
 
         seldictf['cut5'] = {}
         seldictf['cut5']['var'] = 'Nvisits_z'
-        seldictf['cut5']['value'] = 70.
+        seldictf['cut5']['value'] = 80.
         seldictf['cut5']['op'] = operator.ge
         seldictf['cut5']['zmin'] = 0.65
         seldictf['cut5']['zmax'] = 0.90
