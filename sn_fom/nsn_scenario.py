@@ -234,7 +234,7 @@ class NSN_scenario:
               season_length, area, nseasons, nfields, zsurvey)
 
         zmin = 0.05
-        zstep = 0.05
+        zstep = 0.03
         zmax = 1.2
 
         assert(surveytype in ['complete', 'full'])

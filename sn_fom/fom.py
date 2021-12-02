@@ -192,7 +192,8 @@ sigma_mu_from_simu = Sigma_mu_obs(fileDir,
                                   outName='sigma_mu_from_simu_Ny_{}.hdf5'.format(
                                       Ny),
                                   plot=False).data
-
+print('boo', sigma_mu_from_simu)
+# print(test)
 # load nsn_bias
 # special config file needed here: 1 season, 1 pointing per field
 config = getconfig(['DD_0.90'],

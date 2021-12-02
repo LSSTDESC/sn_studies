@@ -156,8 +156,8 @@ def nSN_bin_eff(data, nsn_per_bin):
         zmax = zcomp
 
     zmax = np.round(zmax, 2)
-    zstep = 0.05
-    bins = np.arange(0, zmax+zstep, zstep)
+    zstep = 0.03
+    bins = np.arange(0.035, zmax+zstep, zstep)
 
     group = data.groupby(pd.cut(data.z, bins))
     group_sel = sel_data.groupby(pd.cut(sel_data.z, bins))
@@ -165,6 +165,7 @@ def nSN_bin_eff(data, nsn_per_bin):
     # estimate efficiency here
     effi = group_sel.size()/group.size()
 
+    effi = effi.fillna(0.)
     # multiply efficiencies by expected number of sn
     # slight shift to adjust the bining (not sure it is necessary actually)
     nsn_per_bin['z'] -= 0.005

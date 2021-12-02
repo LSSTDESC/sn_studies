@@ -41,7 +41,7 @@ class fit_SN_mu:
         plt.plot(data_sn['z_SN'], data_sn['sigma_bias_stat'], 'ko')
         plt.show()
         """
-        #data_sn['sigma_bias_stat'] = 0.0
+        # data_sn['sigma_bias_stat'] = 0.0
         # add WFD SN if required
         # print('NSN DD:', len(data_sn), 'WFD:', len(sn_wfd))
         data_sn['snType'] = 'DD'
@@ -163,7 +163,9 @@ class fit_SN_mu:
             nfields = selconfig['nfields'].to_list()[0]
             nsn_eff['nsn_eff'] *= nseasons*nfields
             # sigmu = self.get_sigmu_from_simu(sn_simu, nsn_eff)
+            #print('aaaaa', sigmu, nsn_eff)
             #print('aoooaooo', sigmu['z'], nsn_eff['z'])
+
             sigmu = sigmu.round({'z': 3})
             nsn_eff = nsn_eff.round({'z': 3})
             simuparams = nsn_eff.merge(
@@ -301,8 +303,8 @@ class fit_SN_mu:
         data_sn = self.add_bias_x1_color(data_sn)
 
         # plot to cross-check
-        #import matplotlib.pyplot as plt
-        #plt.plot(data_sn['z_SN'], data_sn['sigma_bias_x1_color'], 'ko')
+        # import matplotlib.pyplot as plt
+        # plt.plot(data_sn['z_SN'], data_sn['sigma_bias_x1_color'], 'ko')
         # plt.show()
 
         # re-estimate the distance moduli including the bias error - for DD only - faster
@@ -313,7 +315,7 @@ class fit_SN_mu:
         sigmu = np.array(data_sn['sigma_mu_SN'])
         sigbias = np.array(data_sn['sigma_bias_stat'])
         sigx1color = np.array(data_sn['sigma_bias_x1_color'])
-        #print('hello', len(dist_mu), len(sigmu), sigbias)
+        # print('hello', len(dist_mu), len(sigmu), sigbias)
         data_sn['mu_SN'] = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2+sigbias[i]**2+sigx1color[i]**2))
                             for i in range(len(dist_mu))]
         return data_sn
@@ -658,13 +660,14 @@ class Sigma_mu_obs:
 
         """
 
-        zmin = 0.0
-
         df = pd.DataFrame()
         for io, dbName in enumerate(self.dbNames):
-            zmax = 1.2
+            zmin = 0.035
+            zmax = 1.235
             nbins = 25  # 25 for 0.05 z-bin
+            nbins = 41
             if 'WFD' in dbName:
+                zmin = 0.0
                 zmax = 0.20
                 nbins = 20
 
@@ -673,10 +676,40 @@ class Sigma_mu_obs:
                                   snType, self.alpha, self.beta, self.Mb)
             bdata = binned_data(zmin, zmax, nbins, data_sn)
             bdatab = binned_data(zmin, zmax, nbins, data_sn, 'mu')
+            bdata = bdata.round({'z': 2})
+            bdatab = bdatab.round({'z': 2})
+
+            bdata = self.check_fill(bdata, 'sigma_mu_mean')
+            bdatab = self.check_fill(bdatab, 'mu_mean')
             bdata = bdata.merge(bdatab, left_on=['z'], right_on=['z'])
+
             bdata['dbName'] = dbName
             df = pd.concat((df, bdata))
         return df
+
+    def check_fill(self, data, var):
+        """
+        Method to remove zeros (if any)
+
+        Parameters
+        ---------------
+        data: array
+           data to process
+
+        """
+
+        zvals = data['z'].to_list()
+
+        data = data.fillna(-1)
+        idx = data[var] > 0.
+        sel = data[idx]
+
+        interp = interp1d(sel['z'], sel[var],
+                          bounds_error=False, fill_value=0.)
+
+        data[var] = interp(zvals)
+
+        return data
 
     def plot(self, df):
         import matplotlib.pyplot as plt
@@ -748,6 +781,7 @@ class NSN_bias:
             data = self.get_data()
             data.to_hdf(outName, key='nsn')
 
+        print('loading', outName)
         self.data = pd.read_hdf(outName)
         if plot:
             self.plot()
@@ -765,7 +799,7 @@ class NSN_bias:
 
         for i, dbName in enumerate(self.dbNames):
             print('processing', dbName)
-            #print('loading SN')
+            # print('loading SN')
             data_sn = loadSN(self.fileDir, dbName, 'allSN')
             for field in self.fields:
                 idx = self.config['fieldName'].isin([field])
@@ -804,8 +838,6 @@ class NSN_bias:
         nsn_scen = NSN_config(config)
 
         nsn_per_bin = nsn_bin(nsn_scen.data)
-
-        # get SN from simu
 
         # get the effective (bias effect) number of expected SN per bin
 
