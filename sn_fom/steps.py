@@ -8,6 +8,36 @@ from . import np
 
 
 class fit_SN_mu:
+    """
+    class to simulate distance modulus and fit cosmology
+
+    Parameters
+    ---------------
+    fileDir: str
+      directory files
+    dbNames: list(str)
+      list of dbNames
+    config: dict
+      survey configuration
+    fields: list(str)
+      list of fields to consider
+    snType: str
+      type of SN
+    sigmu: pandas df
+      sigma_mu values (vs z)
+    nsn_bias: pandas df
+      nsn_bias values vs z
+    sn_wfd: pandas df
+      data for WFD
+    params_fit: list(str)
+      list of cosmology parameters to fit
+    saveSN: str, opt
+      dir where to save produced SN (default: '')
+    sigmaInt: float, opt
+      intrinsic dispersion of SN (default: 0.12)
+    binned_cosmology: bool, opt
+      to perform binned cosmology (not operational yet)(default: False)
+    """
 
     def __init__(self, fileDir, dbNames, config, fields,
                  snType, sigmu, nsn_bias,
@@ -31,8 +61,7 @@ class fit_SN_mu:
         self.sigma_bias_x1_color = sigma_bias_x1_color
 
         # simulate supernovae here - DDF
-        data_sn = self.simul_SN()
-
+        data_sn = self.simul_distmod()
         # add bias corr and resimulate
         data_sn = self.add_sigbias_resimulate(data_sn, sigmaInt)
         """
@@ -130,9 +159,19 @@ class fit_SN_mu:
 
         return df
 
-    def simul_SN(self):
+    def simul_distmod(self):
+        """
+        Method to simulate distance moduli
+        loop on the configurations (dbNames) and  DD fields.
+        (1 field = 1 dbName)
 
+        Returns
+        ----------
+        pandas df of distance moduli
+
+        """
         data_sn = pd.DataFrame()
+        # loop on configurations
         for i, dbName in enumerate(self.dbNames):
             fields_to_process = self.fields[i].split(',')
             idx = self.config['fieldName'].isin(fields_to_process)
@@ -148,7 +187,22 @@ class fit_SN_mu:
         return data_sn
 
     def getSN_mu_simu(self, dbName, fields, sigmu, nsn_bias, config):
+        """
+        Get distance moduli
 
+        Parameters
+        ---------------
+        dbName: str
+          name of the config (DD_*)
+        fields: list(str)
+          list of fields to process
+        sigmu: pandas df
+          array of distance modulus errors (with Malmquist bias) vs z
+        nsn_bias: pandas df
+          array of NSN (with Malmquist bias) vs z
+        config: dict
+          survey configuration
+        """
         zcomp = dbName.split('_')[1]
 
         SN = pd.DataFrame()
@@ -162,20 +216,24 @@ class fit_SN_mu:
             nseasons = selconfig['nseasons'].to_list()[0]
             nfields = selconfig['nfields'].to_list()[0]
             nsn_eff['nsn_eff'] *= nseasons*nfields
+
             # sigmu = self.get_sigmu_from_simu(sn_simu, nsn_eff)
-            #print('aaaaa', sigmu, nsn_eff)
-            #print('aoooaooo', sigmu['z'], nsn_eff['z'])
+            # print('aaaaa', sigmu, nsn_eff)
+            # print('aoooaooo', sigmu['z'], nsn_eff['z'])
 
             sigmu = sigmu.round({'z': 3})
             nsn_eff = nsn_eff.round({'z': 3})
             simuparams = nsn_eff.merge(
                 sigmu, left_on=['z'], right_on=['z'])
-            #print('there man after merge', simuparams)
+            # print('there man after merge', simuparams)
             # simulate distance modulus (and error) here
             # print(field, 'nsn to simulate', np.sum(
             #    simuparams['nsn_eff']), nseasons, nfields)
+
+            ido = simuparams['z'] <= 1.1
+            simuparams = simuparams[ido]
             res = simu_mu(simuparams, self.sigmaInt)
-            # print(field, 'nsn simulated', len(res))
+
             res['fieldName'] = field
             SN = pd.concat((SN, res))
 
@@ -251,11 +309,21 @@ class fit_SN_mu:
                 selSN = sel[idxb]
                 # get the number of SN per bin
                 zmin = zcomp
+                """
+                zvals = sel_sigmu[idx]['z']
                 zmax = 1.1
-                zstep = 0.05
+                zstep = 0.03
                 bins = np.arange(zmin, zmax+zstep, zstep)
                 io = bins <= zmax
                 bins = bins[io]
+                """
+                idxx = sel_sigmu['z'] >= zcomp
+                sel_sigmub = sel_sigmu[idxx]
+                zmax = 1.1
+                zst = np.mean(np.diff(sel_sigmub['z']))/2
+                zmin = sel_sigmub['z'].min()
+                zmax += 2*zst
+                bins = np.arange(zmin, zmax, 2.*zst)
 
                 grouped = selSN.groupby(pd.cut(selSN.z_SN, bins))
                 dd = pd.DataFrame()
@@ -294,14 +362,12 @@ class fit_SN_mu:
     def add_sigbias_resimulate(self, data_sn, sigmaInt):
 
         # add a column sigma_bias_stat for all
-
         data_sn['sigma_bias_stat'] = 0.0
         data_sn['sigma_bias_x1_color'] = 0.0
         # add bias stat
         data_sn = self.add_bias_stat(data_sn)
         # add bias x1_color
         data_sn = self.add_bias_x1_color(data_sn)
-
         # plot to cross-check
         # import matplotlib.pyplot as plt
         # plt.plot(data_sn['z_SN'], data_sn['sigma_bias_x1_color'], 'ko')
@@ -841,9 +907,10 @@ class NSN_bias:
 
         # get the effective (bias effect) number of expected SN per bin
 
-        nsn_eff = nSN_bin_eff(data_sn, nsn_per_bin)
+        fieldName = fields[0]
+        nsn_eff = nSN_bin_eff(data_sn, nsn_per_bin, fieldName)
 
-        nsn_eff['fieldName'] = fields[0]
+        nsn_eff['fieldName'] = fieldName
         nsn_eff['zcomp'] = zcomp
 
         return nsn_eff

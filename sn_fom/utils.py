@@ -127,7 +127,7 @@ def selSN(sn_data, nsn_per_bin, x1_color):
     return out_data
 
 
-def nSN_bin_eff(data, nsn_per_bin):
+def nSN_bin_eff(data, nsn_per_bin, fieldName):
     """
     Method to select a number of simulated SN according to the expected nsn_per_bin
 
@@ -137,7 +137,8 @@ def nSN_bin_eff(data, nsn_per_bin):
       simulated sn
     nsn_per_bin: pandas df
       df with the expected number of sn per bin
-    x1_color: dict
+    fieldName: str
+      name of the DD field
 
     Returns
     -----------
@@ -165,6 +166,10 @@ def nSN_bin_eff(data, nsn_per_bin):
     # estimate efficiency here
     effi = group_sel.size()/group.size()
 
+    """
+    if fieldName == 'XMM-LSS':
+        effi = group.size()/group.size()
+    """
     effi = effi.fillna(0.)
     # multiply efficiencies by expected number of sn
     # slight shift to adjust the bining (not sure it is necessary actually)
@@ -528,6 +533,7 @@ def binned_data(zmin, zmax, nbins, data, var='sigma_mu', sigma_var=''):
         #print('err', error_values[:])
     else:
         error_values = 0.
+        error_values = group[var].std().to_list()
 
     df = pd.DataFrame(plot_centers, columns=['z'])
     df['{}_mean'.format(var)] = plot_values

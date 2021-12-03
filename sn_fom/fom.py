@@ -12,6 +12,14 @@ import os
 import pandas as pd
 
 
+def go_fit(nMC, params, nproc, fitparName):
+
+    ffi = range(nMC)
+    params_fit = multiproc(ffi, params, multifit_mu, nproc)
+
+    params_fit.to_hdf(fitparName, key='fitparams')
+
+
 def plotFitResults(params_fit):
 
     plotFitRes(params_fit)
@@ -192,7 +200,7 @@ sigma_mu_from_simu = Sigma_mu_obs(fileDir,
                                   outName='sigma_mu_from_simu_Ny_{}.hdf5'.format(
                                       Ny),
                                   plot=False).data
-print('boo', sigma_mu_from_simu)
+#print('boo', sigma_mu_from_simu)
 # print(test)
 # load nsn_bias
 # special config file needed here: 1 season, 1 pointing per field
@@ -204,6 +212,15 @@ config = getconfig(['DD_0.90'],
 nsn_bias = NSN_bias(fileDir, config, fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'],
                     dbNames=dbNames_all,
                     plot=False, outName='nsn_bias_Ny_{}.hdf5'.format(Ny)).data
+
+"""
+
+idx = nsn_bias['zcomp'] == '0.80'
+idx &= nsn_bias['fieldName'] == 'XMM-LSS'
+idx &= nsn_bias['z'] <= 1.1
+sel = nsn_bias[idx]
+print('number of SN', np.sum(sel['nsn_eff']))
+"""
 
 # load sn_wfd
 sn_wfd = pd.DataFrame()
@@ -222,34 +239,29 @@ config = getconfig(dbNames, fields, nseasons, npointings, zsurvey=zsurvey,
 
 fitparName = '{}/FitParams_{}.hdf5'.format(dirFit, configName)
 parameter_to_fit = opts.fit_parameters.split(',')
-if not os.path.isfile(fitparName):
-    # get default configuration file
 
-    ffi = range(nMC)
-    params = {}
-    params['fileDir'] = fileDir
-    params['dbNames'] = dbNames
-    params['config'] = config
-    params['fields'] = fields
-    params['dirSN'] = ''
-    params['snType'] = snType
-    params['sigma_mu'] = sigma_mu_from_simu
-    params['params_fit'] = parameter_to_fit
-    params['nsn_bias'] = nsn_bias
-    params['sn_wfd'] = sn_wfd
-    params['sigma_bias_x1_color'] = pd.read_hdf('sigma_mu_bias_x1_color.hdf5')
-    params['sigmaInt'] = sigmaInt
-    params['binned_cosmology'] = binned_cosmology
+params = {}
+params['fileDir'] = fileDir
+params['dbNames'] = dbNames
+params['config'] = config
+params['fields'] = fields
+params['dirSN'] = ''
+params['snType'] = snType
+params['sigma_mu'] = sigma_mu_from_simu
+params['params_fit'] = parameter_to_fit
+params['nsn_bias'] = nsn_bias
+params['sn_wfd'] = sn_wfd
+params['sigma_bias_x1_color'] = pd.read_hdf('sigma_mu_bias_x1_color.hdf5')
+params['sigmaInt'] = sigmaInt
+params['binned_cosmology'] = binned_cosmology
 
-    params_fit = multiproc(ffi, params, multifit_mu, nproc)
-
-    params_fit.to_hdf(fitparName, key='fitparams')
+go_fit(nMC, params, nproc, fitparName)
 
 params_fit = pd.read_hdf(fitparName)
 idx = params_fit['accuracy'] == 1
 params_fit = params_fit[idx]
 print('result', np.median(params_fit['sigma_w0']),
-      np.std(params_fit['sigma_w0']))
+      np.std(params_fit['sigma_w0']), np.median(params_fit['nsn_DD']), np.median(params_fit['nsn_DD_COSMOS']+params_fit['nsn_DD_XMM-LSS']), np.median(params_fit['nsn_DD_XMM-LSS']))
 
 # plotFitResults(params_fit)
 """
