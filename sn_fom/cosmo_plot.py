@@ -41,14 +41,17 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         idxb = cosmo_scen['configName'] == conf
         scen = cosmo_scen[idxb]
         if len(scen) > 0:
-            zcomp, nddf = decode_scen(scen, runtype=runtype)
+            zcomp, zcomp_ultra, nddf, nddf_ultra, nseasons_ultra = decode_scen(
+                scen, runtype=runtype)
             if nddf > 0:
-                r.append((conf, mean, std, zcomp, nddf, nsn_DD))
+                r.append((conf, mean, std, zcomp, zcomp_ultra,
+                          nddf, nddf_ultra, nsn_DD, nseasons_ultra))
 
     res = pd.DataFrame(
-        r, columns=['conf', 'sigma_w', 'sigma_w_std', 'zcomp', 'nddf', 'nsn_DD'])
+        r, columns=['conf', 'sigma_w', 'sigma_w_std', 'zcomp', 'zcomp_ultra', 'nddf', 'nddf_ultra', 'nsn_DD', 'nseasons_ultra'])
 
-    print(res[['conf', 'sigma_w', 'zcomp', 'nddf', 'nsn_DD']])
+    print(res[['conf', 'sigma_w', 'zcomp', 'nddf',
+               'nsn_DD', 'zcomp_ultra', 'nddf', 'nddf_ultra', 'nseasons_ultra']])
 
     return res
 
@@ -58,17 +61,33 @@ def decode_scen(scen, runtype='deep_rolling'):
     dbName = scen['dbName'].to_list()[0]
     fields = scen['fields'].to_list()[0]
     pointings = scen['npointings'].to_list()[0]
-
+    seasons = scen['nseasons'].to_list()[0]
+    print('here is the scene', scen)
     zcomp = -1
     nddf = []
 
+    nddf_ultra = 0
+    zcomp_ultra = 0
+    zcomp = 0.
+    nddf = 0
+    nddf_ultra = 0
+    zcomp_ultra = 0
+    nseasons_ultra = 0
+
     if '/' in dbName:
 
-        dbName = dbName.split('/')[-1]
-        zcomp = float(dbName.split('_')[-1])
+        dbNamespl = dbName.split('/')
+        zcomp = float(dbNamespl[-1].split('_')[-1])
+        zcomp_ultra = float(dbNamespl[0].split('_')[-1])
 
         nddf = pointings.split('/')[-1].split(',')
+        nddf_ultra = pointings.split('/')[0].split(',')
+        nseasons_ultra = seasons.split('/')[0].split(',')
+
         nddf = list(map(int, nddf))
+        nddf_ultra = list(map(int, nddf_ultra))
+        nseasons_ultra = list(map(int, nseasons_ultra))
+
     else:
         if runtype != 'deep_rolling':
             zcomp = float(dbName.split('_')[-1])
@@ -76,10 +95,16 @@ def decode_scen(scen, runtype='deep_rolling'):
             nddf = pointings.split(',')
             nddf = list(map(int, nddf))
         else:
-            zcomp = 0.
-            nddf = 0
+            zcomp_ultra = float(dbName.split('_')[-1])
+            nddf_ultra = pointings.split(',')
+            nseasons_ultra = seasons.split(',')
+            nddf_ultra = list(map(int, nddf_ultra))
+            nseasons_ultra = list(map(int, nseasons_ultra))
 
-    return zcomp, int(np.sum(nddf))
+    nddf = int(np.sum(nddf))
+    nddf_ultra = int(np.sum(nddf_ultra))
+    nseasons_ultra = int(np.median(nseasons_ultra))
+    return zcomp, zcomp_ultra, nddf, nddf_ultra, nseasons_ultra
 
 
 def smooth(res, plot=False):
@@ -136,12 +161,13 @@ fis = glob.glob('{}/*{}*.hdf5'.format(opts.fileDir, confName))
 cosmo_scen = pd.read_csv(opts.config, delimiter=';', comment='#')
 
 outName = opts.config.replace('config_', '').replace('csv', 'hdf5')
+print('looking for', outName)
+# if not os.path.isfile(outName):
+#    print('moving to summ')
+res = make_summary(fis, cosmo_scen, runtype=opts.runtype)
+res.to_hdf(outName, key='cosmo')
 
-if not os.path.isfile(outName):
-    print('moving to summ')
-    res = make_summary(fis, cosmo_scen, runtype=opts.runtype)
-    res.to_hdf(outName, key='cosmo')
-
+"""
 res = pd.read_hdf(outName)
 
 res = smooth(res, plot=True)
@@ -185,6 +211,7 @@ axb.clabel(CSb, inline=True, fontsize=15,
            colors='r', fmt=fmt)
 
 ax.grid()
+"""
 """
 
 ZLIMIT, SIGMAS, NDDF = getVals(res, 'zcomp', 'sigma_w', 'nddf', nbins=500)
@@ -266,4 +293,4 @@ for l, s in zip(CS.levels, strs):
 ax.clabel(CS, inline=True, fontsize=10,
           colors='k', fmt=fmt)
 """
-plt.show()
+# plt.show()
