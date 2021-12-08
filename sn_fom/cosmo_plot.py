@@ -24,6 +24,13 @@ def getVals(res, varx='zcomp', vary='sigma_w', varz='nddf', nbins=800, method='l
     return X, Y, Z
 
 
+def to_string(ll):
+
+    return ll
+    print('allo', ll)
+    return '_'.join(['{}'.format(l) for l in ll])
+
+
 def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
 
     r = []
@@ -41,22 +48,32 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         idxb = cosmo_scen['configName'] == conf
         scen = cosmo_scen[idxb]
         if len(scen) > 0:
+            """
             zcomp, zcomp_ultra, nddf, nddf_ultra, nseasons_ultra = decode_scen(
                 scen, runtype=runtype)
-            if nddf > 0:
+             if nddf > 0:
                 r.append((conf, mean, std, zcomp, zcomp_ultra,
                           nddf, nddf_ultra, nsn_DD, nseasons_ultra))
+            """
+            ddf_dd, zcomp_dd, nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra = decode_scen(
+                scen, runtype=runtype)
+            r.append((conf, mean, std, ddf_dd, zcomp_dd,
+                      nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD))
 
+    """
     res = pd.DataFrame(
         r, columns=['conf', 'sigma_w', 'sigma_w_std', 'zcomp', 'zcomp_ultra', 'nddf', 'nddf_ultra', 'nsn_DD', 'nseasons_ultra'])
 
     print(res[['conf', 'sigma_w', 'zcomp', 'nddf',
                'nsn_DD', 'zcomp_ultra', 'nddf', 'nddf_ultra', 'nseasons_ultra']])
+    """
 
+    res = pd.DataFrame(
+        r, columns=['conf', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd', 'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD'])
     return res
 
 
-def decode_scen(scen, runtype='deep_rolling'):
+def decode_scen_deprecated(scen, runtype='deep_rolling'):
 
     dbName = scen['dbName'].to_list()[0]
     fields = scen['fields'].to_list()[0]
@@ -83,11 +100,14 @@ def decode_scen(scen, runtype='deep_rolling'):
         nddf = pointings.split('/')[-1].split(',')
         nddf_ultra = pointings.split('/')[0].split(',')
         nseasons_ultra = seasons.split('/')[0].split(',')
+        fields_ultra = fields.split('/')[0].split(',')
+        fields_dd = fields.split('/')[1].split(',')
 
         nddf = list(map(int, nddf))
         nddf_ultra = list(map(int, nddf_ultra))
         nseasons_ultra = list(map(int, nseasons_ultra))
-
+        print('allo', nddf, nddf_ultra, nseasons_ultra,
+              [zcomp_ultra]*np.sum(nddf_ultra), fields_ultra, fields_dd)
     else:
         if runtype != 'deep_rolling':
             zcomp = float(dbName.split('_')[-1])
@@ -105,6 +125,97 @@ def decode_scen(scen, runtype='deep_rolling'):
     nddf_ultra = int(np.sum(nddf_ultra))
     nseasons_ultra = int(np.median(nseasons_ultra))
     return zcomp, zcomp_ultra, nddf, nddf_ultra, nseasons_ultra
+
+
+def decode_scen(scen, runtype='deep_rolling'):
+
+    dbName = scen['dbName'].to_list()[0]
+    dbNamespl = dbName.split('/')
+    fields = scen['fields'].to_list()[0]
+    pointings = scen['npointings'].to_list()[0]
+    seasons = scen['nseasons'].to_list()[0]
+    print('here is the scene', scen)
+    zcomp = -1
+    nddf = []
+
+    nddf_ultra = 0
+    zcomp_ultra = 0
+    zcomp = 0.
+    nddf = 0
+    nddf_ultra = 0
+    zcomp_ultra = 0
+    nseasons_ultra = 0
+
+    ddf_ultra = []
+    zcomp_ultra = []
+    nseasons_ultra = []
+
+    ddf_dd = []
+    zcomp_dd = []
+    nseasons_dd = []
+    if '/' in dbName:
+
+        # ultra deep fields
+        zcomp_ultra = float(dbNamespl[0].split('_')[-1])
+        nddf_ultra = pointings.split('/')[0].split(',')
+        nseasons_ultra = seasons.split('/')[0].split(',')
+        ddf_ultra = fields.split('/')[0].split(',')
+        nddf_ultra = list(map(int, nddf_ultra))
+        zcomp_ultra = [zcomp_ultra]*np.sum(nddf_ultra)
+        nseasons_ultra = list(map(int, nseasons_ultra))
+
+        # deep fields
+        zcomp = float(dbNamespl[-1].split('_')[-1])
+        nddf = list(map(int, pointings.split('/')[-1].split(',')))
+        nseasons = list(map(int, seasons.split('/')[1].split(',')))
+        fields_dd = fields.split('/')[1].split(',')
+
+        for i in range(len(nddf)):
+            ddf_dd += [fields_dd[i]]*nddf[i]
+            zcomp_dd += [zcomp]*nddf[i]
+            nseasons_dd += [nseasons[i]]*nddf[i]
+
+        print('allo', ddf_dd, zcomp_dd, nseasons_dd,
+              ddf_ultra, zcomp_ultra, nseasons_ultra)
+    else:
+        if runtype != 'deep_rolling':
+            zcomp = float(dbName.split('_')[-1])
+
+            nddf = pointings.split(',')
+            nddf = list(map(int, nddf))
+            # deep fields
+            zcomp = float(dbNamespl[-1].split('_')[-1])
+            nddf = list(map(int, pointings.split('/')[-1].split(',')))
+            nseasons = list(map(int, seasons.split('/')[1].split(',')))
+            fields_dd = fields.split('/')[1].split(',')
+
+            for i in range(len(nddf)):
+                ddf_dd += [fields_dd[i]]*nddf[i]
+                zcomp_dd += [zcomp]*nddf[i]
+                nseasons_dd += [nseasons[i]]*nddf[i]
+
+        else:
+            zcomp_ultra = float(dbName.split('_')[-1])
+            nddf_ultra = pointings.split(',')
+            nseasons_ultra = seasons.split(',')
+            nddf_ultra = list(map(int, nddf_ultra))
+            nseasons_ultra = list(map(int, nseasons_ultra))
+
+            # ultra deep fields
+            zcomp_ultra = float(dbNamespl[0].split('_')[-1])
+            nddf_ultra = pointings.split('/')[0].split(',')
+            nseasons_ultra = seasons.split('/')[0].split(',')
+            ddf_ultra = fields.split('/')[0].split(',')
+            nddf_ultra = list(map(int, nddf_ultra))
+            zcomp_ultra = [zcomp_ultra]*np.sum(nddf_ultra)
+            nseasons_ultra = list(map(int, nseasons_ultra))
+            """
+            nddf = int(np.sum(nddf))
+            nddf_ultra = int(np.sum(nddf_ultra))
+            nseasons_ultra = int(np.median(nseasons_ultra))
+            """
+    # return zcomp, zcomp_ultra, nddf, nddf_ultra, nseasons_ultra
+    return to_string(ddf_dd), to_string(zcomp_dd), to_string(nseasons_dd), to_string(ddf_ultra), to_string(zcomp_ultra), to_string(nseasons_ultra)
 
 
 def smooth(res, plot=False):
