@@ -186,8 +186,8 @@ def decode_scen(scen, runtype='deep_rolling'):
             # deep fields
             zcomp = float(dbNamespl[-1].split('_')[-1])
             nddf = list(map(int, pointings.split('/')[-1].split(',')))
-            nseasons = list(map(int, seasons.split('/')[1].split(',')))
-            fields_dd = fields.split('/')[1].split(',')
+            nseasons = list(map(int, seasons.split('/')[0].split(',')))
+            fields_dd = fields.split('/')[0].split(',')
 
             for i in range(len(nddf)):
                 ddf_dd += [fields_dd[i]]*nddf[i]
