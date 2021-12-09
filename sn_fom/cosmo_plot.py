@@ -276,6 +276,9 @@ print('looking for', outName)
 # if not os.path.isfile(outName):
 #    print('moving to summ')
 res = make_summary(fis, cosmo_scen, runtype=opts.runtype)
+# get Ny visits
+Ny = int(opts.fileDir.split('_')[3])
+res['Ny'] = Ny
 res.to_hdf(outName, key='cosmo')
 
 """
