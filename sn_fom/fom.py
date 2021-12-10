@@ -194,13 +194,12 @@ for dbN in dbNames_all:
 dbNames_all = dbC
 """
 # load sigma_mu
+outName = 'sigma_mu_from_simu_Ny_{}.hdf5'.format(Ny)
 sigma_mu_from_simu = Sigma_mu_obs(fileDir,
                                   dbNames=dbNames_all+['WFD_0.20'],
                                   snTypes=['allSN']*len(dbNames_all)+['WFD'],
-                                  outName='sigma_mu_from_simu_Ny_{}.hdf5'.format(
-                                      Ny),
-                                  plot=False).data
-#print('boo', sigma_mu_from_simu)
+                                  outName=outName, plot=False).data
+# print('boo', sigma_mu_from_simu)
 # print(test)
 # load nsn_bias
 # special config file needed here: 1 season, 1 pointing per field
@@ -209,9 +208,10 @@ config = getconfig(['DD_0.90'],
                    ['1,1,1,1,1'],
                    ['1,1,1,1,1'])
 
+outName = 'nsn_bias_Ny_{}.hdf5'.format(Ny)
 nsn_bias = NSN_bias(fileDir, config, fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'],
                     dbNames=dbNames_all,
-                    plot=False, outName='nsn_bias_Ny_{}.hdf5'.format(Ny)).data
+                    plot=False, outName=outName).data
 
 """
 

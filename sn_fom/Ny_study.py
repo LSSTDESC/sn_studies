@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from sn_tools.sn_rate import SN_Rate
 from sn_fom import plt
-from scipy.interpolate import make_interp_spline
+from scipy.interpolate import make_interp_spline, interp1d
+from scipy.ndimage.filters import gaussian_filter1d
 
 
 def load_files(Ny=[20, 40, 80, 120], prefix='nsn_bias_Ny', preconfig='config_fakes_Ny'):
@@ -97,13 +98,21 @@ def plot(ax, res, zcomp, norm=1, xvar='Nvisits_y', yvar='Nvisits'):
     idx = res['zcomp'] == zcomp
     seldf = res[idx]
 
-    ax.plot(seldf[xvar], seldf[yvar]/norm,
+    y = seldf[yvar]/norm
+    x = seldf[xvar]
+    ax.plot(seldf[xvar], y,
+            label='$z_{complete}$'+'= {}'.format(zcomp), lw=3)
+
+    f_cubic = interp1d(x, y, kind='slinear')
+    xmin, xmax = np.min(x), np.max(x)
+    xnew = np.linspace(xmin, xmax, 100)
+    ax.plot(xnew, f_cubic(xnew),
             label='$z_{complete}$'+'= {}'.format(zcomp), lw=3)
     """
     xmin, xmax = np.min(seldf[xvar]), np.max(seldf[xvar])
     xnew = np.linspace(xmin, xmax, 100)
     spl = make_interp_spline(
-        seldf[xvar], seldf[yvar]/norm, k=5)  # type: BSpline
+        seldf[xvar], seldf[yvar]/norm, k=1)  # type: BSpline
     spl_smooth = spl(xnew)
     ax.plot(xnew, spl_smooth,
             label='$z_{complete}$'+'= {}'.format(zcomp), lw=3)
