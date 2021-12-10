@@ -57,6 +57,7 @@ class CombiChoice:
 
         snr_opti = self.multiAna(thedir, nproc)
 
+        """
         if snr_opti is None:
             return None
         # snr_opti has a set of the best combi
@@ -70,6 +71,8 @@ class CombiChoice:
 
         snr_fi['z'] = z
         return snr_fi
+        """
+        return snr_opti
 
     def multiAna(self, thedir, nproc=8):
         """
@@ -187,6 +190,42 @@ class CombiChoice:
         return sel[lliss]
 
     def minimize(self, snr):
+
+        import matplotlib.pyplot as plt
+
+        if self.z >= 0.7:
+            idx = np.abs(snr['sigmaC']-0.04) < 0.001
+            idx &= snr['Nvisits_z'] >= snr['Nvisits_i']
+        else:
+            idx = snr['sigmaC'] <= 0.04
+
+        sel = snr[idx]
+        sel = sel.sort_values(by=['Nvisits'])
+        """
+        plt.plot(sel['Nvisits_y'], sel['sigmaC'])
+        plt.show()
+        print(sel)
+        """
+        df = pd.DataFrame()
+        for vv in [10., 20., 30., 40., 50., 60., 70., 80., 90., 100]:
+            """
+            idb = sel['Nvisits_y'] <= 1.1*vv
+            idb &= sel['Nvisits_y'] >= 0.9*vv
+            """
+            #print(self.z, sel[idb][:1])
+            df_sort = sel.iloc[(sel['Nvisits_y']-vv).abs().argsort()[:]]
+            idx = np.abs(df_sort['Nvisits_y']-vv) <= 3.
+            df_sort = df_sort[idx]
+            df_sort = df_sort.sort_values(by=['Nvisits'])
+            df_sort['Ny'] = int(vv)
+            df = pd.concat((df, df_sort[:1]))
+            #df = pd.concat((df, sel[idb][:1]))
+        df['zcomp'] = str(self.z)[::-1].zfill(4)[::-1]
+
+        print(df)
+        return df
+
+    def minimize_old(self, snr):
         """
         Method to estimate the best combis according to some criteria
 
@@ -324,18 +363,50 @@ class CombiChoice:
         seldicth = seldict.copy()
         seldicth['cut4'] = {}
         seldicth['cut4']['var'] = 'Nvisits_y'
-        seldicth['cut4']['value'] = 100.
+        seldicth['cut4']['value'] = 120.
         seldicth['cut4']['op'] = operator.le
         seldicth['cut4']['zmin'] = 0.65
         seldicth['cut4']['zmax'] = 0.90
         seldicth['cut4']['valmin'] = 0.
         seldicth['cut5'] = {}
         seldicth['cut5']['var'] = 'Nvisits_z'
-        seldicth['cut5']['value'] = 40.
+        seldicth['cut5']['value'] = 30.
         seldicth['cut5']['op'] = operator.ge
         seldicth['cut5']['zmin'] = 0.65
         seldicth['cut5']['zmax'] = 0.90
         seldicth['cut5']['valmin'] = 10.
+
+        seldicti = seldict.copy()
+        seldicti['cut4'] = {}
+        seldicti['cut4']['var'] = 'Nvisits_y'
+        seldicti['cut4']['value'] = 140.
+        seldicti['cut4']['op'] = operator.le
+        seldicti['cut4']['zmin'] = 0.65
+        seldicti['cut4']['zmax'] = 0.90
+        seldicti['cut4']['valmin'] = 0.
+        seldicti['cut5'] = {}
+        seldicti['cut5']['var'] = 'Nvisits_z'
+        seldicti['cut5']['value'] = 30.
+        seldicti['cut5']['op'] = operator.ge
+        seldicti['cut5']['zmin'] = 0.65
+        seldicti['cut5']['zmax'] = 0.90
+        seldicti['cut5']['valmin'] = 10.
+
+        seldictj = seldict.copy()
+        seldictj['cut4'] = {}
+        seldictj['cut4']['var'] = 'Nvisits_y'
+        seldictj['cut4']['value'] = 60.
+        seldictj['cut4']['op'] = operator.le
+        seldictj['cut4']['zmin'] = 0.65
+        seldictj['cut4']['zmax'] = 0.80
+        seldictj['cut4']['valmin'] = 0.
+        seldictj['cut5'] = {}
+        seldictj['cut5']['var'] = 'Nvisits_z'
+        seldictj['cut5']['value'] = 30.
+        seldictj['cut5']['op'] = operator.ge
+        seldictj['cut5']['zmin'] = 0.65
+        seldictj['cut5']['zmax'] = 0.90
+        seldictj['cut5']['valmin'] = 10.
 
         selvar = ['Nvisits']
         minparname = ['nvisits']
@@ -366,6 +437,12 @@ class CombiChoice:
             snr_visits = pd.concat((snr_visits, res))
 
             res = self.min_nvisits(sel, key, '{}_Ny_120'.format(val), seldicth)
+            snr_visits = pd.concat((snr_visits, res))
+
+            res = self.min_nvisits(sel, key, '{}_Ny_140'.format(val), seldicti)
+            snr_visits = pd.concat((snr_visits, res))
+
+            res = self.min_nvisits(sel, key, '{}_Ny_160'.format(val), seldictj)
             snr_visits = pd.concat((snr_visits, res))
 
         # snr_chisq = self.min_chisq(snr.copy())
