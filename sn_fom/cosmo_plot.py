@@ -47,6 +47,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         nsn_DD = np.median(params_fit['nsn_DD'])
         idxb = cosmo_scen['configName'] == conf
         scen = cosmo_scen[idxb]
+        print('hhh', scen)
         if len(scen) > 0:
             """
             zcomp, zcomp_ultra, nddf, nddf_ultra, nseasons_ultra = decode_scen(
@@ -268,17 +269,21 @@ opts, args = parser.parse_args()
 confName = opts.config.split('.')[0].split('FitParams_conf_')[-1]
 confName = '_'.join(vv for vv in confName.split('_')[2:])
 
-fis = glob.glob('{}/*{}*.hdf5'.format(opts.fileDir, confName))
+search_path = '{}/*{}*.hdf5'.format(opts.fileDir, confName)
+print('searching ...', search_path)
+fis = glob.glob(search_path)
 cosmo_scen = pd.read_csv(opts.config, delimiter=';', comment='#')
 
-outName = opts.config.replace('config_', '').replace('csv', 'hdf5')
-print('looking for', outName)
+print('ggg', len(fis), cosmo_scen)
+#print('looking for', outName)
 # if not os.path.isfile(outName):
 #    print('moving to summ')
 res = make_summary(fis, cosmo_scen, runtype=opts.runtype)
 # get Ny visits
 Ny = int(opts.fileDir.split('_')[3])
 res['Ny'] = Ny
+outName = opts.config.replace('config_', '').replace(
+    '.csv', '_Ny_{}.hdf5'.format(Ny))
 res.to_hdf(outName, key='cosmo')
 
 """
