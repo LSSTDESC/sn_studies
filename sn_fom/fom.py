@@ -254,6 +254,7 @@ params['sn_wfd'] = sn_wfd
 params['sigma_bias_x1_color'] = pd.read_hdf('sigma_mu_bias_x1_color.hdf5')
 params['sigmaInt'] = sigmaInt
 params['binned_cosmology'] = binned_cosmology
+params['surveyType'] = surveyType
 
 go_fit(nMC, params, nproc, fitparName)
 

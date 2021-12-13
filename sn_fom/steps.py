@@ -45,7 +45,7 @@ class fit_SN_mu:
                  params_fit=['Om', 'w0', 'wa'],
                  saveSN='', sigmaInt=0.12,
                  sigma_bias_x1_color=pd.DataFrame(),
-                 binned_cosmology=False):
+                 binned_cosmology=False, surveyType='full'):
 
         self.fileDir = fileDir
         self.dbNames = dbNames
@@ -80,6 +80,7 @@ class fit_SN_mu:
             sn_wfd['fieldName'] = 'WFD'
             sn_wfd['sigma_bias_stat'] = 0.0
             sn_wfd['sigma_bias_x1_color'] = 0.0
+            sn_wfd['zcomp'] = 0.6
             data_sn = pd.concat((data_sn, sn_wfd))
 
         # print(test)
@@ -96,9 +97,9 @@ class fit_SN_mu:
             SNID = saveSN.split('.hdf5')[0]
 
         # second step: fit the data
-
+        print('to fit', data_sn.columns)
         # FitCosmo instance
-        fit = FitData_mu(data_sn, params_fit=params_fit)
+        fit = FitData_mu(data_sn, params_fit=params_fit, surveyType=surveyType)
 
         # make the fit and get the parameters
         params_fit = fit()
@@ -203,7 +204,7 @@ class fit_SN_mu:
         config: dict
           survey configuration
         """
-        zcomp = dbName.split('_')[1]
+        zcomp = float(dbName.split('_')[1])
 
         SN = pd.DataFrame()
         # sn_simu = transformSN(self.fileDir, dbName, 'allSN',
@@ -235,6 +236,7 @@ class fit_SN_mu:
             res = simu_mu(simuparams, self.sigmaInt)
 
             res['fieldName'] = field
+            res['zcomp'] = zcomp
             SN = pd.concat((SN, res))
 
         # print('total number of SN', len(SN))
@@ -411,6 +413,7 @@ def fit_SN_deprecated(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=p
 
     # second step: fit the data
 
+    print('to fit', data_sn)
     # FitCosmo instance
     fit = FitData_mu(data_sn, params_fit=params_fit)
 
@@ -522,6 +525,7 @@ def multifit_mu(index, params, j=0, output_q=None):
     sigma_bias_x1_color = params['sigma_bias_x1_color']
     sigmaInt = params['sigmaInt']
     binned_cosmology = params['binned_cosmology']
+    surveyType = params['surveyType']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
@@ -536,7 +540,9 @@ def multifit_mu(index, params, j=0, output_q=None):
                            nsn_bias, sn_wfd, params_for_fit,
                            saveSN=saveSN_f, sigmaInt=sigmaInt,
                            sigma_bias_x1_color=sigma_bias_x1_color,
-                           binned_cosmology=binned_cosmology)
+                           binned_cosmology=binned_cosmology,
+                           surveyType=surveyType)
+
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
     if output_q is not None:

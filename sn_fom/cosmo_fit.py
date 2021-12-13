@@ -602,9 +602,13 @@ class FitData_mu:
 
     """
 
-    def __init__(self, data, params_fit=['Om', 'w0']):
+    def __init__(self, data, params_fit=['Om', 'w0'], surveyType='full'):
         # print('Number of SN for fit', len(data))
         # print set([d[name]['idr.subset'] for name in d.keys()]
+
+        if surveyType == 'complete':
+            idx = data['z_SN'] <= data['zcomp']
+            data = data[idx]
 
         Z_SN = data['z_SN']
         mu_SN = data['mu_SN']
@@ -618,8 +622,9 @@ class FitData_mu:
                 sel = data[idx]
                 self.nsn_DD_fields[fieldName] = len(sel)
         self.nsn_DD = len(data[data['snType'] == 'DD'])
-
+        self.nsn_z_09 = len(data[data['z_SN'] >= 0.9])
         self.nsn_WFD = len(data[data['snType'] == 'WFD'])
+
         # instance of the fit functions here
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_bias,
                                params_fit=params_fit)
@@ -651,6 +656,7 @@ class FitData_mu:
         resa['sigma_int'] = sigma_int
         resa['nsn_DD'] = self.nsn_DD
         resa['nsn_WFD'] = self.nsn_WFD
+        resa['nsn_z_09'] = self.nsn_z_09
         for key, vals in self.nsn_DD_fields.items():
             resa['nsn_DD_{}'.format(key)] = vals
 
