@@ -45,6 +45,9 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         mean = np.median(params_fit['sigma_w0'])
         std = np.std(params_fit['sigma_w0'])
         nsn_DD = np.median(params_fit['nsn_DD'])
+        nsn_z_09 = 0.
+        if 'nsn_z_09' in params_fit.columns:
+            nsn_z_09 = np.median(params_fit['nsn_z_09'])
         idxb = cosmo_scen['configName'] == conf
         scen = cosmo_scen[idxb]
         print('hhh', scen)
@@ -59,7 +62,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
             ddf_dd, zcomp_dd, nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra = decode_scen(
                 scen, runtype=runtype)
             r.append((conf, mean, std, ddf_dd, zcomp_dd,
-                      nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD))
+                      nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09))
 
     """
     res = pd.DataFrame(
@@ -70,7 +73,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
     """
 
     res = pd.DataFrame(
-        r, columns=['conf', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd', 'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD'])
+        r, columns=['conf', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd', 'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09'])
     return res
 
 

@@ -7,7 +7,7 @@ from scipy.interpolate import make_interp_spline, interp1d
 from scipy.ndimage.filters import gaussian_filter1d
 
 
-def load_files(Ny=[20, 40, 80, 120], prefix='nsn_bias_Ny', preconfig='config_fakes_Ny'):
+def load_files(Ny=[20, 30, 40, 60, 80, 120], prefix='nsn_bias_Ny', preconfig='config_fakes_Ny'):
     df = {}
     config = {}
     for vv in Ny:
@@ -42,7 +42,7 @@ def select(data, zcomp, fieldName, zcol='zcomp'):
 
 def get_infos(df, config, fieldName='XMM-LSS'):
 
-    Nys = [20, 40, 80, 120]
+    Nys = [20, 30, 40, 60, 80, 120]
     zcomps = ['0.70', '0.75', '0.80', '0.85', '0.90']
 
     r = []
@@ -97,17 +97,20 @@ def plot(ax, res, zcomp, norm=1, xvar='Nvisits_y', yvar='Nvisits'):
 
     idx = res['zcomp'] == zcomp
     seldf = res[idx]
-
+    seldf = seldf.sort_values(by=['Nvisits_y'])
+    print(zcomp, seldf)
+    seldf = seldf.groupby([xvar])[yvar].mean().reset_index()
     y = seldf[yvar]/norm
     x = seldf[xvar]
     ax.plot(seldf[xvar], y,
-            label='$z_{complete}$'+'= {}'.format(zcomp), lw=3)
+            label='$z_{complete}$'+'= {}'.format(zcomp), lw=3, marker='o')
 
-    f_cubic = interp1d(x, y, kind='slinear')
+    f_cubic = interp1d(x, y, kind='quadratic')
     xmin, xmax = np.min(x), np.max(x)
     xnew = np.linspace(xmin, xmax, 100)
     ax.plot(xnew, f_cubic(xnew),
             label='$z_{complete}$'+'= {}'.format(zcomp), lw=3)
+
     """
     xmin, xmax = np.min(seldf[xvar]), np.max(seldf[xvar])
     xnew = np.linspace(xmin, xmax, 100)
@@ -134,6 +137,7 @@ figb, axb = plt.subplots()
 idd = np.abs(res['Ny']-20) < 1.e-5
 refdf = res[idd]
 
+print('hhh', res['zcomp'].unique())
 for zcomp in res['zcomp'].unique():
     plot(ax, res, zcomp, norm=nsn_z, xvar='Nvisits_y', yvar='NSN_0.90')
     plot(axb, res, zcomp, norm=refdf)
