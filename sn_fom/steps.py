@@ -37,6 +37,10 @@ class fit_SN_mu:
       intrinsic dispersion of SN (default: 0.12)
     binned_cosmology: bool, opt
       to perform binned cosmology (not operational yet)(default: False)
+    surveyType: str, opt
+      type of survey (default: full)
+    sigma_mu_photoz: pandas df, opt
+      mu error from photoz (default: empty df)
     """
 
     def __init__(self, fileDir, dbNames, config, fields,
@@ -45,7 +49,8 @@ class fit_SN_mu:
                  params_fit=['Om', 'w0', 'wa'],
                  saveSN='', sigmaInt=0.12,
                  sigma_bias_x1_color=pd.DataFrame(),
-                 binned_cosmology=False, surveyType='full'):
+                 binned_cosmology=False, surveyType='full',
+                 sigma_mu_photoz=pd.DataFrame()):
 
         self.fileDir = fileDir
         self.dbNames = dbNames
@@ -59,6 +64,7 @@ class fit_SN_mu:
         self.saveSN = saveSN
         self.sigmaInt = sigmaInt
         self.sigma_bias_x1_color = sigma_bias_x1_color
+        self.sigma_mu_photoz = sigma_mu_photoz
 
         # simulate supernovae here - DDF
         data_sn = self.simul_distmod()
@@ -80,6 +86,7 @@ class fit_SN_mu:
             sn_wfd['fieldName'] = 'WFD'
             sn_wfd['sigma_bias_stat'] = 0.0
             sn_wfd['sigma_bias_x1_color'] = 0.0
+            sn_wfd['sigma_mu_photoz'] = 0.0
             sn_wfd['zcomp'] = 0.6
             data_sn = pd.concat((data_sn, sn_wfd))
 
@@ -345,7 +352,6 @@ class fit_SN_mu:
         return df_tot
 
     def add_bias_x1_color(self, df_tot):
-
         df_fi = pd.DataFrame()
         for dbName in df_tot['dbName'].unique():
             idx = df_tot['dbName'] == dbName
@@ -366,10 +372,14 @@ class fit_SN_mu:
         # add a column sigma_bias_stat for all
         data_sn['sigma_bias_stat'] = 0.0
         data_sn['sigma_bias_x1_color'] = 0.0
+        data_sn['sigma_mu_photoz'] = 0.0
         # add bias stat
         data_sn = self.add_bias_stat(data_sn)
         # add bias x1_color
         data_sn = self.add_bias_x1_color(data_sn)
+        # add sigma_mu_photoz
+        data_sn = self.add_sigma_photoz(data_sn)
+
         # plot to cross-check
         # import matplotlib.pyplot as plt
         # plt.plot(data_sn['z_SN'], data_sn['sigma_bias_x1_color'], 'ko')
@@ -383,10 +393,55 @@ class fit_SN_mu:
         sigmu = np.array(data_sn['sigma_mu_SN'])
         sigbias = np.array(data_sn['sigma_bias_stat'])
         sigx1color = np.array(data_sn['sigma_bias_x1_color'])
+        sigphotz = np.array(data_sn['sigma_mu_photoz'])
         # print('hello', len(dist_mu), len(sigmu), sigbias)
-        data_sn['mu_SN'] = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2+sigbias[i]**2+sigx1color[i]**2))
+        data_sn['mu_SN'] = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2+sigbias[i]**2+sigx1color[i]**2+sigphotz[i]**2))
                             for i in range(len(dist_mu))]
         return data_sn
+
+    def add_sigma_photoz(self, data, check_plot=False):
+
+        sigma_photoz = 0.
+        fieldNames = ['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS']
+        z_photoz = [0.8, 0.8, 0.6, 0.6, 0.6]
+        fzdict = dict(zip(fieldNames, z_photoz))
+        if not self.sigma_mu_photoz.empty:
+            sigmu_interp = interp1d(
+                self.sigma_mu_photoz['z'], self.sigma_mu_photoz['sigma_mu_photoz'], bounds_error=False, fill_value=0.)
+            sigma_photoz = self.sigma_mu_photoz['sigma_photoz'].unique()[0]
+            data_n = pd.DataFrame()
+            for fName, zv in fzdict.items():
+                dd = self.apply_sigma_photoz(data, fName, zv, sigmu_interp)
+                data_n = pd.concat((dd, data_n))
+            data = pd.DataFrame(data_n)
+
+        data['sigma_photoz'] = sigma_photoz
+
+        if check_plot:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            for fieldName in fieldNames:
+                idx = data['fieldName'] == fieldName
+                sel = data[idx]
+                if not sel.empty:
+                    sel = sel.sort_values(by=['z_SN'])
+                    ax.plot(sel['z_SN'], sel['sigma_mu_photoz'],
+                            label=fieldName, marker='o')
+            ax.legend()
+            plt.show()
+
+        return data
+
+    def apply_sigma_photoz(self, data, fieldName, zsel, sigmu_interp):
+
+        idx = data['fieldName'] == fieldName
+        sel = data[idx]
+        if not sel.empty:
+            sel['sigma_mu_photoz'] = sigmu_interp(
+                sel['z_SN'])
+            idx = sel['z_SN'] <= zsel
+            sel.loc[idx, 'sigma_mu_photoz'] = 0.0
+        return sel
 
 
 def fit_SN_deprecated(dbNames, config, fields, snType, sigmu, nsn_bias, sn_wfd=pd.DataFrame(), params_fit=['Om', 'w0', 'wa'], saveSN='', sigma_bias=0.01):
@@ -526,6 +581,7 @@ def multifit_mu(index, params, j=0, output_q=None):
     sigmaInt = params['sigmaInt']
     binned_cosmology = params['binned_cosmology']
     surveyType = params['surveyType']
+    sigma_mu_photoz = params['sigma_mu_photoz']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
@@ -541,7 +597,8 @@ def multifit_mu(index, params, j=0, output_q=None):
                            saveSN=saveSN_f, sigmaInt=sigmaInt,
                            sigma_bias_x1_color=sigma_bias_x1_color,
                            binned_cosmology=binned_cosmology,
-                           surveyType=surveyType)
+                           surveyType=surveyType,
+                           sigma_mu_photoz=sigma_mu_photoz)
 
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
