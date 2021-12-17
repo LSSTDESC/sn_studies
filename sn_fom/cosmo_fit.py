@@ -613,8 +613,10 @@ class FitData_mu:
         Z_SN = data['z_SN']
         mu_SN = data['mu_SN']
         sigma_mu_SN = data['sigma_mu_SN']
-        sigma_bias = np.sqrt(data['sigma_bias_stat']
-                             ** 2+data['sigma_bias_x1_color']**2)
+        sigma_mu_bias = np.sqrt(data['sigma_bias_stat']
+                                ** 2+data['sigma_bias_x1_color']**2)
+        sigma_mu_photoz = data['sigma_mu_photoz']
+        self.sigma_photoz = data['sigma_photoz'].unique()[0]
         self.nsn_DD_fields = {}
         for fieldName in data['fieldName'].unique():
             if fieldName != 'WFD':
@@ -626,7 +628,7 @@ class FitData_mu:
         self.nsn_WFD = len(data[data['snType'] == 'WFD'])
 
         # instance of the fit functions here
-        self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_bias,
+        self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_mu_bias, sigma_mu_photoz,
                                params_fit=params_fit)
 
     def __call__(self):
@@ -657,6 +659,7 @@ class FitData_mu:
         resa['nsn_DD'] = self.nsn_DD
         resa['nsn_WFD'] = self.nsn_WFD
         resa['nsn_z_09'] = self.nsn_z_09
+        resa['sigma_photoz'] = self.sigma_photoz
         for key, vals in self.nsn_DD_fields.items():
             resa['nsn_DD_{}'.format(key)] = vals
 
@@ -1100,7 +1103,7 @@ class FitCosmo_mu(CosmoDist):
 
     """
 
-    def __init__(self, Z, mu, sigma_mu, sigma_bias,
+    def __init__(self, Z, mu, sigma_mu, sigma_bias, sigma_mu_photoz,
                  params_fit=['Om', 'w0'],
                  H0=70., c=299792.458):
         super().__init__(H0, c)
@@ -1112,6 +1115,7 @@ class FitCosmo_mu(CosmoDist):
         self.mu_SN = mu
         self.sigma_mu_SN = sigma_mu
         self.sigma_bias = sigma_bias
+        self.sigma_mu_photoz = sigma_mu_photoz
         self.ndf = nsn-len(params_fit)-1
         self.params_fit = params_fit
 
@@ -1235,15 +1239,15 @@ class FitCosmo_mu(CosmoDist):
         # return optimize.minimize(self.tchi2, (0.3, -1.0, 0., sigma_int))
 
     def chi2(self, Om, w0, wa):
-        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2)))
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2+self.sigma_mu_photoz**2)))
 
     def chi2_sigma_int(self, Om, w0, wa, sigma_int):
 
-        return np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+sigma_int**2+self.sigma_bias**2))
+        return np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+sigma_int**2+self.sigma_bias**2+self.sigma_mu_photoz**2))
 
     def chi2_nowa(self, Om, w0):
 
-        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, self.wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2)))
+        return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, self.wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2+self.sigma_mu_photoz**2)))
 
     def tchi2(self, tup):
         Om, w0, wa, sigma_int = tup
