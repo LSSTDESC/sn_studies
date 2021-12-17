@@ -163,7 +163,10 @@ parser.add_option("--fit_parameters", type=str, default='Om,w0,wa',
                   help="parameters to fit [%default]")
 parser.add_option("--Ny", type=int, default=80,
                   help="y-band visits max at 0.9 [%default]")
-
+parser.add_option("--sigma_mu_photoz", type=str, default='',
+                  help="mu error from photoz [%default]")
+parser.add_option("--sigma_mu_bias_x1_color", type=str, default='sigma_mu_bias_x1_color_1_sigma',
+                  help="mu error bias from x1 and color n-sigma variation [%default]")
 
 opts, args = parser.parse_args()
 
@@ -185,6 +188,8 @@ configName = opts.configName
 binned_cosmology = opts.binned_cosmology
 dbNames_all = opts.dbNames_all .split(',')
 Ny = opts.Ny
+sigma_mu_photoz = opts.sigma_mu_photoz
+sigma_mu_bias_x1_color = opts.sigma_mu_bias_x1_color
 
 """
 dbC = []
@@ -251,10 +256,14 @@ params['sigma_mu'] = sigma_mu_from_simu
 params['params_fit'] = parameter_to_fit
 params['nsn_bias'] = nsn_bias
 params['sn_wfd'] = sn_wfd
-params['sigma_bias_x1_color'] = pd.read_hdf('sigma_mu_bias_x1_color.hdf5')
+params['sigma_bias_x1_color'] = pd.read_hdf(
+    '{}.hdf5'.format(sigma_mu_bias_x1_color))
 params['sigmaInt'] = sigmaInt
 params['binned_cosmology'] = binned_cosmology
 params['surveyType'] = surveyType
+params['sigma_mu_photoz'] = pd.DataFrame()
+if sigma_mu_photoz != '':
+    params['sigma_mu_photoz'] = pd.read_hdf('{}.hdf5'.format(sigma_mu_photoz))
 
 go_fit(nMC, params, nproc, fitparName)
 
