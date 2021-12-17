@@ -23,8 +23,8 @@ def sigma_photoz(Om=0.3, w0=-1.0, wa=0., sigma_phot=0.002, plot=False):
     ch = cosmo.mu_astro(zh, Om, w0, wa)
     deriv_mu = (ch-cref)/h
     res = pd.DataFrame(z, columns=['z'])
-    res['sigma_photoz'] = sigma_phot*(1.+z)*deriv_mu
-
+    res['sigma_mu_photoz'] = sigma_phot*(1.+z)*deriv_mu
+    res['sigma_photoz'] = sigma_phot
     """
     norm = cosmo.c/cosmo.H0
     norm *= 1.e6
@@ -36,7 +36,7 @@ def sigma_photoz(Om=0.3, w0=-1.0, wa=0., sigma_phot=0.002, plot=False):
     """
     if plot:
         fig, ax = plt.subplots()
-        ax.plot(res['z'], res['sigma_photoz'])
+        ax.plot(res['z'], res['sigma_mu_photoz'])
 
         ax.grid()
         ax.set_xlabel('$z$')
@@ -56,7 +56,8 @@ def estimate_syste(data, dbNames, nsigma, plot=False):
         res = syste()
         df_syste = pd.concat((df_syste, res))
 
-    df_syste.to_hdf('sigma_mu_bias_x1_color.hdf5', key='bias')
+    df_syste.to_hdf(
+        'sigma_mu_bias_x1_color_{}_sigma.hdf5'.format(nsigma), key='bias')
 
     if plot:
         fig, ax = plt.subplots()
@@ -788,10 +789,14 @@ for dbName in dbNames:
 
 
 # bias syste x1_color
-#estimate_syste(data, dbNames, nsigma, plot=True)
-
-# sigma_photoz()
-# print(test)
+estimate_syste(data, dbNames, nsigma, plot=True)
+"""
+sigma_phot = 0.02
+sigma_photoz = sigma_photoz(plot=False, sigma_phot=sigma_phot)
+sigma_photoz.to_hdf('sigma_mu_photoz_{}.hdf5'.format(
+    sigma_phot), key='sigma_photoz')
+"""
+print(test)
 
 
 if not binned:
