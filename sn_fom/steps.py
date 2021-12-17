@@ -435,10 +435,10 @@ class fit_SN_mu:
     def apply_sigma_photoz(self, data, fieldName, zsel, sigmu_interp):
 
         idx = data['fieldName'] == fieldName
-        sel = data[idx]
+        sel = pd.DataFrame(data[idx])
         if not sel.empty:
-            sel['sigma_mu_photoz'] = sigmu_interp(
-                sel['z_SN'])
+            z_SN = sel['z_SN']
+            sel['sigma_mu_photoz'] = sigmu_interp(z_SN)
             idx = sel['z_SN'] <= zsel
             sel.loc[idx, 'sigma_mu_photoz'] = 0.0
         return sel
