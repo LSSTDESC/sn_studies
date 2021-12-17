@@ -283,7 +283,7 @@ print('ggg', len(fis), cosmo_scen)
 #    print('moving to summ')
 res = make_summary(fis, cosmo_scen, runtype=opts.runtype)
 # get Ny visits
-Ny = int(opts.fileDir.split('_')[3])
+Ny = int(opts.fileDir.split('_')[-3])
 res['Ny'] = Ny
 outName = opts.config.replace('config_', '').replace(
     '.csv', '_Ny_{}.hdf5'.format(Ny))
