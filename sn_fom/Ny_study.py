@@ -40,9 +40,8 @@ def select(data, zcomp, fieldName, zcol='zcomp'):
     return data[idx]
 
 
-def get_infos(df, config, fieldName='XMM-LSS'):
+def get_infos(df, config, fieldName='XMM-LSS', Nys=[20, 30, 40, 60, 80, 120]):
 
-    Nys = [20, 30, 40, 60, 80, 120]
     zcomps = ['0.70', '0.75', '0.80', '0.85', '0.90']
 
     r = []
@@ -50,7 +49,8 @@ def get_infos(df, config, fieldName='XMM-LSS'):
         for zcomp in zcomps:
             idx = df[Ny]['zcomp'] == zcomp
             idx &= df[Ny]['fieldName'] == fieldName
-            idxb = config[Ny]['dbName'] == 'DD_{}_Ny_{}'.format(zcomp, Ny)
+            Nyv = int(Ny.split('a')[0])
+            idxb = config[Ny]['dbName'] == 'DD_{}_Ny_{}'.format(zcomp, Nyv)
 
             seldf = df[Ny][idx]
             idxc = seldf['z'] >= 0.9
@@ -63,7 +63,7 @@ def get_infos(df, config, fieldName='XMM-LSS'):
                 Nvisits += conf['Nvisits_{}'.format(b)].to_list()[0]
             print(Ny, zcomp, np.sum(selldf['nsn_eff']), Nvisits, Nvisits_y)
             r.append(
-                (Ny, zcomp, np.sum(selldf['nsn_eff']), Nvisits, Nvisits_y))
+                (Nyv, zcomp, np.sum(selldf['nsn_eff']), Nvisits, Nvisits_y))
 
     outdf = pd.DataFrame(
         r, columns=['Ny', 'zcomp', 'NSN_0.90', 'Nvisits', 'Nvisits_y'])
@@ -105,12 +105,13 @@ def plot(ax, res, zcomp, norm=1, xvar='Nvisits_y', yvar='Nvisits'):
     ax.plot(seldf[xvar], y,
             label='$z_{complete}$'+'= {}'.format(zcomp), lw=3, marker='o')
 
+    """
     f_cubic = interp1d(x, y, kind='quadratic')
     xmin, xmax = np.min(x), np.max(x)
     xnew = np.linspace(xmin, xmax, 100)
     ax.plot(xnew, f_cubic(xnew),
             label='$z_{complete}$'+'= {}'.format(zcomp), lw=3)
-
+    """
     """
     xmin, xmax = np.min(seldf[xvar]), np.max(seldf[xvar])
     xnew = np.linspace(xmin, xmax, 100)
@@ -122,10 +123,11 @@ def plot(ax, res, zcomp, norm=1, xvar='Nvisits_y', yvar='Nvisits'):
     """
 
 
-df, config = load_files()
+Nys = ['20', '40', '80', '10a', '20a', '30a', '40a', '60a', '80a']
+df, config = load_files(Nys)
 
 print(df)
-res = get_infos(df, config, fieldName='CDFS')
+res = get_infos(df, config, fieldName='CDFS', Nys=Nys)
 
 print(res)
 
