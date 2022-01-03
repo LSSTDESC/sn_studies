@@ -93,20 +93,27 @@ class Plot_NSN:
      list of fields to plot (default: ['COSMOS', 'XMM-LSS', 'CDFS', 'ELAIS', 'ADFS'])
     """
 
-    def __init__(self, fichName,
+    def __init__(self, fichNames,
                  zcomps=['0.90', '0.80', '0.70', '0.65'],
                  fieldNames=['COSMOS', 'XMM-LSS', 'CDFS', 'ELAIS', 'ADFS']):
 
-        data = pd.read_hdf(fichName)
+        data = {}
+
+        for fichName in fichNames:
+            data[fichName] = pd.read_hdf('{}.hdf5'.format(fichName))
+
         ls = dict(
             zip(zcomps, ['solid', 'dotted', 'dashed', 'dashdot']))
 
         for field in fieldNames:
-            idx = data['fieldName'] == field
-            sel = data[idx]
-            self.plot_field(field, sel, zcomps, ls)
+            fig, ax = plt.subplots(figsize=(12, 9))
+            fig.suptitle('{}'.format(field))
+            for key, vals in data.items():
+                idx = vals['fieldName'] == field
+                sel = vals[idx]
+                self.plot_field(ax, field, sel, zcomps, ls)
 
-    def plot_field(self, field, sel, zcomps, ls):
+    def plot_field(self, ax, field, sel, zcomps, ls):
         """
         This is where the plot is effectively made
 
@@ -122,8 +129,8 @@ class Plot_NSN:
           linestyle for the plot
 
         """
-        fig, ax = plt.subplots(figsize=(12, 9))
-        fig.suptitle('{}'.format(field))
+        #fig, ax = plt.subplots(figsize=(12, 9))
+        # fig.suptitle('{}'.format(field))
         print(type(sel))
         sel = sel.fillna(0)
         for zcomp in zcomps:
@@ -131,11 +138,12 @@ class Plot_NSN:
             selb = sel[idxb].to_records(index=False)
             idz = selb['z'] <= 1.09
             selb = selb[idz]
-            """
+
             ax.plot(selb['z'], selb['nsn_eff'],
-                    label='$z_{complee}$'+'= {}'.format(zcomp), lw=3)
-            """
+                    label='$z_{complee}$'+'= {}'.format(zcomp), lw=3, ls=ls[zcomp])
+
             xmax = np.max(selb['z'])
+            """
             xnew = np.linspace(
                 np.min(selb['z']), np.max(selb['z']), 100)
             spl = make_interp_spline(
@@ -145,7 +153,7 @@ class Plot_NSN:
             spl_smooth = spl(xnew)
             ax.plot(xnew, spl_smooth,
                     label='$z_{complete}$'+'= {}'.format(zcomp), ls=ls[zcomp], lw=3)
-
+            """
         ax.grid()
         ax.set_xlabel('$z$')
         ax.set_ylabel('N$_{\mathrm{SN}}$')
@@ -156,12 +164,16 @@ class Plot_NSN:
 
 parser = OptionParser(
     description='plot nsn and sigma_mu distributions')
-parser.add_option("--Ny", type=str, default='40',
-                  help="y-band visits [%default]")
+parser.add_option("--sigma_mu", type=str, default='sigma_mu_from_simu_Ny_40',
+                  help="sigma_mu file name [%default]")
+parser.add_option("--nsn_bias", type=str, default='nsn_bias_Ny_40',
+                  help="nsn bias file name [%default]")
 
 opts, args = parser.parse_args()
-Ny = opts.Ny
 
-Plot_NSN('nsn_bias_Ny_{}.hdf5'.format(Ny), fieldNames=['CDFS'])
-Plot_Sigma_mu('sigma_mu_from_simu_Ny_{}.hdf5'.format(Ny))
+nsn_bias = opts.nsn_bias.split(',')
+sigma_mu = opts.sigma_mu.split(',')
+
+Plot_NSN(nsn_bias, fieldNames=['CDFS'])
+# Plot_Sigma_mu(sigma_mu)
 plt.show()
