@@ -328,7 +328,7 @@ def select(dd):
     selected pandas df
 
     """
-    idx = dd['z'] < 1.2
+    idx = dd['z'] <= 1.2
     idx &= dd['z'] >= 0.01
     idx &= dd['fitstatus'] == 'fitok'
     idx &= np.sqrt(dd['Cov_colorcolor']) <= 0.04
