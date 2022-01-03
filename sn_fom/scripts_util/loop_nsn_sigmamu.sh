@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#python sn_studies/sn_fom/gime_nsn_sigma_mu.py --fileDir Fakes_x1_plus_1_sigma/Fit --outName_sigmamu sigma_mu_from_simu_Ny_40_x1_plus_1_sigma --outName_nsn nsn_bias_Ny_40_x1_plus_1_sigma
+#python sn_studies/sn_fom/gime_nsn_sigma_mu.py --fileDir Fakes_x1_minus_1_sigma/Fit --outName_sigmamu sigma_mu_from_simu_Ny_40_x1_minus_1_sigma --outName_nsn nsn_bias_Ny_40_x1_minus_1_sigma
+#python sn_studies/sn_fom/gime_nsn_sigma_mu.py --fileDir Fakes_color_plus_1_sigma/Fit --outName_sigmamu sigma_mu_from_simu_Ny_40_color_plus_1_sigma --outName_nsn nsn_bias_Ny_40_color_plus_1_sigma
+#python sn_studies/sn_fom/gime_nsn_sigma_mu.py --fileDir Fakes_color_minus_1_sigma/Fit --outName_sigmamu sigma_mu_from_simu_Ny_40_color_minus_1_sigma --outName_nsn nsn_bias_Ny_40_color_minus_1_sigma
+
+python sn_studies/sn_fom/gime_nsn_sigma_mu.py --fileDir Fakes_x1_plus_2_sigma/Fit --outName_sigmamu sigma_mu_from_simu_Ny_40_x1_plus_2_sigma --outName_nsn nsn_bias_Ny_40_x1_plus_2_sigma
+python sn_studies/sn_fom/gime_nsn_sigma_mu.py --fileDir Fakes_x1_minus_2_sigma/Fit --outName_sigmamu sigma_mu_from_simu_Ny_40_x1_minus_2_sigma --outName_nsn nsn_bias_Ny_40_x1_minus_2_sigma
+python sn_studies/sn_fom/gime_nsn_sigma_mu.py --fileDir Fakes_color_plus_2_sigma/Fit --outName_sigmamu sigma_mu_from_simu_Ny_40_color_plus_2_sigma --outName_nsn nsn_bias_Ny_40_color_plus_2_sigma
+python sn_studies/sn_fom/gime_nsn_sigma_mu.py --fileDir Fakes_color_minus_2_sigma/Fit --outName_sigmamu sigma_mu_from_simu_Ny_40_color_minus_2_sigma --outName_nsn nsn_bias_Ny_40_color_minus_2_sigma
