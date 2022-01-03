@@ -41,8 +41,11 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         params_fit = pd.read_hdf(fi)
         idx = params_fit['accuracy'] == 1
         params_fit = params_fit[idx]
-        # print(params_fit)
-        mean = np.median(params_fit['sigma_w0'])
+        # print(params_fit.columns)
+        sigma_w = np.median(params_fit['sigma_w0'])
+        sigma_Om = np.median(params_fit['sigma_Om'])
+        mean_w = np.median(params_fit['w0'])
+        mean_Om = np.median(params_fit['Om'])
         std = np.std(params_fit['sigma_w0'])
         nsn_DD = np.median(params_fit['nsn_DD'])
         nsn_z_09 = 0.
@@ -61,7 +64,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
             """
             ddf_dd, zcomp_dd, nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra = decode_scen(
                 scen, runtype=runtype)
-            r.append((conf, mean, std, ddf_dd, zcomp_dd,
+            r.append((conf, mean_Om, sigma_Om, mean_w, sigma_w, std, ddf_dd, zcomp_dd,
                       nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09))
 
     """
@@ -73,7 +76,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
     """
 
     res = pd.DataFrame(
-        r, columns=['conf', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd', 'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09'])
+        r, columns=['conf', 'Om', 'sigma_Om', 'w', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd', 'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09'])
     return res
 
 
@@ -266,6 +269,8 @@ parser.add_option('--config', type=str, default='config_cosmoSN_dr_0.9.csv',
                   help='config file  [%default]')
 parser.add_option('--runtype', type=str, default='deep_rolling',
                   help='runtype (deep_rolling/universal) [%default]')
+parser.add_option('--outName', type=str, default='config_cosmoSN_dr_0.9.hdf5',
+                  help='output file name [%default]')
 
 opts, args = parser.parse_args()
 
@@ -285,9 +290,11 @@ res = make_summary(fis, cosmo_scen, runtype=opts.runtype)
 # get Ny visits
 Ny = int(opts.fileDir.split('_')[-3])
 res['Ny'] = Ny
+"""
 outName = opts.config.replace('config_', '').replace(
     '.csv', '_Ny_{}.hdf5'.format(Ny))
-res.to_hdf(outName, key='cosmo')
+"""
+res.to_hdf('{}.hdf5'.format(opts.outName), key='cosmo')
 
 """
 res = pd.read_hdf(outName)
