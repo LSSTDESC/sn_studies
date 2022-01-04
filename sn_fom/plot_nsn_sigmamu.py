@@ -85,22 +85,28 @@ class Plot_NSN:
 
     Parameters
     ----------------
-    fichname: str
-      name of the file to process (plot)
+    nsn_bias: list(str)
+      name of the files to process (plot)
+   nsn_bias_syste: list(str)
+      name of the files for syste estimation (plot)
     zcomp: list(str), opt
       list of redshift completeness survey to plot (default: ['0.90', '0.80', '0.70', '0.65'])
     fieldNames: list(str), opt
      list of fields to plot (default: ['COSMOS', 'XMM-LSS', 'CDFS', 'ELAIS', 'ADFS'])
     """
 
-    def __init__(self, fichNames,
+    def __init__(self, nsn_bias, nsn_bias_syste,
                  zcomps=['0.90', '0.80', '0.70', '0.65'],
                  fieldNames=['COSMOS', 'XMM-LSS', 'CDFS', 'ELAIS', 'ADFS']):
 
         data = {}
+        data_syste = {}
 
-        for fichName in fichNames:
+        for fichName in nsn_bias:
             data[fichName] = pd.read_hdf('{}.hdf5'.format(fichName))
+
+        for fichName in nsn_bias_syste:
+            data_syste[fichName] = pd.read_hdf('{}.hdf5'.format(fichName))
 
         ls = dict(
             zip(zcomps, ['solid', 'dotted', 'dashed', 'dashdot']))
@@ -111,9 +117,10 @@ class Plot_NSN:
             for key, vals in data.items():
                 idx = vals['fieldName'] == field
                 sel = vals[idx]
-                self.plot_field(ax, field, sel, zcomps, ls)
+                syste = self.estimate_syste(field, sel, data_syste)
+                self.plot_field(ax, field, sel, zcomps, ls, syste)
 
-    def plot_field(self, ax, field, sel, zcomps, ls):
+    def plot_field(self, ax, field, sel, zcomps, ls, syste):
         """
         This is where the plot is effectively made
 
@@ -129,7 +136,7 @@ class Plot_NSN:
           linestyle for the plot
 
         """
-        #fig, ax = plt.subplots(figsize=(12, 9))
+        # fig, ax = plt.subplots(figsize=(12, 9))
         # fig.suptitle('{}'.format(field))
         print(type(sel))
         sel = sel.fillna(0)
@@ -138,9 +145,34 @@ class Plot_NSN:
             selb = sel[idxb].to_records(index=False)
             idz = selb['z'] <= 1.09
             selb = selb[idz]
-
+            """
             ax.plot(selb['z'], selb['nsn_eff'],
-                    label='$z_{complee}$'+'= {}'.format(zcomp), lw=3, ls=ls[zcomp])
+                    label='$z_{complete}$'+'= {}'.format(zcomp), lw=3, ls=ls[zcomp])
+            """
+            if not syste.empty:
+                syste['nsn_eff_plus'] = syste['nsn_eff']+syste['syste']
+                syste['nsn_eff_minus'] = syste['nsn_eff']-syste['syste']
+
+                idxs = syste['zcomp'] == zcomp
+                selsyst = syste[idxs].to_records(index=False)
+                nsn_tot = np.sum(selsyst['nsn_eff'])
+                nsn_tot_plus = np.sum(selsyst['nsn_eff_plus'])
+                nsn_tot_minus = np.sum(selsyst['nsn_eff_minus'])
+                print(zcomp, nsn_tot, nsn_tot_plus,
+                      nsn_tot_minus, nsn_tot-nsn_tot_plus)
+                ax.fill_between(
+                    selsyst['z'], selsyst['nsn_eff_plus'], selsyst['nsn_eff_minus'], color='yellow')
+                """
+                xnew, smootha = self.smooth_it(
+                    selsyst, vary='nsn_eff_plus', k=25)
+                xnew, smoothb = self.smooth_it(
+                    selsyst, vary='nsn_eff_minus', k=25)
+                
+                
+                ax.fill_between(
+                    xnew, smootha, smoothb, color='yellow')
+                """
+                #ax.plot(selsyst['z'], selsyst['nsn_syste'], lw=3, ls=ls[zcomp])
 
             xmax = np.max(selb['z'])
             """
@@ -151,15 +183,94 @@ class Plot_NSN:
             print('NSN', zcomp, np.sum(
                 selb['nsn_eff']), np.sum(selb['nsn_eff']))
             spl_smooth = spl(xnew)
+            """
+            xnew, spl_smooth = self.smooth_it(selb)
             ax.plot(xnew, spl_smooth,
                     label='$z_{complete}$'+'= {}'.format(zcomp), ls=ls[zcomp], lw=3)
-            """
+
         ax.grid()
         ax.set_xlabel('$z$')
         ax.set_ylabel('N$_{\mathrm{SN}}$')
         ax.legend()
         ax.set_xlim([0.05, xmax])
         ax.set_ylim([0.0, None])
+
+    def smooth_it(self, selb, varx='z', vary='nsn_eff', k=7):
+
+        xmax = np.max(selb['z'])
+
+        xnew = np.linspace(
+            np.min(selb[varx]), np.max(selb[varx]), 100)
+        spl = make_interp_spline(
+            selb[varx], selb[vary], k=k)  # type: BSpline
+        spl_smooth = spl(xnew)
+
+        return xnew, spl_smooth
+
+    def estimate_syste(self, field, data, data_syste):
+
+        syste = {}
+
+        # print(data)
+        syste_posl = []
+        syste_negl = []
+        for key, vals in data_syste.items():
+            idx = vals['fieldName'] == field
+            sel = vals[idx]
+            # print(sel)
+            tt = data.merge(
+                sel, left_on=['z', 'zcomp'], right_on=['z', 'zcomp'])
+            tt['delta_n'] = tt['nsn_eff_x']-tt['nsn_eff_y']
+            res = tt[['z', 'zcomp', 'delta_n', 'nsn_eff_x']]
+            res = res.rename(columns={'nsn_eff_x': 'nsn_eff'})
+            mean_delta = np.mean(res['delta_n'])
+            if mean_delta > 0:
+                syste_posl.append(res)
+            else:
+                syste_negl.append(res)
+
+        # now estimate positive and negative systematics
+
+        if len(syste_posl) > 1:
+            syste_pos = syste_posl[0].merge(
+                syste_posl[1], left_on=['z', 'zcomp'], right_on=['z', 'zcomp'])
+            syste_pos['syste'] = np.sqrt(
+                syste_pos['delta_n_x']**2+syste_pos['delta_n_y']**2)
+            syste_pos['nsn_syste'] = syste_pos['nsn_eff_x']+syste_pos['syste']
+            syste_pos['syste_type'] = 'pos'
+            syste_pos = syste_pos.rename(columns={'nsn_eff_x': 'nsn_eff'})
+
+        else:
+            syste_pos = syste_posl[0]
+            syste_pos['syste'] = np.sqrt(
+                syste_pos['delta_n']**2)
+            syste_pos['nsn_syste'] = syste_pos['nsn_eff']+syste_pos['syste']
+            syste_pos['syste_type'] = 'pos'
+
+        if len(syste_negl) > 1:
+            syste_neg = syste_negl[0].merge(
+                syste_negl[1], left_on=['z', 'zcomp'], right_on=['z', 'zcomp'])
+            syste_neg['syste'] = np.sqrt(
+                syste_neg['delta_n_x']**2+syste_neg['delta_n_y']**2)
+            syste_neg['nsn_syste'] = syste_neg['nsn_eff_x']-syste_neg['syste']
+            syste_neg['syste_type'] = 'neg'
+
+            syste_neg = syste_neg.rename(columns={'nsn_eff_x': 'nsn_eff'})
+        else:
+            syste_neg = syste_negl[0]
+            syste_neg['syste'] = np.sqrt(
+                syste_neg['delta_n']**2)
+            syste_neg['nsn_syste'] = syste_neg['nsn_eff']-syste_neg['syste']
+            syste_neg['syste_type'] = 'neg'
+
+        vvar = ['z', 'zcomp', 'nsn_eff', 'syste']
+
+        syste = syste_pos[vvar].merge(syste_neg[vvar], left_on=[
+                                      'z', 'zcomp'], right_on=['z', 'zcomp'])
+        syste['syste'] = syste[['syste_x', 'syste_y']].max(axis=1)
+        syste = syste.rename(columns={'nsn_eff_x': 'nsn_eff'})
+
+        return syste
 
 
 parser = OptionParser(
@@ -168,12 +279,15 @@ parser.add_option("--sigma_mu", type=str, default='sigma_mu_from_simu_Ny_40',
                   help="sigma_mu file name [%default]")
 parser.add_option("--nsn_bias", type=str, default='nsn_bias_Ny_40',
                   help="nsn bias file name [%default]")
+parser.add_option("--nsn_bias_syste", type=str,
+                  default='nsn_bias_Ny_40_color_plus_1_sigma,nsn_bias_Ny_40_color_minus_1_sigma,nsn_bias_Ny_40_x1_plus_1_sigma,nsn_bias_Ny_40_x1_minus_1_sigma', help="nsn bias syste files [%default]")
 
 opts, args = parser.parse_args()
 
 nsn_bias = opts.nsn_bias.split(',')
+nsn_bias_syste = opts.nsn_bias_syste.split(',')
 sigma_mu = opts.sigma_mu.split(',')
 
-Plot_NSN(nsn_bias, fieldNames=['CDFS'])
+Plot_NSN(nsn_bias, nsn_bias_syste, fieldNames=['CDFS'])
 # Plot_Sigma_mu(sigma_mu)
 plt.show()
