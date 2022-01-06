@@ -803,17 +803,33 @@ class Sigma_mu_obs:
             snType = self.snTypes[io]
             data_sn = transformSN(self.fileDir, dbName,
                                   snType, self.alpha, self.beta, self.Mb)
-            bdata = binned_data(zmin, zmax, nbins, data_sn)
+            for vv in ['x1', 'color', 'mb']:
+                vvb = 'sigma_{}'.format(vv)
+                if vvb not in data_sn.columns:
+                    vvc = 'Cov_{}{}'.format(vv, vv)
+                    data_sn[vvb] = np.sqrt(data_sn[vvc])
+            bdatat = pd.DataFrame()
+            for var in ['mu', 'sigma_mu', 'sigma_color', 'sigma_x1', 'sigma_mb']:
+                bdata = binned_data(zmin, zmax, nbins, data_sn, var)
+                bdata = bdata.round({'z': 2})
+                bdata = self.check_fill(bdata, '{}_mean'.format(var))
+                if bdatat.empty:
+                    bdatat = bdata
+                else:
+                    bdatat = bdatat.merge(bdata, left_on=['z'], right_on=['z'])
+
+            """    
             bdatab = binned_data(zmin, zmax, nbins, data_sn, 'mu')
+            
             bdata = bdata.round({'z': 2})
             bdatab = bdatab.round({'z': 2})
 
             bdata = self.check_fill(bdata, 'sigma_mu_mean')
             bdatab = self.check_fill(bdatab, 'mu_mean')
             bdata = bdata.merge(bdatab, left_on=['z'], right_on=['z'])
-
-            bdata['dbName'] = dbName
-            df = pd.concat((df, bdata))
+            """
+            bdatat['dbName'] = dbName
+            df = pd.concat((df, bdatat))
         return df
 
     def check_fill(self, data, var):
