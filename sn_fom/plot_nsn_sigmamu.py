@@ -5,6 +5,123 @@ from scipy.interpolate import make_interp_spline
 from optparse import OptionParser
 
 
+def get_sigma_mb_z(fichName, dbNames=['DD_0.90', 'DD_0.85', 'DD_0.80', 'DD_0.75', 'DD_0.70', 'DD_0.65']):
+
+    vvars = ['z', 'dbName', 'sigma_mb_mean']
+    prefName = 'sigma_mb_from_simu'
+    for fich in fichName:
+        data = pd.read_hdf('{}.hdf5'.format(fich))
+
+        prefix = fich.split('.')[0].split('_')
+        print('boo', prefix)
+        prefix = '_'.join(pp for pp in prefix[-2:])
+        print('allo', prefix)
+        for dbName in dbNames:
+            idx = data['dbName'] == dbName
+            seldata = data[idx]
+            df = seldata[vvars]
+            df = df.rename(columns={'sigma_mb_mean': 'sigma_mb'})
+            outName = '{}_{}_{}.hdf5'.format(prefName, dbName, prefix)
+            df.to_hdf(outName, key='sigma_mb')
+
+
+class Plot_Sigma_Components:
+    """
+    class to plot sigma componentsvs z for a set of redshift completeness survey
+
+    Parameters
+    ----------------
+    fichname: str
+      name of the file to process (plot)
+    dbNames: list(str), opt
+      list of redshift completeness survey to plot (default: ['DD_0.90', 'DD_0.80', 'DD_0.70', 'DD_0.65'])
+    alpha: float, opt
+      alpha parameter to estimate x1 error contribution (default: 0.13)
+    beta: float, opt
+      alpha parameter to estimate color error contribution (default: 3.1)
+
+    """
+
+    def __init__(self, fichName, dbNames=['DD_0.90', 'DD_0.80', 'DD_0.70', 'DD_0.65'], alpha=0.13, beta=3.1):
+
+        self.alpha = alpha
+        self.beta = beta
+        self.dbNames = dbNames
+        for fich in fichName:
+            data = pd.read_hdf('{}.hdf5'.format(fich))
+            self.plot_sigma_component(data)
+
+    def plot_sigma_component(self, dd):
+        """
+        This is where the plot is effectively made
+
+        Parameters
+        --------------
+        dd: pandas df
+          data to plot
+
+        """
+        """
+        zmin = 0.1
+        zmax = 1.1
+        nbins = 20
+
+        dres = pd.DataFrame()
+        for key, val in dd.items():
+            da = binned_data(zmin, zmax, nbins, val)
+            da['dbName'] = key
+            dres = pd.concat((dres, da))
+        """
+
+        for dbName in self.dbNames:
+            idx = dd['dbName'] == dbName
+            sel = dd[idx]
+            sel = sel.sort_values(by=['z'])
+            sel = sel.fillna(0)
+            selb = sel.to_records(index=False)
+            idz = selb['z'] <= 1.09
+            selb = selb[idz]
+            zcomp = dbName.split('_')[-1]
+            self.plot_Indiv(zcomp, selb)
+
+    def plot_Indiv(self, zcomp, selb):
+
+        fig, ax = plt.subplots(figsize=(12, 9))
+        fig.suptitle('$z_{complete}$='+str(zcomp))
+        vvars = ['mu', 'x1', 'color', 'mb']
+        coeffs = dict(zip(vvars, [1, 0.14, 3.1, 1.]))
+        for vv in vvars:
+            ax.plot(selb['z'], coeffs[vv]*selb['sigma_{}_mean'.format(vv)],
+                    label=vv, lw=3)
+        """
+        ax.plot(selb['z'], selb['sigma_mu_mean'],
+                label='$\mu$', lw=3)
+        ax.plot(selb['z'], self.alpha*selb['sigma_x1_mean'],
+                label='$\alpha x$', lw=3)
+        ax.plot(selb['z'], self.beta*selb['sigma_color_mean'],
+                label='$\beta c$', lw=3)
+        ax.plot(selb['z'], selb['sigma_mb_mean'],
+                label='$m_b$', lw=3)
+        xmax = np.max(selb['z'])
+        """
+        """
+        xnew = np.linspace(
+                np.min(selb['z']), np.max(selb['z']), 100)
+            selfpl = make_interp_spline(
+                selb['z'], selb['sigma_mu_mean'], k=3)  # type: BSpline
+            spl_smooth = spl(xnew)
+            ax.plot(xnew, spl_smooth,
+                    label='$z_{complete}$'+'= {}'.format(zcomp), ls=ls[dbName], lw=3)
+        """
+        ax.grid()
+        ax.set_ylabel('error budget')
+        ax.set_xlabel('$z$')
+        ax.legend()
+        xmax = np.max(selb['z'])
+        ax.set_xlim([0.05, xmax])
+        ax.set_ylim([0.0, None])
+
+
 class Plot_Sigma_mu:
     """
     class to plot sigma_mu vs z for a set of redshift completeness survey
@@ -21,7 +138,7 @@ class Plot_Sigma_mu:
     def __init__(self, fichName, dbNames=['DD_0.90', 'DD_0.80', 'DD_0.70', 'DD_0.65']):
 
         self.dbNames = dbNames
-        data = pd.read_hdf(fichName)
+        data = pd.read_hdf('{}.hdf5'.format(fichName[0]))
         self.plot_sigma_mu(data)
 
     def plot_sigma_mu(self, dd):
@@ -172,7 +289,7 @@ class Plot_NSN:
                 ax.fill_between(
                     xnew, smootha, smoothb, color='yellow')
                 """
-                #ax.plot(selsyst['z'], selsyst['nsn_syste'], lw=3, ls=ls[zcomp])
+                # ax.plot(selsyst['z'], selsyst['nsn_syste'], lw=3, ls=ls[zcomp])
 
             xmax = np.max(selb['z'])
             """
@@ -288,6 +405,9 @@ nsn_bias = opts.nsn_bias.split(',')
 nsn_bias_syste = opts.nsn_bias_syste.split(',')
 sigma_mu = opts.sigma_mu.split(',')
 
-Plot_NSN(nsn_bias, nsn_bias_syste, fieldNames=['CDFS'])
+# Plot_NSN(nsn_bias, nsn_bias_syste, fieldNames=['CDFS'])
 # Plot_Sigma_mu(sigma_mu)
+# Plot_Sigma_Components(sigma_mu, dbNames=['DD_0.90', 'DD_0.65'])
 plt.show()
+# save sigma_mb vs z
+get_sigma_mb_z(sigma_mu)
