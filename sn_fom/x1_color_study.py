@@ -210,7 +210,9 @@ class Syste_x1_color:
                         'x1_plus_{}_sigma'.format(nsigma),
                         'x1_minus_{}_sigma'.format(nsigma),
                         'color_plus_{}_sigma'.format(nsigma),
-                        'color_minus_{}_sigma'.format(nsigma)]
+                        'color_minus_{}_sigma'.format(nsigma),
+                        'sigmaInt_plus_{}_sigma'.format(nsigma),
+                        'sigmaInt_minus_{}_sigma'.format(nsigma)]
         """
         corresp = dict(zip(configs, ['nominal',
                                      '$x_1 + {}\sigma$'.format(nsigma),
@@ -287,6 +289,8 @@ class Syste_x1_color:
             if 'plus' in config:
 
                 vvconf = config.split('_')[0]
+                if vvconf == 'sigmaInt':
+                    vvconf = 'Mb'
                 bb = ref.merge(df, left_on=['z'], right_on=['z'])
 
                 for vv in ['x1_fit', 'color_fit', 'Mb']:
@@ -320,29 +324,36 @@ class Syste_x1_color:
 
         alpha = 0.13
         beta = 3.1
-        sigma_int = 0.12
 
-        dfsyst['delta_x1'] = 0.0
-        dfsyst['delta_color'] = 0.0
-        dfsyst['delta_Mb'] = 0.0
+        # replace deltas by covariance
+        dfsyst = dfsyst.rename(columns=lambda x: x.replace('delta', 'Cov'))
+        print('hello', dfsyst.columns, dfsyst)
+        for vv in ['x1', 'color', 'Mb']:
+            vvb = 'Cov_{}_{}'.format(vv, vv)
+            dfsyst[vvb] = dfsyst[vvb]**2
+            #dfsyst['delta_color'] += dfsyst['delta_color_{}'.format(vv)]
+            #dfsyst['delta_Mb'] += dfsyst['delta_Mb_{}'.format(vv)]
 
-        for vv in ['x1', 'color']:
-            dfsyst['delta_x1'] += dfsyst['delta_x1_{}'.format(vv)]
-            dfsyst['delta_color'] += dfsyst['delta_color_{}'.format(vv)]
-            dfsyst['delta_Mb'] += dfsyst['delta_Mb_{}'.format(vv)]
-
+        dfsyst['delta_mu_bias'] = alpha**2*dfsyst['Cov_x1_x1']
+        dfsyst['delta_mu_bias'] += beta**2*dfsyst['Cov_color_color']
+        dfsyst['delta_mu_bias'] += dfsyst['Cov_Mb_Mb']
+        # covariance terms
+        """
+        dfsyst['delta_mu_bias'] += 2.*alpha*dfsyst['Cov_Mb_x1']
+        dfsyst['delta_mu_bias'] += -2.*alpha*beta*dfsyst['Cov_color_x1']
+        dfsyst['delta_mu_bias'] += -2.*beta*dfsyst['Cov_Mb_color']
+        """
         """
         dfsyst['delta_mu_x1'] = dfsyst['delta_Mb_x1']**2 + \
             alpha**2*dfsyst['delta_x1']**2
         dfsyst['delta_mu_color'] = dfsyst['delta_Mb_color']**2 + \
             beta**2*dfsyst['delta_color']**2
-        """
+        
         dfsyst['delta_mu_x1'] = np.sqrt(alpha**2*dfsyst['delta_x1']**2)
         dfsyst['delta_mu_color'] = np.sqrt(beta**2*dfsyst['delta_color']**2)
         dfsyst['delta_mu_Mb'] = np.sqrt(beta**2*dfsyst['delta_Mb']**2)
-
-        dfsyst['delta_mu_bias'] = np.sqrt(
-            dfsyst['delta_mu_x1']**2+dfsyst['delta_mu_color']**2+dfsyst['delta_mu_Mb']**2)
+        """
+        dfsyst['delta_mu_bias'] = np.sqrt(dfsyst['delta_mu_bias'])
 
         return dfsyst
 
@@ -363,7 +374,9 @@ def plot_test_b(dd, dbName='DD_0.65', nsigma=1):
                'x1_plus_{}_sigma'.format(nsigma),
                'x1_minus_{}_sigma'.format(nsigma),
                'color_plus_{}_sigma'.format(nsigma),
-               'color_minus_{}_sigma'.format(nsigma)]
+               'color_minus_{}_sigma'.format(nsigma),
+               'sigmaInt_plus_{}_sigma'.format(nsigma),
+               'sigmaInt_minus_{}_sigma'.format(nsigma)]
 
     corresp = dict(zip(configs, ['nominal',
                                  '$x_1 + {}\sigma$'.format(nsigma),
@@ -826,7 +839,9 @@ data = {}
 fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma),
           'Fakes_x1_minus_{}_sigma'.format(nsigma),
           'Fakes_color_plus_{}_sigma'.format(nsigma),
-          'Fakes_color_minus_{}_sigma'.format(nsigma)]
+          'Fakes_color_minus_{}_sigma'.format(nsigma),
+          'Fakes_sigmaInt_plus_{}_sigma'.format(nsigma),
+          'Fakes_sigmaInt_minus_{}_sigma'.format(nsigma)]
 
 fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma)]
 
