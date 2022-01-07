@@ -5,7 +5,7 @@ from scipy.interpolate import make_interp_spline
 from optparse import OptionParser
 
 
-def get_sigma_mb_z(fichName, dbNames=['DD_0.90', 'DD_0.85', 'DD_0.80', 'DD_0.75', 'DD_0.70', 'DD_0.65']):
+def get_sigma_mb_z(fichName, dbNames=['DD_0.90', 'DD_0.85', 'DD_0.80', 'DD_0.75', 'DD_0.70', 'DD_0.65', 'DD_0.60', 'DD_0.55', 'DD_0.50']):
 
     vvars = ['z', 'dbName', 'sigma_mb_mean']
     prefName = 'sigma_mb_from_simu'
