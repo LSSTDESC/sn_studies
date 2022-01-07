@@ -135,13 +135,22 @@ class Plot_Sigma_mu:
 
     """
 
-    def __init__(self, fichName, dbNames=['DD_0.90', 'DD_0.80', 'DD_0.70', 'DD_0.65']):
+    def __init__(self, fichName, sigmamu_syste, dbNames=['DD_0.90', 'DD_0.80', 'DD_0.70', 'DD_0.65']):
 
         self.dbNames = dbNames
-        data = pd.read_hdf('{}.hdf5'.format(fichName[0]))
-        self.plot_sigma_mu(data)
 
-    def plot_sigma_mu(self, dd):
+        data = pd.read_hdf('{}.hdf5'.format(fichName[0]))
+
+        data_syste = {}
+        for fichName in sigmamu_syste:
+            data_syste[fichName] = pd.read_hdf('{}.hdf5'.format(fichName))
+
+        # estimate systematics here
+        syste = self.estimate_syste(data, data_syste)
+        print('syste', syste)
+        self.plot_sigma_mu(data, syste)
+
+    def plot_sigma_mu(self, dd, syste):
         """
         This is where the plot is effectively made
 
@@ -188,12 +197,99 @@ class Plot_Sigma_mu:
             ax.plot(xnew, spl_smooth,
                     label='$z_{complete}$'+'= {}'.format(zcomp), ls=ls[dbName], lw=3)
 
+            if not syste.empty:
+                syste['sigma_mu_mean_plus'] = syste['sigma_mu_mean'] + \
+                    syste['syste']
+                syste['sigma_mu_mean_minus'] = syste['sigma_mu_mean'] - \
+                    syste['syste']
+                idxs = syste['zcomp'] == dbName
+                selsyst = syste[idxs].to_records(index=False)
+                nsn_tot = np.sum(selsyst['sigma_mu_mean'])
+                nsn_tot_plus = np.sum(selsyst['sigma_mu_mean_plus'])
+                nsn_tot_minus = np.sum(selsyst['sigma_mu_mean_minus'])
+                print(zcomp, nsn_tot, nsn_tot_plus,
+                      nsn_tot_minus, nsn_tot-nsn_tot_plus)
+                ax.fill_between(
+                    selsyst['z'], selsyst['sigma_mu_mean_plus'], selsyst['sigma_mu_mean_minus'], color='yellow')
+
         ax.grid()
         ax.set_ylabel('<$\sigma_\mu$>')
         ax.set_xlabel('$z$')
         ax.legend()
         ax.set_xlim([0.05, xmax])
         ax.set_ylim([0.0, None])
+
+    def estimate_syste(self, data, data_syste):
+
+        syste = {}
+        data['zcomp'] = data['dbName']
+        # print(data)
+        syste_posl = []
+        syste_negl = []
+        for key, sel in data_syste.items():
+            print('allo syste', key)
+            sel['zcomp'] = sel['dbName']
+            # print(sel)
+            tt = data.merge(
+                sel, left_on=['z', 'zcomp'], right_on=['z', 'zcomp'])
+            tt['delta_sigma_mu'] = tt['sigma_mu_mean_x']-tt['sigma_mu_mean_y']
+            res = tt[['z', 'zcomp', 'delta_sigma_mu', 'sigma_mu_mean_x']]
+            res = res.rename(columns={'sigma_mu_mean_x': 'sigma_mu_mean'})
+            mean_delta = np.mean(res['delta_sigma_mu'])
+            print(res)
+            if mean_delta > 0:
+                syste_posl.append(res)
+            else:
+                syste_negl.append(res)
+
+        # now estimate positive and negative systematics
+
+        if len(syste_posl) > 1:
+            syste_pos = syste_posl[0].merge(
+                syste_posl[1], left_on=['z', 'zcomp'], right_on=['z', 'zcomp'])
+            syste_pos['syste'] = np.sqrt(
+                syste_pos['delta_sigma_mu_x']**2+syste_pos['delta_sigma_mu_y']**2)
+            syste_pos['sigma_mu_syste'] = syste_pos['sigma_mu_mean_x'] + \
+                syste_pos['syste']
+            syste_pos['syste_type'] = 'pos'
+            syste_pos = syste_pos.rename(
+                columns={'sigma_mu_mean_x': 'sigma_mu_mean'})
+
+        else:
+            syste_pos = syste_posl[0]
+            syste_pos['syste'] = np.sqrt(
+                syste_pos['delta_sigma_mu']**2)
+            syste_pos['sigma_mu_syste'] = syste_pos['sigma_mu_mean'] + \
+                syste_pos['syste']
+            syste_pos['syste_type'] = 'pos'
+
+        if len(syste_negl) > 1:
+            syste_neg = syste_negl[0].merge(
+                syste_negl[1], left_on=['z', 'zcomp'], right_on=['z', 'zcomp'])
+            syste_neg['syste'] = np.sqrt(
+                syste_neg['delta_sigma_mu_x']**2+syste_neg['delta_sigma_mu_y']**2)
+            syste_neg['sigma_mu_syste'] = syste_neg['sigma_mu_mean_x'] - \
+                syste_neg['syste']
+            syste_neg['syste_type'] = 'neg'
+
+            syste_neg = syste_neg.rename(
+                columns={'sigma_mu_mean_x': 'sigma_mu_mean'})
+        else:
+            syste_neg = syste_negl[0]
+            syste_neg['syste'] = np.sqrt(
+                syste_neg['delta_sigma_mu']**2)
+            syste_neg['sigma_mu_syste'] = syste_neg['sigma_mu_mean'] - \
+                syste_neg['syste']
+            syste_neg['syste_type'] = 'neg'
+
+        vvar = ['z', 'zcomp', 'sigma_mu_mean', 'syste']
+
+        syste = syste_pos[vvar].merge(syste_neg[vvar], left_on=[
+                                      'z', 'zcomp'], right_on=['z', 'zcomp'])
+        syste['syste'] = syste[['syste_x', 'syste_y']].max(axis=1)
+        syste = syste.rename(columns={'sigma_mu_mean_x': 'sigma_mu_mean'})
+
+        return syste
 
 
 class Plot_NSN:
@@ -332,6 +428,7 @@ class Plot_NSN:
         syste_posl = []
         syste_negl = []
         for key, vals in data_syste.items():
+            print('allo syste', key)
             idx = vals['fieldName'] == field
             sel = vals[idx]
             # print(sel)
@@ -341,6 +438,7 @@ class Plot_NSN:
             res = tt[['z', 'zcomp', 'delta_n', 'nsn_eff_x']]
             res = res.rename(columns={'nsn_eff_x': 'nsn_eff'})
             mean_delta = np.mean(res['delta_n'])
+            print(res)
             if mean_delta > 0:
                 syste_posl.append(res)
             else:
@@ -397,17 +495,21 @@ parser.add_option("--sigma_mu", type=str, default='sigma_mu_from_simu_Ny_40',
 parser.add_option("--nsn_bias", type=str, default='nsn_bias_Ny_40',
                   help="nsn bias file name [%default]")
 parser.add_option("--nsn_bias_syste", type=str,
-                  default='nsn_bias_Ny_40_color_plus_1_sigma,nsn_bias_Ny_40_color_minus_1_sigma,nsn_bias_Ny_40_x1_plus_1_sigma,nsn_bias_Ny_40_x1_minus_1_sigma', help="nsn bias syste files [%default]")
+                  default='nsn_bias_Ny_40_color_plus_1_sigma,nsn_bias_Ny_40_color_minus_1_sigma,nsn_bias_Ny_40_x1_plus_1_sigma,nsn_bias_Ny_40_x1_minus_1_sigma,nsn_bias_Ny_40_mb_plus_1_sigma,nsn_bias_Ny_40_mb_minus_1_sigma', help="nsn bias syste files [%default]")
+parser.add_option("--sigma_mu_syste", type=str,
+                  default='sigma_mu_from_simu_Ny_40_mb_plus_1_sigma,sigma_mu_from_simu_Ny_40_mb_minus_1_sigma,sigma_mu_from_simu_Ny_40_x1_plus_1_sigma,sigma_mu_from_simu_Ny_40_x1_minus_1_sigma,sigma_mu_from_simu_Ny_40_color_plus_1_sigma,sigma_mu_from_simu_Ny_40_color_minus_1_sigma', help="nsn bias syste files [%default]")
+
 
 opts, args = parser.parse_args()
 
 nsn_bias = opts.nsn_bias.split(',')
 nsn_bias_syste = opts.nsn_bias_syste.split(',')
 sigma_mu = opts.sigma_mu.split(',')
+sigma_mu_syste = opts.sigma_mu_syste.split(',')
 
-# Plot_NSN(nsn_bias, nsn_bias_syste, fieldNames=['CDFS'])
-# Plot_Sigma_mu(sigma_mu)
+Plot_NSN(nsn_bias, nsn_bias_syste, fieldNames=['CDFS'])
+Plot_Sigma_mu(sigma_mu, sigma_mu_syste)
 # Plot_Sigma_Components(sigma_mu, dbNames=['DD_0.90', 'DD_0.65'])
 plt.show()
 # save sigma_mb vs z
-get_sigma_mb_z(sigma_mu)
+# get_sigma_mb_z(sigma_mu)
