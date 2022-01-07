@@ -70,6 +70,7 @@ class fit_SN_mu:
         data_sn = self.simul_distmod()
         # add bias corr and resimulate
         data_sn = self.add_sigbias_resimulate(data_sn, sigmaInt)
+
         """
         print('after bias corr', data_sn)
         import matplotlib.pyplot as plt
@@ -701,10 +702,10 @@ def getSN_mu_simu_old(fileDir, dbName, config, fields, sigmu_from_simu):
 def getSN_mu_simu_wfd(fileDir, dbName, sigmu_from_simu, nfich=-1, nsn=5000, sigmaInt=0.12):
 
     zst = np.mean(np.diff(sigmu_from_simu['z']))/2
-    print('alors man', zst)
-    zmin = 0.
-    zmax = sigmu_from_simu['z'].max()+zst
-    bins = np.arange(zmin, zmax, 2.*zst)
+
+    zmin = 0.005
+    zmax = sigmu_from_simu['z'].max()+2.*zst
+    bins = np.arange(zmin, zmax+2.*zst, 2.*zst)
 
     # get SN from simu
     data_sn = select(loadSN(fileDir, dbName, 'WFD', nfich=nfich))
