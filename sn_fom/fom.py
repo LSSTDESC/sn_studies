@@ -161,7 +161,7 @@ parser.add_option("--dbNames_all", type=str,
                   help="dbNames to consider to estimate reference files [%default]")
 parser.add_option("--fit_parameters", type=str, default='Om,w0,wa',
                   help="parameters to fit [%default]")
-parser.add_option("--Ny", type=int, default=80,
+parser.add_option("--Ny", type=int, default=40,
                   help="y-band visits max at 0.9 [%default]")
 parser.add_option("--sigma_mu_photoz", type=str, default='',
                   help="mu error from photoz [%default]")
