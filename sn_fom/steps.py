@@ -89,6 +89,7 @@ class fit_SN_mu:
             sn_wfd['sigma_bias_x1_color'] = 0.0
             sn_wfd['sigma_mu_photoz'] = 0.0
             sn_wfd['zcomp'] = 0.6
+            sn_wfd['dd_type'] = 'unknown'
             data_sn = pd.concat((data_sn, sn_wfd))
 
         # print(test)
@@ -146,7 +147,7 @@ class fit_SN_mu:
 
         group = data.groupby(pd.cut(data.z_SN, bins))
         # print(group.size())
-        bin_centers = (bins[:-1] + bins[1:])/2
+        bin_centers = (bins[: -1] + bins[1:])/2
         # bin_values = group['mu_SN'].mean().to_list()
 
         bin_values = group.apply(
@@ -379,13 +380,14 @@ class fit_SN_mu:
         # add bias x1_color
         data_sn = self.add_bias_x1_color(data_sn)
         # add sigma_mu_photoz
-        data_sn = self.add_sigma_photoz(data_sn)
+        data_sn = self.add_sigma_photoz(data_sn, check_plot=False)
 
         # plot to cross-check
-        # import matplotlib.pyplot as plt
-        # plt.plot(data_sn['z_SN'], data_sn['sigma_bias_x1_color'], 'ko')
-        # plt.show()
-
+        """
+        import matplotlib.pyplot as plt
+        plt.plot(data_sn['z_SN'], data_sn['sigma_mu_photoz'], 'ko')
+        plt.show()
+        """
         # re-estimate the distance moduli including the bias error - for DD only - faster
         from sn_fom.cosmo_fit import CosmoDist
         from random import gauss
@@ -402,14 +404,29 @@ class fit_SN_mu:
 
     def add_sigma_photoz(self, data, check_plot=False):
 
+        # get the number of seasons for ultra and deep fields
+        n_host_obs = {}
+        n_host_obs['ultra_dd'] = self.get_nseasons(['COSMOS', 'XMM-LSS'])*200
+        n_host_obs['deep_dd'] = self.get_nseasons(
+            ['CDFS', 'ELAIS', 'ADFS'])*500
+
         sigma_photoz = 0.
+        data['sigma_photoz'] = sigma_photoz
         fieldNames = ['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS']
+        nhost_season = dict(zip(fieldNames, [100, 100, 300, 300, 300]))
         z_photoz = [0.8, 0.8, 0.6, 0.6, 0.6]
         fzdict = dict(zip(fieldNames, z_photoz))
+        # get photoz correction here
         if not self.sigma_mu_photoz.empty:
             sigmu_interp = interp1d(
                 self.sigma_mu_photoz['z'], self.sigma_mu_photoz['sigma_mu_photoz'], bounds_error=False, fill_value=0.)
             sigma_photoz = self.sigma_mu_photoz['sigma_photoz'].unique()[0]
+            data['sigma_mu_photoz'] = sigmu_interp(data['z_SN'])
+            data['sigma_photoz'] = sigma_photoz
+            resa = self.apply_sigma_photoz_new(data)
+            data = self.host_measurements(resa, n_host_obs)
+
+        """
             data_n = pd.DataFrame()
             for fName, zv in fzdict.items():
                 dd = self.apply_sigma_photoz(data, fName, zv, sigmu_interp)
@@ -417,7 +434,7 @@ class fit_SN_mu:
             data = pd.DataFrame(data_n)
 
         data['sigma_photoz'] = sigma_photoz
-
+        """
         if check_plot:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
@@ -431,7 +448,118 @@ class fit_SN_mu:
             ax.legend()
             plt.show()
 
+        print('aoooo', data.columns)
+        idx = data['sigma_mu_photoz'] < 1.e-5
+        idxb = data['sigma_mu_photoz'] < 1.e-5
+        print('nsn with host-z measurement', len(data[idx]), len(data))
+        idx &= data['dd_type'] == 'ultra_dd'
+        print('nsn with host-z measurement - ultra', len(data[idx]))
+        idxb &= data['dd_type'] == 'deep_dd'
+        print('nsn with host-z measurement - deep', len(data[idxb]))
         return data
+
+    def apply_sigma_photoz_new(self, data):
+
+        host_Sub = self.host_efficiency(
+            rz=[0.0, 0.2, 1., 1.37, 2.16], reff=[1., 0.98, 0.79, 0.71, 0.0])
+        host_4M = self.host_efficiency(rz=[0.0, 0.34, 0.6, 0.9, 1, 1.1], reff=[
+                                       0.83, 0.79, 0.39, 0.06, 0.03, 0.0])
+
+        interp_Sub = interp1d(
+            host_Sub['z'], host_Sub['host_effi'], bounds_error=False, fill_value=0.)
+        interp_4M = interp1d(
+            host_4M['z'], host_4M['host_effi'], bounds_error=False, fill_value=0.)
+
+        interp_field = {}
+        interp_field['ultra_dd'] = interp_Sub
+        interp_field['deep_dd'] = interp_4M
+
+        bins = np.arange(0., 1.2, 0.05)
+
+        data['dd_type'] = 'deep_dd'
+        idx = data['fieldName'] == 'COSMOS'
+        data.loc[idx, 'dd_type'] = 'ultra_dd'
+        idx = data['fieldName'] == 'XMM-LSS'
+        data.loc[idx, 'dd_type'] = 'ultra_dd'
+
+        nn_data = pd.DataFrame()
+        for dd_type in data['dd_type'].unique():
+            idx = data['dd_type'] == dd_type
+            sel = data[idx]
+            new_data = sel.groupby(pd.cut(sel.z_SN, bins)).apply(
+                lambda x: self.apply_photoz(x, interp_field[dd_type]))
+            newd = pd.DataFrame(new_data['z_SN'].to_list(), columns=['z_SN'])
+            for col in new_data.columns:
+                if col != 'z_SN' and col != 'index':
+                    newd[col] = new_data[col].to_list()
+            nn_data = pd.concat((nn_data, newd))
+        """
+        import matplotlib.pyplot as plt
+        plt.plot(host_Sub['z'], host_Sub['host_effi'])
+        plt.plot(host_4M['z'], host_4M['host_effi'])
+        plt.show()
+        """
+        return nn_data
+
+    def host_efficiency(self, rz, reff):
+
+        df = pd.DataFrame(rz, columns=['z'])
+        df['host_effi'] = reff
+
+        return df
+
+    def host_measurements(self, data, nums):
+
+        res_df = pd.DataFrame()
+        for dd_type in data['dd_type'].unique():
+            idx = data['dd_type'] == dd_type
+            sel = data[idx]
+            sel = sel.reset_index()
+            nn_host = int(nums[dd_type])
+            part_host = sel.sample(n=nn_host)
+            part_no_host = sel.drop(part_host.index)
+            part_host['sigma_mu_photoz'] = 0.0
+            new_df = pd.concat((part_host, part_no_host))
+            res_df = pd.concat((res_df, new_df))
+
+        print('ici cols', res_df.columns)
+        return res_df
+
+    def get_nseasons(self, fieldList):
+
+        n_seasons = []
+        for fieldName in fieldList:
+            ii = self.config.fieldName == fieldName
+            n_seasons.append(
+                self.config[ii]['nseasons']*self.config[ii]['nfields'])
+
+        return np.mean(n_seasons)
+
+    def apply_photoz(self, grp, interp):
+
+        zmin = grp.name.left
+        zmax = grp.name.right
+
+        # apply SN host efficiency curves
+        effi = interp(np.mean([zmin, zmax]))
+        nSN = len(grp)
+        n_host = int(effi*nSN)
+        # print('from host efficiency', n_host, nSN)
+
+        grp = grp.reset_index()
+        part_host = grp.sample(frac=effi)
+        part_no_host = grp.drop(part_host.index)
+
+        part_host['sigma_mu_photoz'] = 0.0
+
+        new_grp = pd.concat((part_host, part_no_host))
+        """
+        print('with host', len(part_host), part_host)
+        print('no host', len(part_no_host), part_no_host)
+        """
+        # apply filter related to the number of host to be measured
+
+        return new_grp
 
     def apply_sigma_photoz(self, data, fieldName, zsel, sigmu_interp):
 
