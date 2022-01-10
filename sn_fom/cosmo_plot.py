@@ -34,7 +34,9 @@ def to_string(ll):
 def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
 
     r = []
+    fields = ['COSMOS', 'XMM-LSS', 'ADFS', 'ELAIS', 'CDFS']
     for fi in fis:
+        nFields = {}
         # get config name
         conf = fi.split('/')[-1].split('.hdf5')[0]
         conf = '_'.join(conf.split('_')[1:])
@@ -48,6 +50,12 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         mean_Om = np.median(params_fit['Om'])
         std = np.std(params_fit['sigma_w0'])
         nsn_DD = np.median(params_fit['nsn_DD'])
+        for field in fields:
+            bb = 'nsn_DD_{}'.format(field)
+            if bb in params_fit.columns:
+                nFields[bb] = np.median(params_fit[bb])
+            else:
+                nFields[bb] = 0.
         nsn_z_09 = 0.
         if 'nsn_z_09' in params_fit.columns:
             nsn_z_09 = np.median(params_fit['nsn_z_09'])
@@ -64,9 +72,11 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
             """
             ddf_dd, zcomp_dd, nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra = decode_scen(
                 scen, runtype=runtype)
-            r.append((conf, mean_Om, sigma_Om, mean_w, sigma_w, std, ddf_dd, zcomp_dd,
-                      nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09))
-
+            bn = [conf, mean_Om, sigma_Om, mean_w, sigma_w, std, ddf_dd, zcomp_dd,
+                  nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09]
+            for field in fields:
+                bn += [nFields['nsn_DD_{}'.format(field)]]
+            r.append(tuple(bn))
     """
     res = pd.DataFrame(
         r, columns=['conf', 'sigma_w', 'sigma_w_std', 'zcomp', 'zcomp_ultra', 'nddf', 'nddf_ultra', 'nsn_DD', 'nseasons_ultra'])
@@ -74,9 +84,17 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
     print(res[['conf', 'sigma_w', 'zcomp', 'nddf',
                'nsn_DD', 'zcomp_ultra', 'nddf', 'nddf_ultra', 'nseasons_ultra']])
     """
+    colfields = []
+    for field in fields:
+        colfields += ['nsn_DD_{}'.format(field)]
+
+    ccols = ['conf', 'Om', 'sigma_Om', 'w', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd',
+             'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09']
+
+    ccols += colfields
 
     res = pd.DataFrame(
-        r, columns=['conf', 'Om', 'sigma_Om', 'w', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd', 'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09'])
+        r, columns=ccols)
     return res
 
 
