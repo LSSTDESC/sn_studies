@@ -92,6 +92,8 @@ class fit_SN_mu:
             sn_wfd['sigma_bias_stat'] = 0.0
             sn_wfd['sigma_bias_x1_color'] = 0.0
             sn_wfd['sigma_mu_photoz'] = 0.0
+            if not self.sigma_mu_photoz.empty:
+                sn_wfd['sigma_mu_photoz'] = self.sigmu_interp(sn_wfd['z_SN'])
             sn_wfd['zcomp'] = 0.6
             sn_wfd['dd_type'] = 'unknown'
             data_sn = pd.concat((data_sn, sn_wfd))
@@ -416,10 +418,10 @@ class fit_SN_mu:
         fzdict = dict(zip(fieldNames, z_photoz))
         # get photoz correction here
         if not self.sigma_mu_photoz.empty:
-            sigmu_interp = interp1d(
-                self.sigma_mu_photoz['z'], self.sigma_mu_photoz['sigma_mu_photoz'], bounds_error=False, fill_value=0.)
+            # sigmu_interp = interp1d(
+            #    self.sigma_mu_photoz['z'], self.sigma_mu_photoz['sigma_mu_photoz'], bounds_error=False, fill_value=0.)
             sigma_photoz = self.sigma_mu_photoz['sigma_photoz'].unique()[0]
-            data['sigma_mu_photoz'] = sigmu_interp(data['z_SN'])
+            data['sigma_mu_photoz'] = self.sigmu_interp(data['z_SN'])
             data['sigma_photoz'] = sigma_photoz
             data = self.apply_sigma_photoz_new(data)
             # data = self.host_measurements(resa, n_host_obs)
@@ -446,7 +448,6 @@ class fit_SN_mu:
             ax.legend()
             plt.show()
 
-        """
         if not self.sigma_mu_photoz.empty:
             print('aoooo', data.columns)
             idx = data['sigma_mu_photoz'] < 1.e-5
@@ -456,7 +457,7 @@ class fit_SN_mu:
             print('nsn with host-z measurement - ultra', len(data[idx]))
             idxb &= data['dd_type'] == 'deep_dd'
             print('nsn with host-z measurement - deep', len(data[idxb]))
-        """
+
         return data
 
     def info_photoz(self):
@@ -465,7 +466,7 @@ class fit_SN_mu:
         self.n_host_obs['ultra_dd'] = self.get_nseasons(
             ['COSMOS', 'XMM-LSS'])*200
         self.n_host_obs['deep_dd'] = self.get_nseasons(
-            ['CDFS', 'ELAIS', 'ADFS'])*1000
+            ['CDFS', 'ELAIS', 'ADFS'])*500
 
         # Subaru host efficiency vs z
         rz_Sub = [0.0, 0.2, 1., 1.37, 2.16]
@@ -484,6 +485,9 @@ class fit_SN_mu:
 
         self.interp_field['ultra_dd'] = interp_Sub
         self.interp_field['deep_dd'] = interp_4M
+
+        self.sigmu_interp = interp1d(
+            self.sigma_mu_photoz['z'], self.sigma_mu_photoz['sigma_mu_photoz'], bounds_error=False, fill_value=0.)
 
     def apply_sigma_photoz_new(self, data):
 

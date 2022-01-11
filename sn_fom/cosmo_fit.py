@@ -631,6 +631,10 @@ class FitData_mu:
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_mu_bias, sigma_mu_photoz,
                                params_fit=params_fit)
 
+        import matplotlib.pyplot as plt
+        plt.plot(Z_SN, sigma_mu_photoz)
+        plt.show()
+
     def __call__(self):
 
         Om = 0.3
@@ -644,7 +648,7 @@ class FitData_mu:
         """
         # print('fitting sigma_int', self.fit.sigma_int)
         sigma_int = self.fit.zfinal2()
-        # print('sigmaInt', sigma_int)
+        print('sigmaInt', sigma_int)
         self.fit.sigma_int = sigma_int
 
         resa = self.fit.fitcosmo(Om, w0, wa)
@@ -1264,7 +1268,7 @@ class Sigma_Fisher(CosmoDist):
 
     def __init__(self, data,
                  params=dict(zip(['M', 'alpha', 'beta', 'Om', 'w0',
-                             'wa'], [-19.045, 0.13, 2.96, 0.3, -1.0, 0.0])),
+                                  'wa'], [-19.045, 0.13, 2.96, 0.3, -1.0, 0.0])),
                  params_Fisher=['Om', 'w0', 'wa', 'M', 'alpha', 'beta', ],
                  H0=72, c=299792.458):
         super().__init__(H0, c)
@@ -1446,7 +1450,7 @@ class Sigma_Fisher(CosmoDist):
 
         sigma_int = 0.011
         res = (grp.Mb-M+alpha*grp.x1-beta*grp.color-self.mu(grp.z, Om,
-               w0, wa))**2/(self.sigma_mu(grp, alpha, beta)**2+sigma_int**2)
+                                                            w0, wa))**2/(self.sigma_mu(grp, alpha, beta)**2+sigma_int**2)
         return np.sqrt(res)
 
     def derivative_grp(self, grp, func, params, parName, h=1.e-8):
@@ -1498,7 +1502,7 @@ class Sigma_Fisher(CosmoDist):
 
         sigma_int = 0.011
         res = (grp.Mb-M+alpha*grp.x1-beta*grp.color-self.mu(grp.z, Om,
-               w0, wa))**2/(self.sigma_mu(grp, alpha, beta)**2+sigma_int**2)
+                                                            w0, wa))**2/(self.sigma_mu(grp, alpha, beta)**2+sigma_int**2)
         return np.sqrt(res)
 
     def datatest(self, params, sigma=0.5):
@@ -1557,7 +1561,7 @@ class Sigma_Fisher_mu(CosmoDist):
 
     def __init__(self, data,
                  params=dict(zip(['Om', 'w0',
-                             'wa'], [0.3, -1.0, 0.0])),
+                                  'wa'], [0.3, -1.0, 0.0])),
                  params_Fisher=['Om', 'w0', 'wa'],
                  H0=70, c=299792.458):
         super().__init__(H0, c)
