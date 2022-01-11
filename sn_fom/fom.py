@@ -167,6 +167,10 @@ parser.add_option("--sigma_mu_photoz", type=str, default='',
                   help="mu error from photoz [%default]")
 parser.add_option("--sigma_mu_bias_x1_color", type=str, default='sigma_mu_bias_x1_color_1_sigma',
                   help="mu error bias from x1 and color n-sigma variation [%default]")
+parser.add_option("--sigma_mu_simu", type=str, default='sigma_mu_from_simu_Ny_40',
+                  help="sigma_mu file for distance moduli simulation [%default]")
+parser.add_option("--nsn_bias_simu", type=str, default='nsn_bias_Ny_40',
+                  help="nsn_bias file for distance moduli simulation [%default]")
 
 opts, args = parser.parse_args()
 
@@ -190,6 +194,8 @@ dbNames_all = opts.dbNames_all .split(',')
 Ny = opts.Ny
 sigma_mu_photoz = opts.sigma_mu_photoz
 sigma_mu_bias_x1_color = opts.sigma_mu_bias_x1_color
+sigma_mu_simu = opts.sigma_mu_simu
+nsn_bias_simu = opts.nsn_bias_simu
 
 """
 dbC = []
@@ -199,7 +205,7 @@ for dbN in dbNames_all:
 dbNames_all = dbC
 """
 # load sigma_mu
-outName = 'sigma_mu_from_simu_Ny_{}.hdf5'.format(Ny)
+outName = '{}.hdf5'.format(sigma_mu_simu)
 sigma_mu_from_simu = Sigma_mu_obs(fileDir,
                                   dbNames=dbNames_all+['WFD_0.20'],
                                   snTypes=['allSN']*len(dbNames_all)+['WFD'],
@@ -213,7 +219,7 @@ config = getconfig(['DD_0.90'],
                    ['1,1,1,1,1'],
                    ['1,1,1,1,1'])
 
-outName = 'nsn_bias_Ny_{}.hdf5'.format(Ny)
+outName = '{}.hdf5'.format(nsn_bias_simu)
 nsn_bias = NSN_bias(fileDir, config, fields=['COSMOS', 'XMM-LSS', 'CDFS', 'ADFS', 'ELAIS'],
                     dbNames=dbNames_all,
                     plot=False, outName=outName).data
