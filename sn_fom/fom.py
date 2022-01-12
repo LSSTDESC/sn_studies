@@ -171,6 +171,8 @@ parser.add_option("--sigma_mu_simu", type=str, default='sigma_mu_from_simu_Ny_40
                   help="sigma_mu file for distance moduli simulation [%default]")
 parser.add_option("--nsn_bias_simu", type=str, default='nsn_bias_Ny_40',
                   help="nsn_bias file for distance moduli simulation [%default]")
+parser.add_option("--nsn_WFD_yearly", type=int, default=-1,
+                  help="number of WFD SN per year (-1=full sample) [%default]")
 
 opts, args = parser.parse_args()
 
@@ -196,6 +198,7 @@ sigma_mu_photoz = opts.sigma_mu_photoz
 sigma_mu_bias_x1_color = opts.sigma_mu_bias_x1_color
 sigma_mu_simu = opts.sigma_mu_simu
 nsn_bias_simu = opts.nsn_bias_simu
+nsn_WFD_yearly = opts.nsn_WFD_yearly
 
 """
 dbC = []
@@ -270,6 +273,7 @@ params['surveyType'] = surveyType
 params['sigma_mu_photoz'] = pd.DataFrame()
 if sigma_mu_photoz != '':
     params['sigma_mu_photoz'] = pd.read_hdf('{}.hdf5'.format(sigma_mu_photoz))
+params['nsn_WFD_yearly'] = nsn_WFD_yearly
 
 go_fit(nMC, params, nproc, fitparName)
 
@@ -277,7 +281,7 @@ params_fit = pd.read_hdf(fitparName)
 idx = params_fit['accuracy'] == 1
 params_fit = params_fit[idx]
 print('result', np.median(params_fit['sigma_w0']),
-      np.std(params_fit['sigma_w0']), np.median(params_fit['nsn_DD']), np.median(params_fit['nsn_DD_COSMOS']+params_fit['nsn_DD_XMM-LSS']), np.median(params_fit['nsn_DD_XMM-LSS']))
+      np.std(params_fit['sigma_w0']), np.median(params_fit['nsn_DD']), np.median(params_fit['nsn_DD_COSMOS']+params_fit['nsn_DD_XMM-LSS']), np.median(params_fit['nsn_WFD']))
 
 # plotFitResults(params_fit)
 """

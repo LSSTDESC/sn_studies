@@ -631,9 +631,18 @@ class FitData_mu:
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_mu_bias, sigma_mu_photoz,
                                params_fit=params_fit)
 
+        """
         import matplotlib.pyplot as plt
-        plt.plot(Z_SN, sigma_mu_photoz)
+        for fi in data['fieldName'].unique():
+            fig, ax = plt.subplots()
+            idx = data['fieldName'] == fi
+            sel = data[idx].to_records(index=False)
+            print('hh', fi, len(sel))
+            ax.plot(sel['z_SN'], sel['sigma_mu_photoz'],
+                    ls='None', marker='o', label=fi)
+            ax.legend()
         plt.show()
+        """
 
     def __call__(self):
 

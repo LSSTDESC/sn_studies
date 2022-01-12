@@ -50,7 +50,8 @@ class fit_SN_mu:
                  saveSN='', sigmaInt=0.12,
                  sigma_bias_x1_color=pd.DataFrame(),
                  binned_cosmology=False, surveyType='full',
-                 sigma_mu_photoz=pd.DataFrame()):
+                 sigma_mu_photoz=pd.DataFrame(),
+                 nsn_WFD_yearly=-1):
 
         self.fileDir = fileDir
         self.dbNames = dbNames
@@ -92,10 +93,14 @@ class fit_SN_mu:
             sn_wfd['sigma_bias_stat'] = 0.0
             sn_wfd['sigma_bias_x1_color'] = 0.0
             sn_wfd['sigma_mu_photoz'] = 0.0
-            if not self.sigma_mu_photoz.empty:
-                sn_wfd['sigma_mu_photoz'] = self.sigmu_interp(sn_wfd['z_SN'])
             sn_wfd['zcomp'] = 0.6
             sn_wfd['dd_type'] = 'unknown'
+            if nsn_WFD_yearly > 0:
+                n_wfd = nsn_WFD_yearly * \
+                    self.get_nseasons(fieldList=self.config['fieldName'])
+                if n_wfd <= len(sn_wfd):
+                    sn_wfd = sn_wfd.sample(n=n_wfd)
+
             data_sn = pd.concat((data_sn, sn_wfd))
 
         # print(test)
@@ -448,6 +453,7 @@ class fit_SN_mu:
             ax.legend()
             plt.show()
 
+        """
         if not self.sigma_mu_photoz.empty:
             print('aoooo', data.columns)
             idx = data['sigma_mu_photoz'] < 1.e-5
@@ -457,7 +463,7 @@ class fit_SN_mu:
             print('nsn with host-z measurement - ultra', len(data[idx]))
             idxb &= data['dd_type'] == 'deep_dd'
             print('nsn with host-z measurement - deep', len(data[idxb]))
-
+        """
         return data
 
     def info_photoz(self):
@@ -492,7 +498,7 @@ class fit_SN_mu:
     def apply_sigma_photoz_new(self, data):
 
         bins = np.arange(0., 1.2, 0.05)
-        binsb = np.arange(0.3, 1.2, 0.05)
+        binsb = np.arange(0.0, 1.2, 0.05)
 
         bins_center = 0.5*(binsb[1:]-binsb[:-1])
         norm = {}
@@ -556,9 +562,9 @@ class fit_SN_mu:
             ii = self.config.fieldName == fieldName
             sel = self.config[ii]
             if len(sel) > 0:
-                n_seasons.append(sel['nseasons']*sel['nfields'])
+                n_seasons.append(sel['nseasons'])
 
-        return np.mean(n_seasons)
+        return np.max(n_seasons)
 
     def apply_photoz(self, grp, interp, norm):
 
@@ -738,6 +744,7 @@ def multifit_mu(index, params, j=0, output_q=None):
     binned_cosmology = params['binned_cosmology']
     surveyType = params['surveyType']
     sigma_mu_photoz = params['sigma_mu_photoz']
+    nsn_WFD_yearly = params['nsn_WFD_yearly']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
@@ -754,7 +761,8 @@ def multifit_mu(index, params, j=0, output_q=None):
                            sigma_bias_x1_color=sigma_bias_x1_color,
                            binned_cosmology=binned_cosmology,
                            surveyType=surveyType,
-                           sigma_mu_photoz=sigma_mu_photoz)
+                           sigma_mu_photoz=sigma_mu_photoz,
+                           nsn_WFD_yearly=nsn_WFD_yearly)
 
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
