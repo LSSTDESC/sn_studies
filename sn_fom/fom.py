@@ -281,7 +281,7 @@ params_fit = pd.read_hdf(fitparName)
 idx = params_fit['accuracy'] == 1
 params_fit = params_fit[idx]
 print('result', np.median(params_fit['sigma_w0']),
-      np.std(params_fit['sigma_w0']), np.median(params_fit['nsn_DD']), np.median(params_fit['nsn_DD_COSMOS']+params_fit['nsn_DD_XMM-LSS']), np.median(params_fit['nsn_WFD']))
+      np.std(params_fit['sigma_w0']), np.median(params_fit['nsn_DD']), np.median(params_fit['nsn_WFD']))
 
 # plotFitResults(params_fit)
 """

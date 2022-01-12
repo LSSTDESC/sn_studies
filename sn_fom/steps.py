@@ -508,9 +508,11 @@ class fit_SN_mu:
 
         data['dd_type'] = 'deep_dd'
         idx = data['fieldName'] == 'COSMOS'
-        data.loc[idx, 'dd_type'] = 'ultra_dd'
+        if len(data[idx]) > 0:
+            data.loc[idx, 'dd_type'] = 'ultra_dd'
         idx = data['fieldName'] == 'XMM-LSS'
-        data.loc[idx, 'dd_type'] = 'ultra_dd'
+        if len(data[idx]) > 0:
+            data.loc[idx, 'dd_type'] = 'ultra_dd'
 
         nn_data = pd.DataFrame()
         for dd_type in data['dd_type'].unique():
@@ -557,12 +559,12 @@ class fit_SN_mu:
 
     def get_nseasons(self, fieldList):
 
-        n_seasons = []
+        n_seasons = [0]
         for fieldName in fieldList:
             ii = self.config.fieldName == fieldName
             sel = self.config[ii]
             if len(sel) > 0:
-                n_seasons.append(sel['nseasons'])
+                n_seasons.append(sel['nseasons'].to_list()[0])
 
         return np.max(n_seasons)
 
