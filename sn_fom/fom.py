@@ -173,6 +173,10 @@ parser.add_option("--nsn_bias_simu", type=str, default='nsn_bias_Ny_40',
                   help="nsn_bias file for distance moduli simulation [%default]")
 parser.add_option("--nsn_WFD_yearly", type=int, default=-1,
                   help="number of WFD SN per year (-1=full sample) [%default]")
+parser.add_option("--nsn_WFD_hostz", type=int, default=100000,
+                  help="number of WFD SN with host z spectro [%default]")
+parser.add_option("--nsn_WFD_hostz_yearly", type=int, default=500,
+                  help="number of WFD SN with host z spectro per year [%default]")
 
 opts, args = parser.parse_args()
 
@@ -199,6 +203,8 @@ sigma_mu_bias_x1_color = opts.sigma_mu_bias_x1_color
 sigma_mu_simu = opts.sigma_mu_simu
 nsn_bias_simu = opts.nsn_bias_simu
 nsn_WFD_yearly = opts.nsn_WFD_yearly
+nsn_WFD_hostz = opts.nsn_WFD_hostz
+nsn_WFD_hostz_yearly = opts.nsn_WFD_hostz_yearly
 
 """
 dbC = []
@@ -274,6 +280,8 @@ params['sigma_mu_photoz'] = pd.DataFrame()
 if sigma_mu_photoz != '':
     params['sigma_mu_photoz'] = pd.read_hdf('{}.hdf5'.format(sigma_mu_photoz))
 params['nsn_WFD_yearly'] = nsn_WFD_yearly
+params['nsn_WFD_hostz'] = nsn_WFD_hostz
+params['nsn_WFD_hostz_yearly'] = nsn_WFD_hostz_yearly
 
 go_fit(nMC, params, nproc, fitparName)
 

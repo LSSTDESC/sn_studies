@@ -51,8 +51,9 @@ class fit_SN_mu:
                  sigma_bias_x1_color=pd.DataFrame(),
                  binned_cosmology=False, surveyType='full',
                  sigma_mu_photoz=pd.DataFrame(),
-                 nsn_WFD_yearly=-1):
-
+                 nsn_WFD_yearly=-1,
+                 nsn_WFD_hostz=100000,
+                 nsn_WFD_hostz_yearly=500):
         self.fileDir = fileDir
         self.dbNames = dbNames
         self.config = config
@@ -87,20 +88,8 @@ class fit_SN_mu:
         # print('NSN DD:', len(data_sn), 'WFD:', len(sn_wfd))
         data_sn['snType'] = 'DD'
         if not sn_wfd.empty:
-            sn_wfd['snType'] = 'WFD'
-            sn_wfd['dbName'] = 'WFD'
-            sn_wfd['fieldName'] = 'WFD'
-            sn_wfd['sigma_bias_stat'] = 0.0
-            sn_wfd['sigma_bias_x1_color'] = 0.0
-            sn_wfd['sigma_mu_photoz'] = 0.0
-            sn_wfd['zcomp'] = 0.6
-            sn_wfd['dd_type'] = 'unknown'
-            if nsn_WFD_yearly > 0:
-                n_wfd = nsn_WFD_yearly * \
-                    self.get_nseasons(fieldList=self.config['fieldName'])
-                if n_wfd <= len(sn_wfd):
-                    sn_wfd = sn_wfd.sample(n=n_wfd)
-
+            sn_wfd = self.get_wfd(sn_wfd, nsn_WFD_yearly,
+                                  nsn_WFD_hostz, nsn_WFD_hostz_yearly, sigmaInt)
             data_sn = pd.concat((data_sn, sn_wfd))
 
         # print(test)
@@ -139,6 +128,98 @@ class fit_SN_mu:
             params_fit['SNID'] = SNID
 
         self.params_fit = params_fit
+
+    def get_wfd(self, sn_wfd_orig, nsn_WFD_yearly, nsn_WFD_hostz, nsn_WFD_hostz_yearly, sigmaInt):
+        """
+        Method to build the WFD sample
+
+        Parameters
+        --------------
+        sn_wfd: pandas df
+           original WFD data
+        nsn_WFD_yearly: int
+           number of WFD SN per year
+        nsn_WFD_hostz: int
+           number of WFD SN with host spectro (total)
+        nsn_WFD_hostz_yearly: int
+           number of WFD SN with host spectro (per year)
+        sigmaInt: float
+          SN internal dispersion
+
+        Returns
+        ----------
+         pandas df of the WFD sample
+
+        """
+        sn_wfd = pd.DataFrame(sn_wfd_orig)
+        sn_wfd['snType'] = 'WFD'
+        sn_wfd['dbName'] = 'WFD'
+        sn_wfd['fieldName'] = 'WFD'
+        sn_wfd['sigma_bias_stat'] = 0.0
+        sn_wfd['sigma_bias_x1_color'] = 0.0
+        sn_wfd['sigma_mu_photoz'] = 0.0
+        sn_wfd['zcomp'] = 0.6
+        sn_wfd['dd_type'] = 'unknown'
+        if nsn_WFD_yearly > 0:
+            nseasons = self.get_nseasons(fieldList=self.config['fieldName'])
+            n_wfd = nsn_WFD_yearly * nseasons
+            n_wfd_hostz = nsn_WFD_hostz_yearly * nseasons
+
+            if n_wfd <= len(sn_wfd):
+                sn_wfd = sn_wfd.sample(n=n_wfd)
+                if not self.sigma_mu_photoz.empty:
+                    sn_wfd = self.apply_photoz_wfd(
+                        sn_wfd, nsn_WFD_hostz, n_wfd_hostz, sigmaInt)
+
+        return sn_wfd
+
+    def apply_photoz_wfd(self, sn_wfd, nsn_WFD_hostz, n_wfd_hostz, sigmaInt):
+        """
+        Method to apply photoz error on the wfd sample
+
+        Parameters
+        ---------------
+        sn_wfd: pandas df
+          data to process
+        nsn_WFD_hostz: int
+          number of sn with spectro-z (total)
+        n_wfd_hostz: int
+          number of sn with spectro-z
+        sigmaInt: float
+          SN internal dispersion
+
+        Returns
+        ----------
+        pandas df with photoz error propagated on the distance modulus
+
+        """
+
+        res = pd.DataFrame()
+        nsn_wfd = len(sn_wfd)
+
+        n_wfd_hostz_ref = np.min([nsn_WFD_hostz, n_wfd_hostz])
+
+        if nsn_wfd <= n_wfd_hostz_ref:
+            return sn_wfd
+        else:
+            sn_wfd = sn_wfd.reset_index()
+            nsn_noz = nsn_wfd-n_wfd_hostz_ref
+
+            sn_wfd_noz = sn_wfd.sample(n=nsn_noz)
+            res = sn_wfd.drop(sn_wfd_noz.index)
+
+            # apply photometric error on mu
+            sn_wfd_noz['sigma_mu_photoz'] = self.sigmu_interp(
+                sn_wfd_noz['z_SN'])
+
+            # recompute mus
+            sn_wfd_noz['mu_SN'] = self.simu_mu_SN(sn_wfd_noz, sigmaInt)
+
+            # rebuild the full pandas df
+            sn_wfd_noz = sn_wfd_noz.reset_index()
+            res = pd.concat((res, sn_wfd_noz))
+
+        return res
 
     def binned_SN(self, data, sigmaInt=0.12, zmin=0.0, zmax=1.0, nbins=20):
 
@@ -400,18 +481,24 @@ class fit_SN_mu:
         plt.show()
         """
         # re-estimate the distance moduli including the bias error - for DD only - faster
+
+        data_sn['mu_SN'] = self. simu_mu_SN(data_sn, sigmaInt)
+        return data_sn
+
+    def simu_mu_SN(self, data, sigmaInt, H0=70.0, Om=0.3, w0=-1.0, wa=0.0):
+
         from sn_fom.cosmo_fit import CosmoDist
         from random import gauss
-        cosmo = CosmoDist(H0=70.)
-        dist_mu = cosmo.mu_astro(data_sn['z_SN'], 0.3, -1.0, 0.0)
-        sigmu = np.array(data_sn['sigma_mu_SN'])
-        sigbias = np.array(data_sn['sigma_bias_stat'])
-        sigx1color = np.array(data_sn['sigma_bias_x1_color'])
-        sigphotz = np.array(data_sn['sigma_mu_photoz'])
-        # print('hello', len(dist_mu), len(sigmu), sigbias)
-        data_sn['mu_SN'] = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2+sigbias[i]**2+sigx1color[i]**2+sigphotz[i]**2))
-                            for i in range(len(dist_mu))]
-        return data_sn
+        cosmo = CosmoDist(H0=H0)
+        dist_mu = cosmo.mu_astro(data['z_SN'], Om, w0, wa)
+        sigmu = np.array(data['sigma_mu_SN'])
+        sigbias = np.array(data['sigma_bias_stat'])
+        sigx1color = np.array(data['sigma_bias_x1_color'])
+        sigphotz = np.array(data['sigma_mu_photoz'])
+        mu = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2+sigbias[i]**2+sigx1color[i]**2+sigphotz[i]**2))
+              for i in range(len(dist_mu))]
+
+        return mu
 
     def add_sigma_photoz(self, data, check_plot=False):
 
@@ -747,6 +834,8 @@ def multifit_mu(index, params, j=0, output_q=None):
     surveyType = params['surveyType']
     sigma_mu_photoz = params['sigma_mu_photoz']
     nsn_WFD_yearly = params['nsn_WFD_yearly']
+    nsn_WFD_hostz = params['nsn_WFD_hostz']
+    nsn_WFD_hostz_yearly = params['nsn_WFD_hostz_yearly']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
@@ -764,7 +853,9 @@ def multifit_mu(index, params, j=0, output_q=None):
                            binned_cosmology=binned_cosmology,
                            surveyType=surveyType,
                            sigma_mu_photoz=sigma_mu_photoz,
-                           nsn_WFD_yearly=nsn_WFD_yearly)
+                           nsn_WFD_yearly=nsn_WFD_yearly,
+                           nsn_WFD_hostz=nsn_WFD_hostz,
+                           nsn_WFD_hostz_yearly=nsn_WFD_hostz_yearly)
 
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
