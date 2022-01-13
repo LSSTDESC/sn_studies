@@ -13,7 +13,7 @@ def sigma_photoz(Om=0.3, w0=-1.0, wa=0., sigma_phot=0.002, plot=False):
     cosmo = CosmoDist()
 
     zstep = 0.01
-    zmin = 0.1
+    zmin = 0.01
     zmax = 1.2+zstep
     z = np.arange(zmin, zmax, zstep)
     h = 1.e-8
@@ -850,6 +850,7 @@ fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma),
 
 # fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma)]
 
+"""
 for dbName in dbNames:
     data[dbName] = getSN(fileDir, dbName, fitDir, fakes, alpha,
                          beta, Mb, nsigma=nsigma, binned=0)
@@ -858,11 +859,11 @@ for dbName in dbNames:
 # bias syste x1_color
 estimate_syste(data, dbNames, nsigma, plot=True)
 """
-sigma_phot = 0.02
-sigma_photoz = sigma_photoz(plot=False, sigma_phot=sigma_phot)
-sigma_photoz.to_hdf('sigma_mu_photoz_{}.hdf5'.format(
-    sigma_phot), key='sigma_photoz')
-"""
+for sigma_phot in [0.02, 0.015, 0.010, 0.002]:
+    sigma_photz = sigma_photoz(plot=False, sigma_phot=sigma_phot)
+    sigma_photz.to_hdf('sigma_mu_photoz_{}.hdf5'.format(
+        sigma_phot), key='sigma_photoz')
+
 print(test)
 
 
