@@ -175,7 +175,7 @@ parser.add_option("--nsn_WFD_yearly", type=int, default=-1,
                   help="number of WFD SN per year (-1=full sample) [%default]")
 parser.add_option("--nsn_WFD_hostz", type=int, default=100000,
                   help="number of WFD SN with host z spectro [%default]")
-parser.add_option("--nsn_WFD_hostz_yearly", type=int, default=500,
+parser.add_option("--nsn_WFD_hostz_yearly", type=int, default=10000,
                   help="number of WFD SN with host z spectro per year [%default]")
 
 opts, args = parser.parse_args()
