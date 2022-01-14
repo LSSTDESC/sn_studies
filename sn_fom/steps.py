@@ -160,6 +160,7 @@ class fit_SN_mu:
         sn_wfd['sigma_mu_photoz'] = 0.0
         sn_wfd['zcomp'] = 0.6
         sn_wfd['dd_type'] = 'unknown'
+        n_wfd_hostz = nsn_WFD_yearly
         if nsn_WFD_yearly > 0:
             nseasons = self.get_nseasons(fieldList=self.config['fieldName'])
             n_wfd = nsn_WFD_yearly * nseasons
@@ -167,9 +168,9 @@ class fit_SN_mu:
 
             if n_wfd <= len(sn_wfd):
                 sn_wfd = sn_wfd.sample(n=n_wfd)
-                if not self.sigma_mu_photoz.empty:
-                    sn_wfd = self.apply_photoz_wfd(
-                        sn_wfd, nsn_WFD_hostz, n_wfd_hostz, sigmaInt)
+        if not self.sigma_mu_photoz.empty:
+            sn_wfd = self.apply_photoz_wfd(
+                sn_wfd, nsn_WFD_hostz, n_wfd_hostz, sigmaInt)
 
         return sn_wfd
 
@@ -199,6 +200,9 @@ class fit_SN_mu:
 
         n_wfd_hostz_ref = np.min([nsn_WFD_hostz, n_wfd_hostz])
 
+        if n_wfd_hostz <= 0.:
+            n_wfd_hostz_ref = nsn_WFD_hostz
+
         if nsn_wfd <= n_wfd_hostz_ref:
             return sn_wfd
         else:
@@ -219,6 +223,12 @@ class fit_SN_mu:
             sn_wfd_noz = sn_wfd_noz.reset_index()
             res = pd.concat((res, sn_wfd_noz))
 
+        # check here
+        """
+        idx = res['sigma_mu_photoz'] > 1.e-5
+        print('WFD without host z', len(res[idx]))
+        print('WFD with host z-spectro', len(res)-len(res[idx]))
+        """
         return res
 
     def binned_SN(self, data, sigmaInt=0.12, zmin=0.0, zmax=1.0, nbins=20):
