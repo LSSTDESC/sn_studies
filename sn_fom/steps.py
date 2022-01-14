@@ -41,6 +41,14 @@ class fit_SN_mu:
       type of survey (default: full)
     sigma_mu_photoz: pandas df, opt
       mu error from photoz (default: empty df)
+    nsn_WFD_yearly: int,opt
+      number of SN in the WFD per year (default: -1)
+     nsn_WFD_hostz: int, opt
+       number of SN in the WFD with z-spectro host (default: 100000)
+     nsn_WFD_hostz_yearly: int, opt
+       number of SN in the WFD with z-spectro host per year (default: 500)
+     year_survey: int, opt
+       current year of the survey (default: 10)
     """
 
     def __init__(self, fileDir, dbNames, config, fields,
@@ -53,7 +61,8 @@ class fit_SN_mu:
                  sigma_mu_photoz=pd.DataFrame(),
                  nsn_WFD_yearly=-1,
                  nsn_WFD_hostz=100000,
-                 nsn_WFD_hostz_yearly=500):
+                 nsn_WFD_hostz_yearly=500,
+                 year_survey=10):
         self.fileDir = fileDir
         self.dbNames = dbNames
         self.config = config
@@ -89,7 +98,7 @@ class fit_SN_mu:
         data_sn['snType'] = 'DD'
         if not sn_wfd.empty:
             sn_wfd = self.get_wfd(sn_wfd, nsn_WFD_yearly,
-                                  nsn_WFD_hostz, nsn_WFD_hostz_yearly, sigmaInt)
+                                  nsn_WFD_hostz, nsn_WFD_hostz_yearly, sigmaInt, year_survey)
             data_sn = pd.concat((data_sn, sn_wfd))
 
         # print(test)
@@ -129,7 +138,7 @@ class fit_SN_mu:
 
         self.params_fit = params_fit
 
-    def get_wfd(self, sn_wfd_orig, nsn_WFD_yearly, nsn_WFD_hostz, nsn_WFD_hostz_yearly, sigmaInt):
+    def get_wfd(self, sn_wfd_orig, nsn_WFD_yearly, nsn_WFD_hostz, nsn_WFD_hostz_yearly, sigmaInt, year_survey):
         """
         Method to build the WFD sample
 
@@ -145,6 +154,8 @@ class fit_SN_mu:
            number of WFD SN with host spectro (per year)
         sigmaInt: float
           SN internal dispersion
+        year_survey: int
+          year of the survey
 
         Returns
         ----------
@@ -162,9 +173,9 @@ class fit_SN_mu:
         sn_wfd['dd_type'] = 'unknown'
         n_wfd_hostz = nsn_WFD_yearly
         if nsn_WFD_yearly > 0:
-            nseasons = self.get_nseasons(fieldList=self.config['fieldName'])
-            n_wfd = nsn_WFD_yearly * nseasons
-            n_wfd_hostz = nsn_WFD_hostz_yearly * nseasons
+            #nseasons = self.get_nseasons(fieldList=self.config['fieldName'])
+            n_wfd = nsn_WFD_yearly * year_survey
+            n_wfd_hostz = nsn_WFD_hostz_yearly * year_survey
 
             if n_wfd <= len(sn_wfd):
                 sn_wfd = sn_wfd.sample(n=n_wfd)
@@ -852,6 +863,7 @@ def multifit_mu(index, params, j=0, output_q=None):
     nsn_WFD_yearly = params['nsn_WFD_yearly']
     nsn_WFD_hostz = params['nsn_WFD_hostz']
     nsn_WFD_hostz_yearly = params['nsn_WFD_hostz_yearly']
+    year_survey = params['year_survey']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
@@ -871,7 +883,8 @@ def multifit_mu(index, params, j=0, output_q=None):
                            sigma_mu_photoz=sigma_mu_photoz,
                            nsn_WFD_yearly=nsn_WFD_yearly,
                            nsn_WFD_hostz=nsn_WFD_hostz,
-                           nsn_WFD_hostz_yearly=nsn_WFD_hostz_yearly)
+                           nsn_WFD_hostz_yearly=nsn_WFD_hostz_yearly,
+                           year_survey=year_survey)
 
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 

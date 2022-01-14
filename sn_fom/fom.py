@@ -177,6 +177,8 @@ parser.add_option("--nsn_WFD_hostz", type=int, default=50000,
                   help="number of WFD SN with host z spectro [%default]")
 parser.add_option("--nsn_WFD_hostz_yearly", type=int, default=10000,
                   help="number of WFD SN with host z spectro per year [%default]")
+parser.add_option("--year_survey", type=int, default=10,
+                  help="yer of the survey [%default]")
 
 opts, args = parser.parse_args()
 
@@ -205,6 +207,7 @@ nsn_bias_simu = opts.nsn_bias_simu
 nsn_WFD_yearly = opts.nsn_WFD_yearly
 nsn_WFD_hostz = opts.nsn_WFD_hostz
 nsn_WFD_hostz_yearly = opts.nsn_WFD_hostz_yearly
+year_survey = opts.year_survey
 
 """
 dbC = []
@@ -282,6 +285,7 @@ if sigma_mu_photoz != '':
 params['nsn_WFD_yearly'] = nsn_WFD_yearly
 params['nsn_WFD_hostz'] = nsn_WFD_hostz
 params['nsn_WFD_hostz_yearly'] = nsn_WFD_hostz_yearly
+params['year_survey'] = year_survey
 
 go_fit(nMC, params, nproc, fitparName)
 
