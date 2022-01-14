@@ -70,7 +70,7 @@ class fit_SN_mu:
 
         self.interp_field = {}
         if not self.sigma_mu_photoz.empty:
-            self.info_photoz()
+            self.info_photoz(nsn_WFD_yearly)
 
         # simulate supernovae here - DDF
         data_sn = self.simul_distmod()
@@ -563,13 +563,19 @@ class fit_SN_mu:
         """
         return data
 
-    def info_photoz(self):
+    def info_photoz(self, nsn_WFD_yearly):
         # get the number of seasons for ultra and deep fields
         self.n_host_obs = {}
         self.n_host_obs['ultra_dd'] = self.get_nseasons(
             ['COSMOS', 'XMM-LSS'])*200
         self.n_host_obs['deep_dd'] = self.get_nseasons(
             ['CDFS', 'ELAIS', 'ADFS'])*500
+
+        if nsn_WFD_yearly < 0:
+            # total Subaru expected spectra for DD
+            self.n_host_obs['ultra_dd'] = 2000
+            # total 4MOST expected spectra for DD
+            self.n_host_obs['deep_dd'] = 1000
 
         # Subaru host efficiency vs z
         rz_Sub = [0.0, 0.2, 1., 1.37, 2.16]
