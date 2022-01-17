@@ -202,7 +202,7 @@ class Syste_x1_color:
         self.dbName = dbName
         self.zmin = 0.1
         self.zmax = 1.2
-        self.zstep = 0.07
+        self.zstep = 0.03
 
         nsigma = str(nsigma)
 
@@ -227,14 +227,45 @@ class Syste_x1_color:
         # get binned data
         df_dict = self.get_binned_data(self.data, self.configs)
 
+        """
+        z = np.arange(0.01, 1.2, 0.01)
+        cosmo_th = CosmoDist()
+        mus = cosmo_th.mu(z)
+
+        cosmo_df = pd.DataFrame(z, columns=['z'])
+        cosmo_df['mu_th'] = mus
+
+        for key, vals in df_dict.items():
+            plt.plot(vals['z'], vals['mu_mean'],
+                     lineStyle='None', label=key, marker='o')
+
+        plt.plot(cosmo_df['z'], cosmo_df['mu_th'], color='k')
+        plt.legend()
+        plt.show()
+        """
         # get diff wrt nominal
         df_syst = self.get_diff_nominal(df_dict, self.configs)
 
+        ppval = ['delta_mu_x1', 'delta_mu_color', 'delta_mu_Mb']
+        vvar = 'delta_mu_x1'
+
+        for vv in ['plus', 'minus']:
+            df_syst[vv] = self.clean_iterative(df_syst[vv], vvar)
+
         # finally: get impact on sigma_mu
-        df_syst = self.get_bias(df_syst)
-        print('finally', df_syst)
+        df_syst = self.get_bias(df_syst['plus'])
+        print('finally', df_syst[['z', 'Cov_mu_x1',
+                                  'Cov_mu_color', 'Cov_mu_Mb', 'delta_mu_bias']])
         df_syst['dbName'] = self.dbName
         df_syst = df_syst[['dbName', 'z', 'delta_mu_bias']]
+        # get the max after 1.
+        """
+        idx = df_syst['z'] >= 0.9
+        mu_max = np.max(df_syst[idx]['delta_mu_bias'])
+        idx = df_syst['delta_mu_bias'] <= 1.1*mu_max
+        df_syst = df_syst[idx]
+        """
+        """
         df_syst = df_syst.sort_values(by=['z'])
         last_df = df_syst.iloc[-1]
         first_df = df_syst.iloc[0]
@@ -244,8 +275,20 @@ class Syste_x1_color:
         dd_app = pd.DataFrame(r, columns=[
             'dbName', 'z', 'delta_mu_bias'])
         df_syst = df_syst.append(dd_app)
-
+        """
         return df_syst
+
+    def clean_iterative(self, df_syst, vvar):
+
+        ddf = pd.DataFrame(df_syst)
+        for i in range(3):
+            idx = ddf['z'] <= 0.9
+            delta_mu_mean = np.mean(ddf[idx][vvar])
+            delta_mu_std = np.std(ddf[idx][vvar])
+            idx = np.abs(ddf[vvar]) <= delta_mu_mean+3.*delta_mu_std
+            ddf = ddf[idx]
+
+        return ddf
 
     def get_binned_data(self, data, configs):
 
@@ -278,49 +321,63 @@ class Syste_x1_color:
 
     def get_diff_nominal(self, df_dict, configs):
 
-        dfsyst = pd.DataFrame()
         ref = df_dict['nosigmaInt']
         ref = ref.replace([np.inf, -np.inf, np.nan], 0)
         ref = ref.round({'z': 6})
 
+        dfsyst = {}
+        for vv in ['plus', 'minus']:
+            dfsyst[vv] = pd.DataFrame()
         for config in configs[1:]:
             df = df_dict[config]
             df = df.replace([np.inf, -np.inf, np.nan], 0)
             df = df.round({'z': 6})
+            if 'minus' in config:
+                dfsyst['minus'] = self.fill_syste(
+                    dfsyst['minus'], df, ref, config)
             if 'plus' in config:
+                dfsyst['plus'] = self.fill_syste(
+                    dfsyst['plus'], df, ref, config)
 
-                vvconf = config.split('_')[0]
-                if vvconf == 'mb':
-                    vvconf = 'Mb'
-                bb = ref.merge(df, left_on=['z'], right_on=['z'])
+        #print('plus', dfsyst['plus'])
+        #print('minus', dfsyst['minus'])
+        return dfsyst
 
-                for vv in ['x1_fit', 'color_fit', 'Mb']:
-                    dvar = ['z']
-                    vvb = vv
-                    if 'fit' in vv:
-                        vvb = vv.split('_')[0]
-                    """
-                    diff = gaussian_filter(df['{}_fit_mean'.format(
-                    vv)], 3)-gaussian_filter(ref['{}_fit_mean'.format(vv)], 3)
-                    diff_mb = gaussian_filter(
-                    df['Mb_mean'], 3)-gaussian_filter(ref['Mb_mean'], 3)
-                    """
+    def fill_syste(self, dfsyst, df, ref, config):
 
-                    vvar1 = 'delta_{}_{}'.format(vvb, vvconf)
-                    dvar.append(vvar1)
-                    bb[vvar1] = gaussian_filter(bb['{}_mean_x'.format(
-                        vv)], 3) - gaussian_filter(bb['{}_mean_y'.format(vv)], 3)
+        vvconf = config.split('_')[0]
+        if vvconf == 'mb':
+            vvconf = 'Mb'
+        bb = ref.merge(df, left_on=['z'], right_on=['z'])
 
-                    # bb[vvar1] = bb['{}_mean_x'.format(
-                    #    vv)]-bb['{}_mean_y'.format(vv)]
+        for vv in ['x1_fit', 'color_fit', 'Mb', 'mu']:
+            dvar = ['z']
+            vvb = vv
+            if 'fit' in vv:
+                vvb = vv.split('_')[0]
+            """
+            diff = gaussian_filter(df['{}_fit_mean'.format(
+            vv)], 3)-gaussian_filter(ref['{}_fit_mean'.format(vv)], 3)
+            diff_mb = gaussian_filter(
+            df['Mb_mean'], 3)-gaussian_filter(ref['Mb_mean'], 3)
+            """
 
-                    bb = bb.round({'z': 6})
+            vvar1 = 'delta_{}_{}'.format(vvb, vvconf)
+            dvar.append(vvar1)
+            """
+            bb[vvar1] = gaussian_filter(bb['{}_mean_x'.format(
+                vv)], 3) - gaussian_filter(bb['{}_mean_y'.format(vv)], 5)
+            """
+            bb[vvar1] = bb['{}_mean_x'.format(
+                vv)]-bb['{}_mean_y'.format(vv)]
 
-                    if dfsyst.empty:
-                        dfsyst = bb[dvar]
-                    else:
-                        dfsyst = dfsyst.merge(
-                            bb[dvar], left_on=['z'], right_on=['z'])
+            bb = bb.round({'z': 6})
+
+            if dfsyst.empty:
+                dfsyst = bb[dvar]
+            else:
+                dfsyst = dfsyst.merge(
+                    bb[dvar], left_on=['z'], right_on=['z'])
 
         return dfsyst
 
@@ -331,7 +388,7 @@ class Syste_x1_color:
 
         # replace deltas by covariance
         dfsyst = dfsyst.rename(columns=lambda x: x.replace('delta', 'Cov'))
-        print('hello', dfsyst.columns, dfsyst)
+
         # for vv in ['x1', 'color', 'Mb']:
         for vv in ['x1', 'color', 'Mb']:
             vvb = 'Cov_{}_{}'.format(vv, vv)
@@ -353,13 +410,18 @@ class Syste_x1_color:
             alpha**2*dfsyst['delta_x1']**2
         dfsyst['delta_mu_color'] = dfsyst['delta_Mb_color']**2 + \
             beta**2*dfsyst['delta_color']**2
-        
+
         dfsyst['delta_mu_x1'] = np.sqrt(alpha**2*dfsyst['delta_x1']**2)
         dfsyst['delta_mu_color'] = np.sqrt(beta**2*dfsyst['delta_color']**2)
         dfsyst['delta_mu_Mb'] = np.sqrt(beta**2*dfsyst['delta_Mb']**2)
         """
-        dfsyst['delta_mu_bias'] = np.sqrt(dfsyst['delta_mu_bias'])
+        dfsyst['delta_sigmamu_bias'] = np.sqrt(dfsyst['delta_mu_bias'])
 
+        dfsyst['delta_mu_bias'] = 0.0
+        for vv in ['Cov_mu_x1', 'Cov_mu_color', 'Cov_mu_Mb']:
+            dfsyst['delta_mu_bias'] += dfsyst[vv]**2
+
+        dfsyst['delta_mu_bias'] = np.sqrt(dfsyst['delta_mu_bias'])
         return dfsyst
 
 
@@ -850,7 +912,7 @@ fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma),
 
 # fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma)]
 
-"""
+
 for dbName in dbNames:
     data[dbName] = getSN(fileDir, dbName, fitDir, fakes, alpha,
                          beta, Mb, nsigma=nsigma, binned=0)
@@ -863,7 +925,7 @@ for sigma_phot in [0.02, 0.015, 0.010, 0.002]:
     sigma_photz = sigma_photoz(plot=False, sigma_phot=sigma_phot)
     sigma_photz.to_hdf('sigma_mu_photoz_{}.hdf5'.format(
         sigma_phot), key='sigma_photoz')
-
+"""
 print(test)
 
 

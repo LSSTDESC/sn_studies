@@ -116,6 +116,16 @@ class fit_SN_mu:
 
         # second step: fit the data
         print('to fit', data_sn.columns)
+        import matplotlib.pyplot as plt
+        for dbName in data_sn['dbName'].unique():
+            idx = data_sn['dbName'] == dbName
+            sel = data_sn[idx]
+            sel = sel.sort_values(by=['z_SN'])
+            plt.plot(sel['z_SN'], sel['sigma_bias_x1_color'], label=dbName)
+
+        plt.legend()
+        plt.show()
+
         # FitCosmo instance
         fit = FitData_mu(data_sn, params_fit=params_fit, surveyType=surveyType)
 
@@ -514,7 +524,13 @@ class fit_SN_mu:
         dist_mu = cosmo.mu_astro(data['z_SN'], Om, w0, wa)
         sigmu = np.array(data['sigma_mu_SN'])
         sigbias = np.array(data['sigma_bias_stat'])
+        #data['sigma_bias_x1_color'] *= 2
         sigx1color = np.array(data['sigma_bias_x1_color'])
+        """
+        import matplotlib.pyplot as plt
+        plt.plot(data['z_SN'], sigx1color)
+        plt.show()
+        """
         sigphotz = np.array(data['sigma_mu_photoz'])
         mu = [gauss(dist_mu[i], np.sqrt(sigmu[i]**2+sigmaInt**2+sigbias[i]**2+sigx1color[i]**2+sigphotz[i]**2))
               for i in range(len(dist_mu))]
