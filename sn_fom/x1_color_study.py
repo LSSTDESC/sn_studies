@@ -208,11 +208,11 @@ class Syste_x1_color:
 
         self.configs = ['nosigmaInt',
                         'x1_plus_{}_sigma'.format(nsigma),
-                        'x1_minus_{}_sigma'.format(nsigma),
+                        # 'x1_minus_{}_sigma'.format(nsigma),
                         'color_plus_{}_sigma'.format(nsigma),
-                        'color_minus_{}_sigma'.format(nsigma),
-                        'mb_plus_{}_sigma'.format(nsigma),
-                        'mb_minus_{}_sigma'.format(nsigma)]
+                        # 'color_minus_{}_sigma'.format(nsigma),
+                        'mb_plus_{}_sigma'.format(nsigma)]
+        # 'mb_minus_{}_sigma'.format(nsigma)]
 
         """
         corresp = dict(zip(configs, ['nominal',
@@ -238,7 +238,7 @@ class Syste_x1_color:
         for key, vals in df_dict.items():
             plt.plot(vals['z'], vals['mu_mean'],
                      lineStyle='None', label=key, marker='o')
-
+            print(key, vals[['z', 'mu_mean']])
         plt.plot(cosmo_df['z'], cosmo_df['mu_th'], color='k')
         plt.legend()
         plt.show()
@@ -249,7 +249,9 @@ class Syste_x1_color:
         ppval = ['delta_mu_x1', 'delta_mu_color', 'delta_mu_Mb']
         vvar = 'delta_mu_x1'
 
-        for vv in ['plus', 'minus']:
+        sigvals = ['plus', 'minus']
+        sigvals = ['plus']
+        for vv in sigvals:
             df_syst[vv] = self.clean_iterative(df_syst[vv], vvar)
 
         # finally: get impact on sigma_mu
@@ -301,6 +303,7 @@ class Syste_x1_color:
         for config in configs:
             idx = data['config'] == config
             data_sn = data[idx]
+
             data_sn = data_sn.rename(columns={"Cov_mbmb": "Cov_MbMb"})
             for vv in ['x1_fit', 'color_fit', 'Mb']:
                 data_sn['sigma_{}'.format(vv)] = np.sqrt(
@@ -309,11 +312,12 @@ class Syste_x1_color:
             for vv in vars:
                 bdatab = binned_data(self.zmin, self.zmax, nbins, data_sn,
                                      vv, 'sigma_{}'.format(vv))
+                bdatab = bdatab.round({'z': 6})
                 if bdata.empty:
                     bdata = bdatab
                 else:
                     bdata = bdata.merge(bdatab, left_on=['z'], right_on=['z'])
-
+                bdata = bdata.round({'z': 6})
             bdata['dbName'] = dbName
             df_dict[config] = bdata
 
@@ -364,6 +368,7 @@ class Syste_x1_color:
 
             vvar1 = 'delta_{}_{}'.format(vvb, vvconf)
             dvar.append(vvar1)
+
             """
             bb[vvar1] = gaussian_filter(bb['{}_mean_x'.format(
                 vv)], 3) - gaussian_filter(bb['{}_mean_y'.format(vv)], 5)
@@ -904,11 +909,11 @@ nsigma = opts.nsigma
 data = {}
 
 fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma),
-          'Fakes_x1_minus_{}_sigma'.format(nsigma),
+          # 'Fakes_x1_minus_{}_sigma'.format(nsigma),
           'Fakes_color_plus_{}_sigma'.format(nsigma),
-          'Fakes_color_minus_{}_sigma'.format(nsigma),
-          'Fakes_mb_plus_{}_sigma'.format(nsigma),
-          'Fakes_mb_minus_{}_sigma'.format(nsigma)]
+          # 'Fakes_color_minus_{}_sigma'.format(nsigma),
+          'Fakes_mb_plus_{}_sigma'.format(nsigma), ]
+# 'Fakes_mb_minus_{}_sigma'.format(nsigma)]
 
 # fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma)]
 
@@ -916,7 +921,6 @@ fakes += ['Fakes_x1_plus_{}_sigma'.format(nsigma),
 for dbName in dbNames:
     data[dbName] = getSN(fileDir, dbName, fitDir, fakes, alpha,
                          beta, Mb, nsigma=nsigma, binned=0)
-
 
 # bias syste x1_color
 estimate_syste(data, dbNames, nsigma, plot=True)
