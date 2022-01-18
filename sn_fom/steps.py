@@ -115,6 +115,7 @@ class fit_SN_mu:
             SNID = saveSN.split('.hdf5')[0]
 
         # second step: fit the data
+        """
         print('to fit', data_sn.columns)
         import matplotlib.pyplot as plt
         for dbName in data_sn['dbName'].unique():
@@ -125,7 +126,7 @@ class fit_SN_mu:
 
         plt.legend()
         plt.show()
-
+        """
         # FitCosmo instance
         fit = FitData_mu(data_sn, params_fit=params_fit, surveyType=surveyType)
 
