@@ -627,6 +627,17 @@ class FitData_mu:
         self.nsn_z_09 = len(data[data['z_SN'] >= 0.9])
         self.nsn_WFD = len(data[data['snType'] == 'WFD'])
 
+        nsn_ultra_z, nsn_ultra = self.get_nsn_z(
+            data, zmin=0.8, listFields=['COSMOS', 'XMM-LSS'])
+        nsn_dd_z, nsn_dd = self.get_nsn_z(
+            data, zmin=0.5, listFields=['CDFS', 'ADFS', 'ELAIS'])
+
+        self.nsn_ultra_z_08 = nsn_ultra_z
+        self.nsn_ultra = nsn_ultra
+        self.nsn_dd_z_05 = nsn_dd_z
+        self.nsn_dd = nsn_dd
+        print(nsn_ultra_z, nsn_ultra, nsn_dd_z, nsn_dd)
+
         # instance of the fit functions here
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_mu_bias, sigma_mu_photoz,
                                params_fit=params_fit)
@@ -673,10 +684,46 @@ class FitData_mu:
         resa['nsn_WFD'] = self.nsn_WFD
         resa['nsn_z_09'] = self.nsn_z_09
         resa['sigma_photoz'] = self.sigma_photoz
+        resa['nsn_ultra_z_08'] = self.nsn_ultra_z_08
+        resa['nsn_ultra'] = self.nsn_ultra
+        resa['nsn_dd_z_05'] = self.nsn_dd_z_05
+        resa['nsn_dd'] = self.nsn_dd
+
         for key, vals in self.nsn_DD_fields.items():
             resa['nsn_DD_{}'.format(key)] = vals
 
         return resa
+
+    def get_nsn_z(self, data, zmin=0.8, listFields=['COSMOS', 'XMM-LSS']):
+        """
+        Method to get the number of SN with z>= zmin for a list of fields
+
+        Parameters
+        ---------------
+        data: pandas df
+          data to process
+        zmin: float, obs
+          min redshift value (default: 0.8)
+        listField: list(str)
+          list of fields to consider (default: COSMOS, XMM-LSS)
+
+        Returns
+        -----------
+        nsn_z: number of SN with z > zmin (float)
+        nsn_tot: number of sn corresponding to the fields
+
+        """
+
+        nsn_z = 0
+        nsn_tot = 0
+        idx = np.isin(data['fieldName'], listFields)
+        sel = data[idx]
+        if len(sel) > 0:
+            idx = sel['z_SN'] >= zmin
+            nsn_z = len(sel[idx])
+            nsn_tot = len(sel)
+
+        return nsn_z, nsn_tot
 
 
 class FitCosmo(CosmoDist):
