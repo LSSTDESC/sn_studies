@@ -56,9 +56,12 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
                 nFields[bb] = np.median(params_fit[bb])
             else:
                 nFields[bb] = 0.
-        nsn_z_09 = 0.
-        if 'nsn_z_09' in params_fit.columns:
-            nsn_z_09 = np.median(params_fit['nsn_z_09'])
+        nsn_z_09 = check_get(params_fit, 'nsn_z_09')
+        nsn_ultra = check_get(params_fit, 'nsn_ultra')
+        nsn_ultra_z_08 = check_get(params_fit, 'nsn_ultra_z_08')
+        nsn_dd = check_get(params_fit, 'nsn_dd')
+        nsn_dd_z_05 = check_get(params_fit, 'nsn_dd_z_05')
+
         idxb = cosmo_scen['configName'] == conf
         scen = cosmo_scen[idxb]
         print('hhh', scen)
@@ -73,7 +76,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
             ddf_dd, zcomp_dd, nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra = decode_scen(
                 scen, runtype=runtype)
             bn = [conf, mean_Om, sigma_Om, mean_w, sigma_w, std, ddf_dd, zcomp_dd,
-                  nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09]
+                  nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09, nsn_ultra, nsn_ultra_z_08, nsn_dd, nsn_dd_z_05]
             for field in fields:
                 bn += [nFields['nsn_DD_{}'.format(field)]]
             r.append(tuple(bn))
@@ -89,13 +92,22 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         colfields += ['nsn_DD_{}'.format(field)]
 
     ccols = ['conf', 'Om', 'sigma_Om', 'w', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd',
-             'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09']
+             'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09', 'nsn_ultra', 'nsn_ultra_z_08', 'nsn_dd', 'nsn_dd_z_05']
 
     ccols += colfields
 
     res = pd.DataFrame(
         r, columns=ccols)
     return res
+
+
+def check_get(params_fit, varname):
+
+    resu = 0.
+    if varname in params_fit.columns:
+        resu = np.median(params_fit[varname])
+
+    return resu
 
 
 def decode_scen_deprecated(scen, runtype='deep_rolling'):
