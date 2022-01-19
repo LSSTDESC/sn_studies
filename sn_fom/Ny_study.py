@@ -105,6 +105,30 @@ def plot(ax, res, zcomp, norm=1, xvar='Nvisits_y', yvar='Nvisits'):
     ax.plot(seldf[xvar], y,
             label='$z_{complete}$'+'= {}'.format(zcomp), lw=3, marker='o')
 
+    # smooth it?
+    xmin, xmax = np.min(seldf[xvar]), np.max(seldf[xvar])
+    xnew = np.linspace(xmin, xmax, 100)
+    spl = make_interp_spline(
+        seldf[xvar], seldf[yvar]/norm, k=3)  # type: BSpline
+    spl_smooth = spl(xnew)
+    ax.plot(xnew, spl_smooth,
+            label='$z_{complete}$'+'= {}'.format(zcomp), lw=3)
+
+
+def plot_loop(res, norm, xvar='Nvisits_y', yvar='NSN_0.90', legx='$y$-band visits', legy='fraction of SN $z\geq$0.9'):
+
+    fig, ax = plt.subplots(figsize=(15, 8))
+
+    print('hhh', res['zcomp'].unique())
+    for zcomp in res['zcomp'].unique():
+        plot(ax, res, zcomp, norm=norm, xvar=xvar, yvar=yvar)
+        #plot(axb, res, zcomp, norm=refdf)
+
+    ax.set_xlabel(legx)
+    ax.set_ylabel(legy)
+    ax.set_xlim([4., None])
+    ax.grid()
+    ax.legend()
     """
     f_cubic = interp1d(x, y, kind='quadratic')
     xmin, xmax = np.min(x), np.max(x)
@@ -124,6 +148,7 @@ def plot(ax, res, zcomp, norm=1, xvar='Nvisits_y', yvar='Nvisits'):
 
 
 Nys = ['20', '40', '80', '10a', '20a', '30a', '40a', '60a', '80a']
+Nys = ['20', '40', '80', '10a', '30a', '40a', '60a', '80a']
 df, config = load_files(Nys)
 
 print(df)
@@ -133,7 +158,17 @@ print(res)
 
 nsn_tot, nsn_z = get_expected_SN()
 print(nsn_tot, nsn_z)
-fig, ax = plt.subplots()
+
+plot_loop(res, norm=nsn_z, xvar='Nvisits_y', yvar='NSN_0.90')
+
+idd = np.abs(res['Ny']-20) < 1.e-5
+refdf = res[idd]
+
+plot_loop(res, norm=refdf, xvar='Nvisits_y', yvar='Nvisits', legx='$y$-band visits',
+          legy='N$_{\mathrm{visits}}^{\mathrm{N}_y=\mathrm{N}_y^{min}}$/N$_{\mathrm{visits}}$')
+
+plt.show()
+fig, ax = plt.subplots(figsize=(15, 8))
 figb, axb = plt.subplots()
 #axb = ax.twinx()
 idd = np.abs(res['Ny']-20) < 1.e-5
