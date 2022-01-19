@@ -555,15 +555,13 @@ class Plot_NSN:
     ----------------
     nsn_bias: list(str)
       name of the files to process (plot)
-   nsn_bias_syste: list(str)
-      name of the files for syste estimation (plot)
     zcomp: list(str), opt
       list of redshift completeness survey to plot (default: ['0.90', '0.80', '0.70', '0.65'])
     fieldNames: list(str), opt
      list of fields to plot (default: ['COSMOS', 'XMM-LSS', 'CDFS', 'ELAIS', 'ADFS'])
     """
 
-    def __init__(self, nsn_bias, nsn_bias_syste,
+    def __init__(self, nsn_bias,
                  zcomps=['0.90', '0.80', '0.70', '0.65'],
                  fieldNames=['COSMOS', 'XMM-LSS', 'CDFS', 'ELAIS', 'ADFS']):
 
@@ -572,9 +570,6 @@ class Plot_NSN:
 
         for fichName in nsn_bias:
             data[fichName] = pd.read_hdf('{}.hdf5'.format(fichName))
-
-        for fichName in nsn_bias_syste:
-            data_syste[fichName] = pd.read_hdf('{}.hdf5'.format(fichName))
 
         ls = dict(
             zip(zcomps, ['solid', 'dotted', 'dashed', 'dashdot']))
@@ -585,10 +580,9 @@ class Plot_NSN:
             for key, vals in data.items():
                 idx = vals['fieldName'] == field
                 sel = vals[idx]
-                syste = self.estimate_syste(field, sel, data_syste)
-                self.plot_field(ax, field, sel, zcomps, ls, syste)
+                self.plot_field(ax, field, sel, zcomps, ls)
 
-    def plot_field(self, ax, field, sel, zcomps, ls, syste):
+    def plot_field(self, ax, field, sel, zcomps, ls):
         """
         This is where the plot is effectively made
 
@@ -613,50 +607,11 @@ class Plot_NSN:
             selb = sel[idxb].to_records(index=False)
             idz = selb['z'] <= 1.09
             selb = selb[idz]
-            """
+
             ax.plot(selb['z'], selb['nsn_eff'],
                     label='$z_{complete}$'+'= {}'.format(zcomp), lw=3, ls=ls[zcomp])
-            """
-            if not syste.empty:
-                syste['nsn_eff_plus'] = syste['nsn_eff']+syste['syste']
-                syste['nsn_eff_minus'] = syste['nsn_eff']-syste['syste']
-
-                idxs = syste['zcomp'] == zcomp
-                selsyst = syste[idxs].to_records(index=False)
-                nsn_tot = np.sum(selsyst['nsn_eff'])
-                nsn_tot_plus = np.sum(selsyst['nsn_eff_plus'])
-                nsn_tot_minus = np.sum(selsyst['nsn_eff_minus'])
-                print(zcomp, nsn_tot, nsn_tot_plus,
-                      nsn_tot_minus, nsn_tot-nsn_tot_plus)
-                print('allo syste',
-                      selsyst[['z', 'nsn_eff_plus', 'nsn_eff_minus']])
-                ax.fill_between(
-                    selsyst['z'], selsyst['nsn_eff_plus'], selsyst['nsn_eff_minus'], color='yellow')
-                """
-                xnew, smootha = self.smooth_it(
-                    selsyst, vary='nsn_eff_plus', k=25)
-                xnew, smoothb = self.smooth_it(
-                    selsyst, vary='nsn_eff_minus', k=25)
-                
-                
-                ax.fill_between(
-                    xnew, smootha, smoothb, color='yellow')
-                """
-                # ax.plot(selsyst['z'], selsyst['nsn_syste'], lw=3, ls=ls[zcomp])
 
             xmax = np.max(selb['z'])
-            """
-            xnew = np.linspace(
-                np.min(selb['z']), np.max(selb['z']), 100)
-            spl = make_interp_spline(
-                selb['z'], selb['nsn_eff'], k=7)  # type: BSpline
-            print('NSN', zcomp, np.sum(
-                selb['nsn_eff']), np.sum(selb['nsn_eff']))
-            spl_smooth = spl(xnew)
-            """
-            xnew, spl_smooth = self.smooth_it(selb)
-            ax.plot(xnew, spl_smooth,
-                    label='$z_{complete}$'+'= {}'.format(zcomp), ls=ls[zcomp], lw=3)
 
         ax.grid()
         ax.set_xlabel('$z$')
@@ -764,9 +719,11 @@ nsn_bias_syste = opts.nsn_bias_syste.split(',')
 sigma_mu = opts.sigma_mu.split(',')
 sigma_mu_syste = opts.sigma_mu_syste.split(',')
 
-NSN_Syste(nsn_bias, nsn_bias_syste, fieldNames=[
-          'COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'])
-#Plot_NSN(nsn_bias, nsn_bias_syste, fieldNames=['CDFS'])
+# this is to plot with systematics
+# NSN_Syste(nsn_bias, nsn_bias_syste, fieldNames=[
+#          'COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'])
+
+Plot_NSN(nsn_bias, fieldNames=['CDFS'])
 #Plot_Sigma_mu(sigma_mu, sigma_mu_syste)
 # Plot_Sigma_Components(sigma_mu, dbNames=['DD_0.90', 'DD_0.65'])
 plt.show()
