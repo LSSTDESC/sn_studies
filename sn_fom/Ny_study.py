@@ -160,6 +160,7 @@ nsn_tot, nsn_z = get_expected_SN()
 print(nsn_tot, nsn_z)
 
 plot_loop(res, norm=nsn_z, xvar='Nvisits_y', yvar='NSN_0.90')
+plot_loop(res, norm=1, xvar='Nvisits_y', yvar='Nvisits')
 
 idd = np.abs(res['Ny']-20) < 1.e-5
 refdf = res[idd]
@@ -176,7 +177,8 @@ refdf = res[idd]
 
 print('hhh', res['zcomp'].unique())
 for zcomp in res['zcomp'].unique():
-    plot(ax, res, zcomp, norm=nsn_z, xvar='Nvisits_y', yvar='NSN_0.90')
+    #plot(ax, res, zcomp, norm=nsn_z, xvar='Nvisits_y', yvar='NSN_0.90')
+    plot(ax, res, zcomp, norm=nsn_z, xvar='Nvisits_y', yvar='Nvisits')
     plot(axb, res, zcomp, norm=refdf)
 
 
