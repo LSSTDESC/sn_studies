@@ -165,7 +165,7 @@ parser.add_option("--Ny", type=int, default=40,
                   help="y-band visits max at 0.9 [%default]")
 parser.add_option("--sigma_mu_photoz", type=str, default='',
                   help="mu error from photoz [%default]")
-parser.add_option("--sigma_mu_bias_x1_color", type=str, default='sigma_mu_bias_x1_color_1_sigma',
+parser.add_option("--sigma_mu_bias_x1_color", type=str, default='',
                   help="mu error bias from x1 and color n-sigma variation [%default]")
 parser.add_option("--sigma_mu_simu", type=str, default='sigma_mu_from_simu_Ny_40',
                   help="sigma_mu file for distance moduli simulation [%default]")
@@ -178,7 +178,10 @@ parser.add_option("--nsn_WFD_hostz", type=int, default=50000,
 parser.add_option("--nsn_WFD_hostz_yearly", type=int, default=10000,
                   help="number of WFD SN with host z spectro per year [%default]")
 parser.add_option("--year_survey", type=int, default=10,
-                  help="yer of the survey [%default]")
+                  help="year of the survey [%default]")
+parser.add_option("--zspectro_only", type=int, default=0,
+                  help="select SN with z spectro only [%default]")
+
 
 opts, args = parser.parse_args()
 
@@ -208,6 +211,7 @@ nsn_WFD_yearly = opts.nsn_WFD_yearly
 nsn_WFD_hostz = opts.nsn_WFD_hostz
 nsn_WFD_hostz_yearly = opts.nsn_WFD_hostz_yearly
 year_survey = opts.year_survey
+zspectro_only = opts.zspectro_only
 
 """
 dbC = []
@@ -274,8 +278,11 @@ params['sigma_mu'] = sigma_mu_from_simu
 params['params_fit'] = parameter_to_fit
 params['nsn_bias'] = nsn_bias
 params['sn_wfd'] = sn_wfd
-params['sigma_bias_x1_color'] = pd.read_hdf(
-    '{}.hdf5'.format(sigma_mu_bias_x1_color))
+params['sigma_bias_x1_color'] = pd.DataFrame()
+if sigma_mu_bias_x1_color != '':
+    params['sigma_bias_x1_color'] = pd.read_hdf(
+        '{}.hdf5'.format(sigma_mu_bias_x1_color))
+
 params['sigmaInt'] = sigmaInt
 params['binned_cosmology'] = binned_cosmology
 params['surveyType'] = surveyType
@@ -286,6 +293,7 @@ params['nsn_WFD_yearly'] = nsn_WFD_yearly
 params['nsn_WFD_hostz'] = nsn_WFD_hostz
 params['nsn_WFD_hostz_yearly'] = nsn_WFD_hostz_yearly
 params['year_survey'] = year_survey
+params['zspectro_only'] = zspectro_only
 
 go_fit(nMC, params, nproc, fitparName)
 
