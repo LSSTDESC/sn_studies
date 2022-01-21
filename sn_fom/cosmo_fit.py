@@ -636,7 +636,11 @@ class FitData_mu:
         self.nsn_ultra = nsn_ultra
         self.nsn_dd_z_05 = nsn_dd_z
         self.nsn_dd = nsn_dd
-        print(nsn_ultra_z, nsn_ultra, nsn_dd_z, nsn_dd)
+        #print(nsn_ultra_z, nsn_ultra, nsn_dd_z, nsn_dd)
+        print('NSN to fit', len(Z_SN))
+        print('SN utra_deep', nsn_ultra)
+        print('SN deep', nsn_dd)
+        print('SN WFD', self.nsn_WFD)
 
         # instance of the fit functions here
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_mu_bias, sigma_mu_photoz,

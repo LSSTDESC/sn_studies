@@ -49,6 +49,8 @@ class fit_SN_mu:
        number of SN in the WFD with z-spectro host per year (default: 500)
      year_survey: int, opt
        current year of the survey (default: 10)
+    zspectro_only: int, opt
+      to select SN with zspectro only (default: 0)
     """
 
     def __init__(self, fileDir, dbNames, config, fields,
@@ -62,7 +64,8 @@ class fit_SN_mu:
                  nsn_WFD_yearly=-1,
                  nsn_WFD_hostz=100000,
                  nsn_WFD_hostz_yearly=500,
-                 year_survey=10):
+                 year_survey=10,
+                 zspectro_only=0):
         self.fileDir = fileDir
         self.dbNames = dbNames
         self.config = config
@@ -76,6 +79,7 @@ class fit_SN_mu:
         self.sigmaInt = sigmaInt
         self.sigma_bias_x1_color = sigma_bias_x1_color
         self.sigma_mu_photoz = sigma_mu_photoz
+        self.zspectro_only = zspectro_only
 
         self.interp_field = {}
         if not self.sigma_mu_photoz.empty:
@@ -184,7 +188,7 @@ class fit_SN_mu:
         sn_wfd['dd_type'] = 'unknown'
         n_wfd_hostz = nsn_WFD_yearly
         if nsn_WFD_yearly > 0:
-            #nseasons = self.get_nseasons(fieldList=self.config['fieldName'])
+            # nseasons = self.get_nseasons(fieldList=self.config['fieldName'])
             n_wfd = nsn_WFD_yearly * year_survey
             n_wfd_hostz = nsn_WFD_hostz_yearly * year_survey
 
@@ -193,6 +197,9 @@ class fit_SN_mu:
         if not self.sigma_mu_photoz.empty:
             sn_wfd = self.apply_photoz_wfd(
                 sn_wfd, nsn_WFD_hostz, n_wfd_hostz, sigmaInt)
+            if self.zspectro_only:
+                idx = sn_wfd['sigma_mu_photoz'] <= 1.e-5
+                sn_wfd = sn_wfd[idx]
 
         return sn_wfd
 
@@ -502,10 +509,26 @@ class fit_SN_mu:
         # add bias stat
         data_sn = self.add_bias_stat(data_sn)
         # add bias x1_color
-        data_sn = self.add_bias_x1_color(data_sn)
+        if not self.sigma_bias_x1_color.empty:
+            data_sn = self.add_bias_x1_color(data_sn)
         # add sigma_mu_photoz
-        data_sn = self.add_sigma_photoz(data_sn, check_plot=False)
+        """
+        print('before photoz')
+        self.stat_zspectro(data_sn)
+        """
+        if not self.sigma_mu_photoz.empty:
+            data_sn = self.add_sigma_photoz(data_sn, check_plot=False)
+            # select zspectro here
+            if self.zspectro_only:
+                idx = data_sn['sigma_mu_photoz'] <= 1.e-5
+                data_sn = data_sn[idx]
 
+        # some check here
+        """
+        print('after photoz')
+        self.stat_zspectro(data_sn)
+        self.plot_effi_zspectro(data_sn)
+        """
         # plot to cross-check
         """
         import matplotlib.pyplot as plt
@@ -517,6 +540,41 @@ class fit_SN_mu:
         data_sn['mu_SN'] = self. simu_mu_SN(data_sn, sigmaInt)
         return data_sn
 
+    def stat_zspectro(self, data_sn):
+
+        for fieldName in data_sn['fieldName'].unique():
+            idx = data_sn['fieldName'] == fieldName
+            sela = data_sn[idx]
+            idx &= data_sn['sigma_mu_photoz'] < 1.e-5
+            sel = data_sn[idx]
+            print(fieldName, len(sel), len(sela))
+
+    def plot_effi_zspectro(self, data_sn):
+
+        zmin = 0.01
+        zmax = 1.2
+        nbins = 20
+        bins = np.linspace(zmin, zmax, nbins)
+        plot_centers = (bins[:-1] + bins[1:])/2
+
+        import matplotlib.pyplot as plt
+        for fieldName in data_sn['fieldName'].unique():
+            df = pd.DataFrame(plot_centers, columns=['z'])
+            idx = data_sn['fieldName'] == fieldName
+            sela = data_sn[idx]
+            idx &= data_sn['sigma_mu_photoz'] < 1.e-5
+            sel = data_sn[idx]
+            groupa = sela.groupby(pd.cut(sela['z_SN'], bins))
+            groupb = sel.groupby(pd.cut(sel['z_SN'], bins))
+            print(fieldName, len(sel), len(sela), groupb.size()/groupa.size())
+            effi = groupb.size()/groupa.size()
+            effi = effi.fillna(0.)
+            print(groupa.size())
+            df['effi'] = effi.to_list()
+            print(df)
+            plt.plot(df['z'], df['effi'], 'ko')
+            plt.show()
+
     def simu_mu_SN(self, data, sigmaInt, H0=70.0, Om=0.3, w0=-1.0, wa=0.0):
 
         from sn_fom.cosmo_fit import CosmoDist
@@ -525,7 +583,7 @@ class fit_SN_mu:
         dist_mu = cosmo.mu_astro(data['z_SN'], Om, w0, wa)
         sigmu = np.array(data['sigma_mu_SN'])
         sigbias = np.array(data['sigma_bias_stat'])
-        #data['sigma_bias_x1_color'] *= 2
+        # data['sigma_bias_x1_color'] *= 2
         sigx1color = np.array(data['sigma_bias_x1_color'])
         """
         import matplotlib.pyplot as plt
@@ -555,6 +613,31 @@ class fit_SN_mu:
             data['sigma_photoz'] = sigma_photoz
             data = self.apply_sigma_photoz_new(data)
             # data = self.host_measurements(resa, n_host_obs)
+
+        # some adjustments required here
+
+        data_new = pd.DataFrame()
+        for dd_type in ['ultra_dd', 'deep_dd']:
+            idx = data['dd_type'] == dd_type
+            sela = data[idx]
+            idxb = sela['sigma_mu_photoz'] <= 1.e-5
+            sel_data = sela[idxb]
+            nosel_data = sela[~idxb]
+            nosel_data = nosel_data.reset_index()
+            data_new = pd.concat((data_new, nosel_data))
+            n_host_spectro = len(sel_data)
+            if n_host_spectro > self.n_host_obs[dd_type]:
+                # too many SN with host spectro -> to be corrected
+                part_spectro = sel_data.sample(n=self.n_host_obs[dd_type])
+                part_host_photoz = sel_data.drop(part_spectro.index)
+                part_host_photoz['sigma_mu_photoz'] = self.sigmu_interp(
+                    part_host_photoz['z_SN'])
+                data_new = pd.concat((data_new, part_spectro))
+                data_new = pd.concat((data_new, part_host_photoz))
+            else:
+                data_new = pd.concat((data_new, sel_data))
+
+        data = pd.DataFrame(data_new)
 
         """
             data_n = pd.DataFrame()
@@ -632,11 +715,12 @@ class fit_SN_mu:
         binsb = np.arange(0.0, 1.2, 0.05)
 
         bins_center = 0.5*(binsb[1:]-binsb[:-1])
+        """
         norm = {}
         for dd_type in ['ultra_dd', 'deep_dd']:
             intt = self.interp_field[dd_type](bins_center)
             norm[dd_type] = self.n_host_obs[dd_type]/np.sum(intt)
-
+        """
         data['dd_type'] = 'deep_dd'
         idx = data['fieldName'] == 'COSMOS'
         if len(data[idx]) > 0:
@@ -650,7 +734,7 @@ class fit_SN_mu:
             idx = data['dd_type'] == dd_type
             sel = data[idx]
             new_data = sel.groupby(pd.cut(sel.z_SN, bins)).apply(
-                lambda x: self.apply_photoz(x, self.interp_field[dd_type], norm[dd_type]))
+                lambda x: self.apply_photoz(x, self.interp_field[dd_type]))
             newd = pd.DataFrame(new_data['z_SN'].to_list(), columns=['z_SN'])
             for col in new_data.columns:
                 if col != 'z_SN' and col != 'index':
@@ -699,7 +783,7 @@ class fit_SN_mu:
 
         return np.max(n_seasons)
 
-    def apply_photoz(self, grp, interp, norm):
+    def apply_photoz(self, grp, interp):
 
         zmin = grp.name.left
         zmax = grp.name.right
@@ -709,8 +793,7 @@ class fit_SN_mu:
         # nSN = len(grp)
         # n_host = int(effi*nSN)
         # print('from host efficiency', n_host, nSN)
-        n_host = int(interp(zmean)*norm)
-
+        n_host = int(interp(zmean)*len(grp))
         if len(grp) == 0:
             return grp
         if len(grp) <= n_host:
@@ -881,6 +964,7 @@ def multifit_mu(index, params, j=0, output_q=None):
     nsn_WFD_hostz = params['nsn_WFD_hostz']
     nsn_WFD_hostz_yearly = params['nsn_WFD_hostz_yearly']
     year_survey = params['year_survey']
+    zspectro_only = params['zspectro_only']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
@@ -901,7 +985,8 @@ def multifit_mu(index, params, j=0, output_q=None):
                            nsn_WFD_yearly=nsn_WFD_yearly,
                            nsn_WFD_hostz=nsn_WFD_hostz,
                            nsn_WFD_hostz_yearly=nsn_WFD_hostz_yearly,
-                           year_survey=year_survey)
+                           year_survey=year_survey,
+                           zspectro_only=zspectro_only)
 
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
@@ -1113,7 +1198,7 @@ class Sigma_mu_obs:
                     data_sn[vvb] = np.sqrt(data_sn[vvc])
             bdatat = pd.DataFrame()
             for var in ['mu', 'sigma_mu', 'sigma_color', 'sigma_x1', 'sigma_mb']:
-                bdata = binned_data(zmin, zmax, nbins, data_sn, var)
+                bdata = binned_data(zmin, zmax, nbins, data_sn, var=var)
                 bdata = bdata.round({'z': 2})
                 bdata = self.check_fill(bdata, '{}_mean'.format(var))
                 if bdatat.empty:
