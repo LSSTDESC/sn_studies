@@ -6,7 +6,7 @@ from sn_tools.sn_io import loopStack
 from astropy.table import Table
 import pandas as pd
 import os
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, make_interp_spline
 
 
 class SN_SNR:
@@ -102,7 +102,7 @@ class SN_SNR:
 def loadData(fDir, dbName, snType='mediumSN'):
 
     data = loadSN(fDir, dbName, snType)
-    data['fitstatus'] = data['fitstatus'].str.decode('utf-8')
+    # data['fitstatus'] = data['fitstatus'].str.decode('utf-8')
     print('hhh', data['fitstatus'])
     idx = data['fitstatus'] == 'fitok'
     data = data[idx]
@@ -130,6 +130,74 @@ class Plot:
         self.bbins = dict(zip(vars, binvars))
         self.dict_bin = dict_bin
 
+        df_res = pd.DataFrame()
+        for key, vals in data.items():
+            vvals = key.split('_')
+            configName = 'config_fakes_{}_{}.csv'.format(
+                vvals[-2], vvals[-1])
+            print(configName)
+            df = pd.read_csv(configName)
+            idx = df['dbName'] == key
+            row = pd.DataFrame(df[idx])
+            print(row)
+            zlim, zlimp, zlimm = self.get_zlim(vals)
+            row['zlim'] = zlim
+            row['zlimp'] = zlimp
+            row['zlimm'] = zlimm
+
+            print(zlim)
+            df_res = pd.concat((df_res, row))
+
+        print(df_res)
+        self.plot_zlim(df_res)
+
+        plot = False
+
+        if plot:
+            self.plot_all(data)
+
+    def plot_zlim(self, data):
+
+        data = data.sort_values(by=['Nvisits_y'])
+        data['DD_zcomp'] = data['dbName'].str.split(
+            '_', expand=True)[0]+'_'+data['dbName'].str.split('_', expand=True)[1]
+        data['zcomp'] = data['DD_zcomp'].str.split('_', expand=True)[1]
+        print(data)
+        fig, ax = plt.subplots(figsize=(15, 8))
+        xvar = 'Nvisits_y'
+        yvar = 'zlim'
+        Nycut = dict(zip(['DD_0.70', 'DD_0.80', 'DD_0.90'], [50, 70, 90]))
+        ls = dict(zip(['DD_0.70', 'DD_0.80', 'DD_0.90'],
+                      ['solid', 'dashed', 'dotted']))
+        for confname in data['DD_zcomp'].unique():
+            idx = data['DD_zcomp'] == confname
+            idx &= data['Nvisits_y'] <= Nycut[confname]
+            seldf = data[idx]
+            zcomp = float(seldf['zcomp'].unique()[0])
+            ax.plot(seldf[xvar], seldf[yvar], ls=ls[confname],
+                    color='k', label='$z_{complete}=$'+'{}'.format(zcomp))
+            """
+            xmin, xmax = np.min(seldf[xvar]), np.max(seldf[xvar])
+            xnew = np.linspace(xmin, xmax, 100)
+            spl = make_interp_spline(
+                seldf[xvar], seldf[yvar], k=3)  # type: BSpline
+            spl_smooth = spl(xnew)
+            ax.plot(xnew, spl_smooth,
+                    label='$z_{complete}$'+'= {}'.format(zcomp), lw=3)
+            """
+            """
+            ax.fill_between(
+                seldf[xvar], seldf['{}p'.format(yvar)], seldf['{}m'.format(yvar)], color='yellow')
+            """
+            ax.fill_between(
+                seldf[xvar], seldf[yvar]+0.01, seldf[yvar]-0.01, color='yellow')
+        ax.grid()
+        ax.set_xlabel('$Y$-band visits')
+        ax.set_ylabel('$z_{limit}$')
+        ax.legend()
+
+    def plot_all(self, data):
+
         for vv in vars:
             fig, ax = plt.subplots()
             r = []
@@ -142,9 +210,20 @@ class Plot:
                     for b in 'grizy':
                         vals['SNR{}'.format(
                             b)] = vals['SNR{}'.format(b)]/vals['SNR']
-                res = self.plot(ax, vals, vv, key)
-                r.append(res)
-            print(np.mean(r), np.std(r))
+                self.plot(vals)
+
+    def get_zlim(self, data, var='sigmaC', sigmaC=0.04):
+
+        dd = self.bbins[var]
+        vmin = self.dict_bin[dd]['min']
+        vmax = self.dict_bin[dd]['max']
+        nbins = self.dict_bin[dd]['nbins']
+        bdata = binned_data(vmin, vmax, nbins, data, dd, var)
+
+        # get the redshift limit here
+        bb = interp1d(
+            data[var], data[dd], bounds_error=False, fill_value=0.)
+        return bb(sigmaC), bb(1.05*sigmaC), bb(0.95*sigmaC)
 
     def plot(self, ax, data, var, label):
 
@@ -157,21 +236,13 @@ class Plot:
         ax.grid()
         ax.legend()
 
-        if var == 'sigmaC':
-            # get the redshift limit here
-            bb = interp1d(
-                data[var], data[dd], bounds_error=False, fill_value=0.)
-            return bb(0.04)
-
-        return 0
-
     """
     ax[0, 0].legend()
     ax[0, 0].set_ylim([0.0, 0.05])
     ax[1, 0].set_xlim([0.01, 0.06])
     ax[1, 1].set_xlim([0.01, 0.06])
     ax[0, 1].set_xlim([0.01, 0.06])
-    
+
     ax[0].legend()
     ax[0].set_ylim([0.0, 0.05])
     """
@@ -179,8 +250,8 @@ class Plot:
 
 snType = 'faintSN'
 snType = 'mediumSN'
-Ny = list(range(10, 70, 10))
-Ny += [80]
+Ny = list(range(10, 90, 10))
+# Ny += [80]
 
 fDir = 'Fakes_medium/Fit'
 """
@@ -193,17 +264,20 @@ for Nyv in Ny:
 
 dbNames = []
 add_vv = '_SNR'
-#add_vv = ''
-for Nyv in Ny:
-    dbNames.append('DD_0.70_Ny_{}{}'.format(Nyv, add_vv))
+add_vv = ''
+# for zcomp in ['0.70', '0.80', '0.90']:
+for zcomp in ['0.70', '0.80', '0.90', '0.75', '0.85']:
+    for Nyv in Ny:
+        dbNames.append('DD_{}_Ny_{}a{}'.format(zcomp, Nyv, add_vv))
 
+dbNames.append('DD_0.70_Ny_40')
 data = {}
 
 for dbName in dbNames:
     data[dbName] = loadData(fDir, dbName, snType=snType)
     print(data[dbName]['SNID'])
 
-#Plot(data, vars=['sigmaC'])
-Plot(data)
+Plot(data, vars=['sigmaC'])
+# Plot(data)
 
 plt.show()
