@@ -506,6 +506,7 @@ class fit_SN_mu:
         data_sn['sigma_bias_stat'] = 0.0
         data_sn['sigma_bias_x1_color'] = 0.0
         data_sn['sigma_mu_photoz'] = 0.0
+        data_sn['sigma_photoz'] = 0.0
         # add bias stat
         data_sn = self.add_bias_stat(data_sn)
         # add bias x1_color
