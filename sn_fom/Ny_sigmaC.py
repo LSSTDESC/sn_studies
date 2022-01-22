@@ -166,9 +166,10 @@ class Plot:
         fig, ax = plt.subplots(figsize=(15, 8))
         xvar = 'Nvisits_y'
         yvar = 'zlim'
-        Nycut = dict(zip(['DD_0.70', 'DD_0.80', 'DD_0.90'], [50, 70, 90]))
-        ls = dict(zip(['DD_0.70', 'DD_0.80', 'DD_0.90'],
-                      ['solid', 'dashed', 'dotted']))
+        Nycut = dict(zip(['DD_0.70', 'DD_0.80', 'DD_0.90',
+                          'DD_0.75', 'DD_0.85'], [50, 90, 90, 90, 90]))
+        ls = dict(zip(['DD_0.70', 'DD_0.80', 'DD_0.90', 'DD_0.75', 'DD_0.85'],
+                      ['solid', 'dashed', 'dotted', (0, (1, 10)), (0, (3, 5, 1, 5))]))
         for confname in data['DD_zcomp'].unique():
             idx = data['DD_zcomp'] == confname
             idx &= data['Nvisits_y'] <= Nycut[confname]
