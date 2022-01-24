@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import glob
 from sn_tools.sn_io import loopStack
+from sn_tools.sn_utils import multiproc
 from astropy.table import Table
 import pandas as pd
 import os
@@ -111,6 +112,27 @@ def loadData(fDir, dbName, snType='mediumSN'):
     return data
 
 
+def loadData_new(dbNames, params, j=0, output_q=None):
+
+    params['fDir'] = fDir
+    params['snType'] = snType
+
+    data_res = {}
+    for dbName in dbNames:
+        data = loadSN(fDir, dbName, snType)
+        # data['fitstatus'] = data['fitstatus'].str.decode('utf-8')
+        print('hhh', data['fitstatus'])
+        idx = data['fitstatus'] == 'fitok'
+        data = data[idx]
+        data['sigmaC'] = np.sqrt(data['Cov_colorcolor'])
+        data_res[dbName] = data
+
+    if output_q is not None:
+        return output_q.put({j: data_res})
+    else:
+        return data_res
+
+
 class Plot:
     def __init__(self, data, vars=['sigmaC', 'SNRi', 'SNRz', 'SNRy']):
 
@@ -175,11 +197,15 @@ class Plot:
             idx &= data['Nvisits_y'] <= Nycut[confname]
             seldf = data[idx]
             zcomp = float(seldf['zcomp'].unique()[0])
+            seldf = seldf.to_records(index=False)
             ax.plot(seldf[xvar], seldf[yvar], ls=ls[confname],
-                    color='k', label='$z_{complete}=$'+'{}'.format(zcomp))
+                    color='k', label='$z_{complete}=$'+'{}'.format(zcomp), lw=3)
+
             """
             xmin, xmax = np.min(seldf[xvar]), np.max(seldf[xvar])
-            xnew = np.linspace(xmin, xmax, 100)
+            #ip = interp1d(seldf[xvar],seldf[yvar],bounds_error=False, fill_value=0.)
+
+            xnew = np.linspace(xmin, xmax, 70)
             spl = make_interp_spline(
                 seldf[xvar], seldf[yvar], k=3)  # type: BSpline
             spl_smooth = spl(xnew)
@@ -266,18 +292,24 @@ for Nyv in Ny:
 dbNames = []
 add_vv = '_SNR'
 add_vv = ''
-# for zcomp in ['0.70', '0.80', '0.90']:
-for zcomp in ['0.70', '0.80', '0.90', '0.75', '0.85']:
+for zcomp in ['0.70', '0.75', '0.80']:
+    # for zcomp in ['0.70', '0.80', '0.90', '0.75', '0.85']:
     for Nyv in Ny:
         dbNames.append('DD_{}_Ny_{}a{}'.format(zcomp, Nyv, add_vv))
 
 dbNames.append('DD_0.70_Ny_40')
 data = {}
 
+params = {}
+params['fDir'] = fDir
+params['snType'] = snType
+data = multiproc(dbNames, params, loadData_new, 4)
+
+"""
 for dbName in dbNames:
     data[dbName] = loadData(fDir, dbName, snType=snType)
     print(data[dbName]['SNID'])
-
+"""
 Plot(data, vars=['sigmaC'])
 # Plot(data)
 
