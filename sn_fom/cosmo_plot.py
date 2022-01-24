@@ -301,16 +301,26 @@ parser.add_option('--runtype', type=str, default='deep_rolling',
                   help='runtype (deep_rolling/universal) [%default]')
 parser.add_option('--outName', type=str, default='config_cosmoSN_dr_0.9.hdf5',
                   help='output file name [%default]')
+parser.add_option('--outDir', type=str, default='cosmo_files',
+                  help='output directory[%default]')
+
 
 opts, args = parser.parse_args()
 
 confName = opts.config.split('.')[0].split('FitParams_conf_')[-1]
 confName = '_'.join(vv for vv in confName.split('_')[2:])
+outDir = opts.outDir
+outName = opts.outName
+
+# check if this dir exist (and create it if necessary)
+if not os.path.exists(outDir):
+    os.mkdir(outDir)
 
 search_path = '{}/*{}*.hdf5'.format(opts.fileDir, confName)
 print('searching ...', search_path)
 fis = glob.glob(search_path)
 cosmo_scen = pd.read_csv(opts.config, delimiter=';', comment='#')
+
 
 print('ggg', len(fis), cosmo_scen)
 #print('looking for', outName)
@@ -324,7 +334,8 @@ res['Ny'] = Ny
 outName = opts.config.replace('config_', '').replace(
     '.csv', '_Ny_{}.hdf5'.format(Ny))
 """
-res.to_hdf('{}.hdf5'.format(opts.outName), key='cosmo')
+fullOut = '{}/{}.hdf5'.format(outDir, outName)
+res.to_hdf(fullOut, key='cosmo')
 
 """
 res = pd.read_hdf(outName)
