@@ -648,12 +648,14 @@ class FitData_mu:
 
         """
         import matplotlib.pyplot as plt
+        var = 'sigma_mu_photoz'
+        var = 'mu_SN'
         for fi in data['fieldName'].unique():
             fig, ax = plt.subplots()
             idx = data['fieldName'] == fi
             sel = data[idx].to_records(index=False)
             print('hh', fi, len(sel))
-            ax.plot(sel['z_SN'], sel['sigma_mu_photoz'],
+            ax.plot(sel['z_SN'], sel[var],
                     ls='None', marker='o', label=fi)
             ax.legend()
         plt.show()
