@@ -591,6 +591,25 @@ class FitData:
         return resa
 
 
+def plot_syste(data):
+
+    import matplotlib.pyplot as plt
+    toplot = ['sigma_mu_SN', 'sigma_bias_stat',
+              'sigma_bias_x1_color', 'sigma_mu_photoz']
+
+    for fi in data['fieldName'].unique():
+        fig, ax = plt.subplots()
+        fig.suptitle(fi)
+        idx = data['fieldName'] == fi
+        sel = data[idx].to_records(index=False)
+        print('hh', fi, len(sel))
+        for var in toplot:
+            ax.plot(sel['z_SN'], sel[var],
+                    ls='None', marker='o', label=var)
+        ax.legend()
+    plt.show()
+
+
 class FitData_mu:
     """
     class to perform a cosmo fit on data
@@ -615,6 +634,7 @@ class FitData_mu:
         sigma_mu_SN = data['sigma_mu_SN']
         sigma_mu_bias = np.sqrt(data['sigma_bias_stat']
                                 ** 2+data['sigma_bias_x1_color']**2)
+        data['sigma_mu_bias'] = sigma_mu_bias
         sigma_mu_photoz = data['sigma_mu_photoz']
         self.sigma_photoz = data['sigma_photoz'].unique()[0]
         self.nsn_DD_fields = {}
@@ -646,20 +666,7 @@ class FitData_mu:
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_mu_bias, sigma_mu_photoz,
                                params_fit=params_fit)
 
-        """
-        import matplotlib.pyplot as plt
-        var = 'sigma_mu_photoz'
-        var = 'mu_SN'
-        for fi in data['fieldName'].unique():
-            fig, ax = plt.subplots()
-            idx = data['fieldName'] == fi
-            sel = data[idx].to_records(index=False)
-            print('hh', fi, len(sel))
-            ax.plot(sel['z_SN'], sel[var],
-                    ls='None', marker='o', label=fi)
-            ax.legend()
-        plt.show()
-        """
+        # plot_syste(data)
 
     def __call__(self):
 
