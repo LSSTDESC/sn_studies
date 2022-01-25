@@ -73,10 +73,10 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
                 r.append((conf, mean, std, zcomp, zcomp_ultra,
                           nddf, nddf_ultra, nsn_DD, nseasons_ultra))
             """
-            ddf_dd, zcomp_dd, nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra = decode_scen(
+            ddf_dd, zcomp_dd, nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, year = decode_scen(
                 scen, runtype=runtype)
             bn = [conf, mean_Om, sigma_Om, mean_w, sigma_w, std, ddf_dd, zcomp_dd,
-                  nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09, nsn_ultra, nsn_ultra_z_08, nsn_dd, nsn_dd_z_05]
+                  nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09, nsn_ultra, nsn_ultra_z_08, nsn_dd, nsn_dd_z_05, year]
             for field in fields:
                 bn += [nFields['nsn_DD_{}'.format(field)]]
             r.append(tuple(bn))
@@ -85,14 +85,14 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         r, columns=['conf', 'sigma_w', 'sigma_w_std', 'zcomp', 'zcomp_ultra', 'nddf', 'nddf_ultra', 'nsn_DD', 'nseasons_ultra'])
 
     print(res[['conf', 'sigma_w', 'zcomp', 'nddf',
-               'nsn_DD', 'zcomp_ultra', 'nddf', 'nddf_ultra', 'nseasons_ultra']])
+               'nsn_DD', 'zcomp_ultra', 'nddf', 'nddf_ultra', 'nseasons_ultra','year']])
     """
     colfields = []
     for field in fields:
         colfields += ['nsn_DD_{}'.format(field)]
 
     ccols = ['conf', 'Om', 'sigma_Om', 'w', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd',
-             'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09', 'nsn_ultra', 'nsn_ultra_z_08', 'nsn_dd', 'nsn_dd_z_05']
+             'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09', 'nsn_ultra', 'nsn_ultra_z_08', 'nsn_dd', 'nsn_dd_z_05', 'year']
 
     ccols += colfields
 
@@ -171,6 +171,7 @@ def decode_scen(scen, runtype='deep_rolling'):
     fields = scen['fields'].to_list()[0]
     pointings = scen['npointings'].to_list()[0]
     seasons = scen['nseasons'].to_list()[0]
+    year = scen['year'].to_list()[0]
     print('here is the scene', scen)
     zcomp = -1
     nddf = []
@@ -252,7 +253,7 @@ def decode_scen(scen, runtype='deep_rolling'):
             nseasons_ultra = int(np.median(nseasons_ultra))
             """
     # return zcomp, zcomp_ultra, nddf, nddf_ultra, nseasons_ultra
-    return to_string(ddf_dd), to_string(zcomp_dd), to_string(nseasons_dd), to_string(ddf_ultra), to_string(zcomp_ultra), to_string(nseasons_ultra)
+    return to_string(ddf_dd), to_string(zcomp_dd), to_string(nseasons_dd), to_string(ddf_ultra), to_string(zcomp_ultra), to_string(nseasons_ultra), year
 
 
 def smooth(res, plot=False):
@@ -323,6 +324,7 @@ cosmo_scen = pd.read_csv(opts.config, delimiter=';', comment='#')
 
 
 print('ggg', len(fis), cosmo_scen)
+
 #print('looking for', outName)
 # if not os.path.isfile(outName):
 #    print('moving to summ')
