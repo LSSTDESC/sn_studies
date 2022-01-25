@@ -451,6 +451,7 @@ class fit_SN_mu:
                 selSN = sel[idxb]
                 # get the number of SN per bin
                 zmin = zcomp
+
                 """
                 zvals = sel_sigmu[idx]['z']
                 zmax = 1.1
@@ -491,9 +492,13 @@ class fit_SN_mu:
             sel = df_tot[idx].copy()
             idm = self.sigma_bias_x1_color['dbName'] == dbName
             sel_bias = self.sigma_bias_x1_color[idm]
+            # get the redshift completeness value
+            zcomp = float(dbName.split('_')[-1])
+            idx = sel_bias['z'] >= zcomp
+            selinterp = sel_bias[idx]
             if not sel_bias.empty:
                 interpo = interp1d(
-                    sel_bias['z'], sel_bias['delta_mu_bias'], bounds_error=False, fill_value=0.)
+                    selinterp['z'], selinterp['delta_mu_bias'], bounds_error=False, fill_value=0.)
                 zrange = sel['z_SN'].to_list()
                 sel.loc[:, 'sigma_bias_x1_color'] = interpo(zrange)
             df_fi = pd.concat((df_fi, sel))
@@ -507,10 +512,10 @@ class fit_SN_mu:
         data_sn['sigma_bias_x1_color'] = 0.0
         data_sn['sigma_mu_photoz'] = 0.0
         data_sn['sigma_photoz'] = 0.0
-        # add bias stat
-        data_sn = self.add_bias_stat(data_sn)
-        # add bias x1_color
         if not self.sigma_bias_x1_color.empty:
+            # add bias stat
+            data_sn = self.add_bias_stat(data_sn)
+            # add bias x1_color
             data_sn = self.add_bias_x1_color(data_sn)
         # add sigma_mu_photoz
         """
