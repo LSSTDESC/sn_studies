@@ -181,6 +181,14 @@ parser.add_option("--year_survey", type=int, default=10,
                   help="year of the survey [%default]")
 parser.add_option("--zspectro_only", type=int, default=0,
                   help="select SN with z spectro only [%default]")
+parser.add_option("--nsn_spectro_ultra_yearly", type=int, default=200,
+                  help="number of spectro-z host for ultradeep fields (per year) [%default]")
+parser.add_option("--nsn_spectro_ultra_tot", type=int, default=2000,
+                  help="number of spectro-z host for ultradeep fields (total) [%default]")
+parser.add_option("--nsn_spectro_deep_yearly", type=int, default=500,
+                  help="number of spectro-z host for deep fields (per year) [%default]")
+parser.add_option("--nsn_spectro_deep_tot", type=int, default=2500,
+                  help="number of spectro-z host for deep fields (total) [%default]")
 
 
 opts, args = parser.parse_args()
@@ -212,6 +220,11 @@ nsn_WFD_hostz = opts.nsn_WFD_hostz
 nsn_WFD_hostz_yearly = opts.nsn_WFD_hostz_yearly
 year_survey = opts.year_survey
 zspectro_only = opts.zspectro_only
+nsn_spectro_ultra_yearly = opts.nsn_spectro_ultra_yearly
+nsn_spectro_ultra_tot = opts.nsn_spectro_ultra_tot
+nsn_spectro_deep_yearly = opts.nsn_spectro_deep_yearly
+nsn_spectro_deep_tot = opts.nsn_spectro_deep_tot
+
 
 """
 dbC = []
@@ -294,6 +307,10 @@ params['nsn_WFD_hostz'] = nsn_WFD_hostz
 params['nsn_WFD_hostz_yearly'] = nsn_WFD_hostz_yearly
 params['year_survey'] = year_survey
 params['zspectro_only'] = zspectro_only
+params['nsn_spectro_ultra_yearly'] = nsn_spectro_ultra_yearly
+params['nsn_spectro_ultra_tot'] = nsn_spectro_ultra_tot
+params['nsn_spectro_deep_yearly'] = nsn_spectro_deep_yearly
+params['nsn_spectro_deep_tot'] = nsn_spectro_deep_tot
 
 go_fit(nMC, params, nproc, fitparName)
 
