@@ -51,6 +51,14 @@ class fit_SN_mu:
        current year of the survey (default: 10)
     zspectro_only: int, opt
       to select SN with zspectro only (default: 0)
+    nsn_spectro_ultra_yearly: int, opt
+      number of SN with zspectro (ultra) per year (default: 200)
+    nsn_spectro_ultra_tot: int, opt
+       number of SN with zspectro (ultra) total (default: 2000)
+    nsn_spectro_deep_yearly: int, opt
+      number of SN with zspectro (deep) per year (default: 500)
+    nsn_spectro_deep_tot: int, opt
+      number of SN with zspectro (deep) total (default: 2500)
     """
 
     def __init__(self, fileDir, dbNames, config, fields,
@@ -65,7 +73,12 @@ class fit_SN_mu:
                  nsn_WFD_hostz=100000,
                  nsn_WFD_hostz_yearly=500,
                  year_survey=10,
-                 zspectro_only=0):
+                 zspectro_only=0,
+                 nsn_spectro_ultra_yearly=200,
+                 nsn_spectro_ultra_tot=2000,
+                 nsn_spectro_deep_yearly=500,
+                 nsn_spectro_deep_tot=2500):
+
         self.fileDir = fileDir
         self.dbNames = dbNames
         self.config = config
@@ -80,6 +93,10 @@ class fit_SN_mu:
         self.sigma_bias_x1_color = sigma_bias_x1_color
         self.sigma_mu_photoz = sigma_mu_photoz
         self.zspectro_only = zspectro_only
+        self.nsn_spectro_ultra_yearly = nsn_spectro_ultra_yearly
+        self.nsn_spectro_ultra_tot = nsn_spectro_ultra_tot
+        self.nsn_spectro_deep_yearly = nsn_spectro_deep_yearly
+        self.nsn_spectro_deep_tot = nsn_spectro_deep_tot
 
         self.interp_field = {}
         if not self.sigma_mu_photoz.empty:
@@ -684,15 +701,14 @@ class fit_SN_mu:
         # get the number of seasons for ultra and deep fields
         self.n_host_obs = {}
         self.n_host_obs['ultra_dd'] = self.get_nseasons(
-            ['COSMOS', 'XMM-LSS'])*200
+            ['COSMOS', 'XMM-LSS'])*self.nsn_spectro_ultra_yearly
         self.n_host_obs['deep_dd'] = self.get_nseasons(
-            ['CDFS', 'ELAIS', 'ADFS'])*500
+            ['CDFS', 'ELAIS', 'ADFS'])*self.nsn_spectro_deep_yearly
 
-        if nsn_WFD_yearly < 0:
-            # total Subaru expected spectra for DD
-            self.n_host_obs['ultra_dd'] = 2000
-            # total 4MOST expected spectra for DD
-            self.n_host_obs['deep_dd'] = 1000
+        self.n_host_obs['ultra_dd'] = np.min([
+            self.n_host_obs['ultra_dd'], self.nsn_spectro_ultra_tot])
+        self.n_host_obs['deep_dd'] = np.min(
+            [self.n_host_obs['deep_dd'], self.nsn_spectro_deep_tot])
 
         # Subaru host efficiency vs z
         rz_Sub = [0.0, 0.2, 1., 1.37, 2.16]
@@ -971,6 +987,10 @@ def multifit_mu(index, params, j=0, output_q=None):
     nsn_WFD_hostz_yearly = params['nsn_WFD_hostz_yearly']
     year_survey = params['year_survey']
     zspectro_only = params['zspectro_only']
+    nsn_spectro_ultra_yearly = params['nsn_spectro_ultra_yearly']
+    nsn_spectro_ultra_tot = params['nsn_spectro_ultra_tot']
+    nsn_spectro_deep_yearly = params['nsn_spectro_deep_yearly']
+    nsn_spectro_deep_tot = params['nsn_spectro_deep_tot']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
@@ -992,7 +1012,11 @@ def multifit_mu(index, params, j=0, output_q=None):
                            nsn_WFD_hostz=nsn_WFD_hostz,
                            nsn_WFD_hostz_yearly=nsn_WFD_hostz_yearly,
                            year_survey=year_survey,
-                           zspectro_only=zspectro_only)
+                           zspectro_only=zspectro_only,
+                           nsn_spectro_ultra_yearly=nsn_spectro_ultra_yearly,
+                           nsn_spectro_ultra_tot=nsn_spectro_ultra_tot,
+                           nsn_spectro_deep_yearly=nsn_spectro_deep_yearly,
+                           nsn_spectro_deep_tot=nsn_spectro_deep_tot)
 
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
