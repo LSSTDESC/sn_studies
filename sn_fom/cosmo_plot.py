@@ -35,6 +35,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
 
     r = []
     fields = ['COSMOS', 'XMM-LSS', 'ADFS', 'ELAIS', 'CDFS']
+
     for fi in fis:
         nFields = {}
         # get config name
@@ -61,6 +62,12 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         nsn_ultra_z_08 = check_get(params_fit, 'nsn_ultra_z_08')
         nsn_dd = check_get(params_fit, 'nsn_dd')
         nsn_dd_z_05 = check_get(params_fit, 'nsn_dd_z_05')
+        nsn_spectro_ultra_yearly = check_get(
+            params_fit, 'nsn_spectro_ultra_yearly')
+        nsn_spectro_ultra_tot = check_get(params_fit, 'nsn_spectro_ultra_tot')
+        nsn_spectro_deep_yearly = check_get(
+            params_fit, 'nsn_spectro_deep_yearly')
+        nsn_spectro_deep_tot = check_get(params_fit, 'nsn_spectro_deep_tot')
 
         idxb = cosmo_scen['configName'] == conf
         scen = cosmo_scen[idxb]
@@ -77,6 +84,8 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
                 scen, runtype=runtype)
             bn = [conf, mean_Om, sigma_Om, mean_w, sigma_w, std, ddf_dd, zcomp_dd,
                   nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09, nsn_ultra, nsn_ultra_z_08, nsn_dd, nsn_dd_z_05, year]
+            bn += [nsn_spectro_ultra_yearly, nsn_spectro_ultra_tot,
+                   nsn_spectro_deep_yearly, nsn_spectro_deep_tot]
             for field in fields:
                 bn += [nFields['nsn_DD_{}'.format(field)]]
             r.append(tuple(bn))
@@ -94,6 +103,8 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
     ccols = ['conf', 'Om', 'sigma_Om', 'w', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd',
              'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09', 'nsn_ultra', 'nsn_ultra_z_08', 'nsn_dd', 'nsn_dd_z_05', 'year']
 
+    ccols += ['nsn_spectro_ultra_yearly', 'nsn_spectro_ultra_tot',
+              'nsn_spectro_deep_yearly', 'nsn_spectro_deep_tot']
     ccols += colfields
 
     res = pd.DataFrame(
