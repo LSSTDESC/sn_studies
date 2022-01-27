@@ -629,6 +629,7 @@ class FitData_mu:
             idx = data['z_SN'] <= data['zcomp']
             data = data[idx]
 
+        print(data.columns)
         Z_SN = data['z_SN']
         mu_SN = data['mu_SN']
         sigma_mu_SN = data['sigma_mu_SN']
@@ -637,6 +638,11 @@ class FitData_mu:
         data['sigma_mu_bias'] = sigma_mu_bias
         sigma_mu_photoz = data['sigma_mu_photoz']
         self.sigma_photoz = data['sigma_photoz'].unique()[0]
+        self.nsn_spectro_ultra_yearly = data['nsn_spectro_ultra_yearly'].mean()
+        self.nsn_spectro_ultra_tot = data['nsn_spectro_ultra_tot'].mean()
+        self.nsn_spectro_deep_yearly = data['nsn_spectro_deep_yearly'].mean()
+        self.nsn_spectro_deep_tot = data['nsn_spectro_deep_tot'].mean()
+
         self.nsn_DD_fields = {}
         for fieldName in data['fieldName'].unique():
             if fieldName != 'WFD':
@@ -701,6 +707,10 @@ class FitData_mu:
         resa['nsn_ultra'] = self.nsn_ultra
         resa['nsn_dd_z_05'] = self.nsn_dd_z_05
         resa['nsn_dd'] = self.nsn_dd
+        resa['nsn_spectro_ultra_yearly'] = self.nsn_spectro_ultra_yearly
+        resa['nsn_spectro_ultra_tot'] = self.nsn_spectro_ultra_tot
+        resa['nsn_spectro_deep_yearly'] = self.nsn_spectro_deep_yearly
+        resa['nsn_spectro_deep_tot'] = self.nsn_spectro_deep_tot
 
         for key, vals in self.nsn_DD_fields.items():
             resa['nsn_DD_{}'.format(key)] = vals

@@ -122,6 +122,12 @@ class fit_SN_mu:
                                   nsn_WFD_hostz, nsn_WFD_hostz_yearly, sigmaInt, year_survey)
             data_sn = pd.concat((data_sn, sn_wfd))
 
+        # add some variables here
+        data_sn['nsn_spectro_ultra_yearly'] = self.nsn_spectro_ultra_yearly
+        data_sn['nsn_spectro_ultra_tot'] = self.nsn_spectro_ultra_tot
+        data_sn['nsn_spectro_deep_yearly'] = self.nsn_spectro_deep_yearly
+        data_sn['nsn_spectro_deep_tot'] = self.nsn_spectro_deep_tot
+
         # print(test)
 
         if binned_cosmology:
