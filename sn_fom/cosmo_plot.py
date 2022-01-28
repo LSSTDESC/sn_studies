@@ -35,7 +35,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
 
     r = []
     fields = ['COSMOS', 'XMM-LSS', 'ADFS', 'ELAIS', 'CDFS']
-
+    print('hello man', fis)
     for fi in fis:
         nFields = {}
         # get config name
