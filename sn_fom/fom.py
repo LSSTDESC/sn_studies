@@ -189,6 +189,8 @@ parser.add_option("--nsn_spectro_deep_yearly", type=int, default=500,
                   help="number of spectro-z host for deep fields (per year) [%default]")
 parser.add_option("--nsn_spectro_deep_tot", type=int, default=2500,
                   help="number of spectro-z host for deep fields (total) [%default]")
+parser.add_option("--nsn_spectro_tuned", type=int, default=0,
+                  help="to tune the number of host spectro [%default]")
 
 
 opts, args = parser.parse_args()
@@ -224,7 +226,7 @@ nsn_spectro_ultra_yearly = opts.nsn_spectro_ultra_yearly
 nsn_spectro_ultra_tot = opts.nsn_spectro_ultra_tot
 nsn_spectro_deep_yearly = opts.nsn_spectro_deep_yearly
 nsn_spectro_deep_tot = opts.nsn_spectro_deep_tot
-
+nsn_spectro_tuned = opts.nsn_spectro_tuned
 
 """
 dbC = []
@@ -311,6 +313,7 @@ params['nsn_spectro_ultra_yearly'] = nsn_spectro_ultra_yearly
 params['nsn_spectro_ultra_tot'] = nsn_spectro_ultra_tot
 params['nsn_spectro_deep_yearly'] = nsn_spectro_deep_yearly
 params['nsn_spectro_deep_tot'] = nsn_spectro_deep_tot
+params['nsn_spectro_tuned'] = nsn_spectro_tuned
 
 go_fit(nMC, params, nproc, fitparName)
 

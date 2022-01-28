@@ -59,6 +59,8 @@ class fit_SN_mu:
       number of SN with zspectro (deep) per year (default: 500)
     nsn_spectro_deep_tot: int, opt
       number of SN with zspectro (deep) total (default: 2500)
+    nsn_spectro_tuned: bool, opt
+      to adjust the number of SN with spectro host (default: False)
     """
 
     def __init__(self, fileDir, dbNames, config, fields,
@@ -77,7 +79,8 @@ class fit_SN_mu:
                  nsn_spectro_ultra_yearly=200,
                  nsn_spectro_ultra_tot=2000,
                  nsn_spectro_deep_yearly=500,
-                 nsn_spectro_deep_tot=2500):
+                 nsn_spectro_deep_tot=2500,
+                 nsn_spectro_tuned=False):
 
         self.fileDir = fileDir
         self.dbNames = dbNames
@@ -97,6 +100,7 @@ class fit_SN_mu:
         self.nsn_spectro_ultra_tot = nsn_spectro_ultra_tot
         self.nsn_spectro_deep_yearly = nsn_spectro_deep_yearly
         self.nsn_spectro_deep_tot = nsn_spectro_deep_tot
+        self.nsn_spectro_tuned = nsn_spectro_tuned
 
         self.interp_field = {}
         if not self.sigma_mu_photoz.empty:
@@ -127,6 +131,7 @@ class fit_SN_mu:
         data_sn['nsn_spectro_ultra_tot'] = self.nsn_spectro_ultra_tot
         data_sn['nsn_spectro_deep_yearly'] = self.nsn_spectro_deep_yearly
         data_sn['nsn_spectro_deep_tot'] = self.nsn_spectro_deep_tot
+        data_sn['nsn_spectro_tuned'] = self.nsn_spectro_tuned
 
         # print(test)
 
@@ -667,6 +672,10 @@ class fit_SN_mu:
                 data_new = pd.concat((data_new, sel_data))
 
         data = pd.DataFrame(data_new)
+        for dd_type in ['ultra_dd', 'deep_dd']:
+            idx = data['dd_type'] == dd_type
+            sela = data[idx]
+            idxb = sela['sigma_mu_photoz'] <= 1.e-5
 
         """
             data_n = pd.DataFrame()
@@ -719,6 +728,8 @@ class fit_SN_mu:
         # Subaru host efficiency vs z
         rz_Sub = [0.0, 0.2, 1., 1.37, 2.16]
         reff_Sub = [1., 0.98, 0.79, 0.71, 0.0]
+        if self.nsn_spectro_tuned:
+            reff_Sub = [1., 1., 1., 1., 1.]
         host_Sub = self.host_efficiency(rz=rz_Sub, reff=reff_Sub)
 
         # 4MOST host efficiency vs z
@@ -997,6 +1008,7 @@ def multifit_mu(index, params, j=0, output_q=None):
     nsn_spectro_ultra_tot = params['nsn_spectro_ultra_tot']
     nsn_spectro_deep_yearly = params['nsn_spectro_deep_yearly']
     nsn_spectro_deep_tot = params['nsn_spectro_deep_tot']
+    nsn_spectro_tuned = params['nsn_spectro_tuned']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
@@ -1022,7 +1034,8 @@ def multifit_mu(index, params, j=0, output_q=None):
                            nsn_spectro_ultra_yearly=nsn_spectro_ultra_yearly,
                            nsn_spectro_ultra_tot=nsn_spectro_ultra_tot,
                            nsn_spectro_deep_yearly=nsn_spectro_deep_yearly,
-                           nsn_spectro_deep_tot=nsn_spectro_deep_tot)
+                           nsn_spectro_deep_tot=nsn_spectro_deep_tot,
+                           nsn_spectro_tuned=nsn_spectro_tuned)
 
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 
