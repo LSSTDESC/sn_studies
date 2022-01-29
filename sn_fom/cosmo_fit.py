@@ -618,10 +618,17 @@ class FitData_mu:
     ---------------
     data: array
       data to fit
+    params_fit: list(str), opt
+      list of cosmo parameters to fit (default: Om,w0)
+    fit_prior: int, opt
+     to apply a prior for the fit (default: 0)
+    surveyType: str, opt
+      type of survey to consider (default: full)
+
 
     """
 
-    def __init__(self, data, params_fit=['Om', 'w0'], surveyType='full'):
+    def __init__(self, data, params_fit=['Om', 'w0'], fit_prior=0, surveyType='full'):
         # print('Number of SN for fit', len(data))
         # print set([d[name]['idr.subset'] for name in d.keys()]
 
@@ -629,7 +636,7 @@ class FitData_mu:
             idx = data['z_SN'] <= data['zcomp']
             data = data[idx]
 
-        print('Fit', data.columns)
+        #print('Fit', data.columns)
         Z_SN = data['z_SN']
         mu_SN = data['mu_SN']
         sigma_mu_SN = data['sigma_mu_SN']
@@ -663,15 +670,16 @@ class FitData_mu:
         self.nsn_ultra = nsn_ultra
         self.nsn_dd_z_05 = nsn_dd_z
         self.nsn_dd = nsn_dd
-        #print(nsn_ultra_z, nsn_ultra, nsn_dd_z, nsn_dd)
+        # print(nsn_ultra_z, nsn_ultra, nsn_dd_z, nsn_dd)
+        """
         print('NSN to fit', len(Z_SN))
         print('SN utra_deep', nsn_ultra)
         print('SN deep', nsn_dd)
         print('SN WFD', self.nsn_WFD)
-
+        """
         # instance of the fit functions here
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_mu_bias, sigma_mu_photoz,
-                               params_fit=params_fit)
+                               params_fit=params_fit, fit_prior=fit_prior)
 
         # plot_syste(data)
 
@@ -1189,7 +1197,7 @@ class FitCosmo_mu(CosmoDist):
     """
 
     def __init__(self, Z, mu, sigma_mu, sigma_bias, sigma_mu_photoz,
-                 params_fit=['Om', 'w0'],
+                 params_fit=['Om', 'w0'], fit_prior=0,
                  H0=70., c=299792.458):
         super().__init__(H0, c)
 
@@ -1203,6 +1211,10 @@ class FitCosmo_mu(CosmoDist):
         self.sigma_mu_photoz = sigma_mu_photoz
         self.ndf = nsn-len(params_fit)-1
         self.params_fit = params_fit
+
+        self.fit_prior = fit_prior
+        self.Om_prior = 0.3
+        self.sigma_prior = 0.012
 
     def plot_modulus(self, offset=0):
         z = np.arange(0.001, 0.12, 0.001)
@@ -1235,10 +1247,14 @@ class FitCosmo_mu(CosmoDist):
                 self.wa = wa
                 m = Minuit(self.chi2_nowa, Om=Om, w0=w0)
             else:
-                m = Minuit(self.chi2, Om=Om, w0=w0, wa=wa)
+                if not self.fit_prior:
+                    m = Minuit(self.chi2, Om=Om, w0=w0, wa=wa)
+                else:
+                    m = Minuit(self.chi2_prior, Om=Om, w0=w0, wa=wa)
             m.migrad()
             dictout = {}
             values = m.values
+
             for key, vals in values.items():
                 dictout[key] = [vals]
             m.hesse()   # run covariance estimator
@@ -1325,6 +1341,14 @@ class FitCosmo_mu(CosmoDist):
 
     def chi2(self, Om, w0, wa):
         return(np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2+self.sigma_mu_photoz**2)))
+
+    def chi2_prior(self, Om, w0, wa):
+
+        prior = ((Om-self.Om_prior)/self.sigma_prior)**2
+        chi2_data = np.sum((self.mu_SN-self.mu_astro(self.Z_SN, Om, w0, wa))**2/(
+            self.sigma_mu_SN**2+self.sigma_int**2+self.sigma_bias**2+self.sigma_mu_photoz**2))
+
+        return chi2_data+prior
 
     def chi2_sigma_int(self, Om, w0, wa, sigma_int):
 

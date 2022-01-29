@@ -10,6 +10,7 @@ from sn_fom.utils import getconfig
 from sn_fom.cosmo_fit import Sigma_Fisher, Sigma_Fisher_mu
 import os
 import pandas as pd
+from sn_fom.utils import FoM
 
 
 def go_fit(nMC, params, nproc, fitparName):
@@ -161,6 +162,8 @@ parser.add_option("--dbNames_all", type=str,
                   help="dbNames to consider to estimate reference files [%default]")
 parser.add_option("--fit_parameters", type=str, default='Om,w0,wa',
                   help="parameters to fit [%default]")
+parser.add_option("--fit_prior", type=int, default=0,
+                  help="apply a prior for the fit [%default]")
 parser.add_option("--Ny", type=int, default=40,
                   help="y-band visits max at 0.9 [%default]")
 parser.add_option("--sigma_mu_photoz", type=str, default='',
@@ -227,6 +230,7 @@ nsn_spectro_ultra_tot = opts.nsn_spectro_ultra_tot
 nsn_spectro_deep_yearly = opts.nsn_spectro_deep_yearly
 nsn_spectro_deep_tot = opts.nsn_spectro_deep_tot
 nsn_spectro_tuned = opts.nsn_spectro_tuned
+fit_prior = opts.fit_prior
 
 """
 dbC = []
@@ -291,6 +295,7 @@ params['dirSN'] = ''
 params['snType'] = snType
 params['sigma_mu'] = sigma_mu_from_simu
 params['params_fit'] = parameter_to_fit
+params['fit_prior'] = fit_prior
 params['nsn_bias'] = nsn_bias
 params['sn_wfd'] = sn_wfd
 params['sigma_bias_x1_color'] = pd.DataFrame()
@@ -320,9 +325,16 @@ go_fit(nMC, params, nproc, fitparName)
 params_fit = pd.read_hdf(fitparName)
 idx = params_fit['accuracy'] == 1
 params_fit = params_fit[idx]
-print('result', np.median(params_fit['sigma_w0']),
-      np.std(params_fit['sigma_w0']), np.median(params_fit['nsn_DD']), np.median(params_fit['nsn_WFD']))
-
+print('result w0', np.median(params_fit['sigma_w0']),
+      np.std(params_fit['sigma_w0']))
+print('NSN DD/WFD',
+      np.median(params_fit['nsn_DD']), np.median(params_fit['nsn_WFD']))
+if 'wa' in params_fit.columns:
+    print('result wa', np.median(params_fit['sigma_wa']),
+          np.std(params_fit['sigma_wa']), np.median(params_fit['Cov_w0_wa']))
+    fom, rho = FoM(np.median(params_fit['sigma_w0']), np.median(
+        params_fit['sigma_wa']), np.median(np.sqrt(params_fit['Cov_w0_wa'])))
+    print('FoM', fom)
 # plotFitResults(params_fit)
 """
 Om = 0.3
