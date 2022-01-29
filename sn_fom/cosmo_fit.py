@@ -610,6 +610,28 @@ def plot_syste(data):
     plt.show()
 
 
+def plot_cumul(data):
+
+    data = data[data['snType'] == 'DD']
+    import matplotlib.pyplot as plt
+
+    zmin = 0.01
+    zmax = 1.1
+    nbins = 20
+    bins = np.linspace(zmin, zmax, nbins)
+    group = data.groupby(pd.cut(data['z_SN'], bins))
+    plot_centers = (bins[:-1] + bins[1:])/2
+
+    df = pd.DataFrame(plot_centers, columns=['z'])
+    df['nsn'] = group.size().to_list()
+    #df.to_hdf('universal_3.hdf5', key='cumul')
+    df.to_hdf('edr_0.80_4.hdf5', key='cumul')
+    print(group.size().to_list())
+    norm = np.cumsum(group.size())[-1]
+    plt.plot(plot_centers, np.cumsum(group.size())/norm)
+    plt.show()
+
+
 class FitData_mu:
     """
     class to perform a cosmo fit on data
@@ -682,6 +704,8 @@ class FitData_mu:
                                params_fit=params_fit, fit_prior=fit_prior)
 
         # plot_syste(data)
+
+        # plot_cumul(data)
 
     def __call__(self):
 
