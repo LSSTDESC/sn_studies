@@ -329,7 +329,7 @@ print('result w0', np.median(params_fit['sigma_w0']),
       np.std(params_fit['sigma_w0']))
 print('NSN DD/WFD',
       np.median(params_fit['nsn_DD']), np.median(params_fit['nsn_WFD']))
-if 'wa' in params_fit.columns:
+if 'sigma_wa' in params_fit.columns:
     print('result wa', np.median(params_fit['sigma_wa']),
           np.std(params_fit['sigma_wa']), np.median(params_fit['Cov_w0_wa']))
     fom, rho = FoM(np.median(params_fit['sigma_w0']), np.median(

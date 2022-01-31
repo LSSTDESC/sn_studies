@@ -692,7 +692,7 @@ class FitData_mu:
         self.nsn_ultra = nsn_ultra
         self.nsn_dd_z_05 = nsn_dd_z
         self.nsn_dd = nsn_dd
-        # print(nsn_ultra_z, nsn_ultra, nsn_dd_z, nsn_dd)
+        print('NSN to fit', nsn_ultra_z, nsn_ultra, nsn_dd_z, nsn_dd)
         """
         print('NSN to fit', len(Z_SN))
         print('SN utra_deep', nsn_ultra)
