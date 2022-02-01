@@ -541,7 +541,7 @@ def binned_data(zmin, zmax, nbins, data, varx='z', var='sigma_mu', sigma_var='')
     return df
 
 
-def FoM(sigma_w0, sigma_wa, sigma_w0_wa, coeff_CL=6.17):
+def FoM(sigma_w0, sigma_wa, Cov_w0_wa, coeff_CL=6.17):
     """
     Function to estimate the Figure of Merit (FoM)
     It is inversely proportional to the area of the error ellipse in the w0-wa plane
@@ -564,10 +564,11 @@ def FoM(sigma_w0, sigma_wa, sigma_w0_wa, coeff_CL=6.17):
 
 
     """
-    rho = sigma_w0_wa/(sigma_w0*sigma_wa)
+    rho = Cov_w0_wa/(sigma_w0*sigma_wa)
     # get ellipse parameters
-    a, b = ellipse_axis(sigma_w0, sigma_wa, sigma_w0_wa)
+    a, b = ellipse_axis(sigma_w0, sigma_wa, Cov_w0_wa)
     area = coeff_CL*a*b
+    area = coeff_CL*sigma_w0*sigma_wa*np.sqrt(1.-rho**2)
 
     return 1./area, rho
 
@@ -592,10 +593,58 @@ def ellipse_axis(sigx, sigy, sigxy):
     """
 
     comm_a = 0.5*(sigx**2+sigy**2)
-    comm_b = 0.25*(sigx**2-sigy**2)**2-sigxy**2
-    if comm_b < 0.:
-        comm_b = 0.
+    comm_b = 0.25*(sigx**2-sigy**2)**2+sigxy**2
+
     a_sq = comm_a+np.sqrt(comm_b)
     b_sq = comm_a-np.sqrt(comm_b)
 
     return np.sqrt(a_sq), np.sqrt(b_sq)
+
+
+def draw_ellipse(x, y, sigx, sigy, Cov_xy, CL=0.954, ax=None):
+    """
+    Method to draw an ellipse corresponding to CL
+
+    Parameters
+    ---------------
+    x,y :  float
+     coordinate of the ellipse center
+    sigx, sigy: float
+      errors on x and y
+    sigxy: float
+      covariance x_y
+    CL: float, opt
+      confidence level fot the contour
+    ax: matplotlib axis, opt
+      where to plot the ellipse (default: None)
+
+    """
+
+    delta_chi2 = dict(zip([0.683, 0.954, 0.997], [2.3, 6.17, 11.8]))
+
+    coeff = np.sqrt(delta_chi2[CL])
+    # get ellipse axis
+
+    a, b = ellipse_axis(sigx, sigy, Cov_xy)
+    ang = 0.5*np.arctan(2.*Cov_xy/(sigx**2-sigy**2))
+    ang = np.rad2deg(ang)
+    width = a*coeff
+    height = b*coeff
+
+    # draw the ellipse
+    if ax is None:
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Ellipse
+
+        fig, ax = plt.subplots()
+        ell = Ellipse(xy=(x, y),
+                      width=width, height=height,
+                      angle=ang)
+
+        ell.set_clip_box(ax.bbox)
+        ell.set_alpha(0.1)
+        # ell.set_facecolor(np.random.rand(3))
+        ax.add_artist(ell)
+        ax.set_xlim(x-2*width, x+2.*width)
+        ax.set_ylim(y-2.*height, y+2.*height)
+        plt.show()
