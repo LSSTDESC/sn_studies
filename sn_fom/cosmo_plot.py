@@ -6,6 +6,7 @@ from optparse import OptionParser
 from scipy.interpolate import make_interp_spline, BSpline, griddata
 import os
 from scipy.ndimage.filters import gaussian_filter
+from sn_fom.utils import FoM  # ,draw_ellipse
 
 
 def getVals(res, varx='zcomp', vary='sigma_w', varz='nddf', nbins=800, method='linear'):
@@ -45,7 +46,32 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         idx = params_fit['accuracy'] == 1
         params_fit = params_fit[idx]
         # print(params_fit.columns)
+        w_param = np.median(params_fit['w0'])
+        wa_param = np.median(params_fit['wa'])
         sigma_w = np.median(params_fit['sigma_w0'])
+        sigma_wa = 0.
+        fom = 0.
+        sigma_wp = 0.
+        detfom = 0.
+        if 'sigma_wa' in params_fit.columns:
+            sigma_wa = np.median(params_fit['sigma_wa'])
+            Cov_w_wa = np.median(params_fit['Cov_wa_w0'])
+            Correl_w_wa = Cov_w_wa/(sigma_w*sigma_wa)
+            sigma_w_wa = np.sqrt(Cov_w_wa)
+            zp = -Correl_w_wa*sigma_w/(sigma_wa+Correl_w_wa*sigma_w)
+            a = 1
+            b = zp/(1.+zp)
+            sigma_wp = sigma_w**2+(b*sigma_wa)**2+2*a*b*Cov_w_wa
+            sigma_wp = np.sqrt(sigma_wp)
+            fom, rho = FoM(sigma_w, sigma_wa, Cov_w_wa)
+            C = np.zeros((2, 2))
+            C[0][0] = sigma_w**2
+            C[1][1] = sigma_wa**2
+            C[1][0] = Cov_w_wa
+            C[0][1] = C[1][0]
+            detmat = np.linalg.det(C)
+            detfom = 1./np.sqrt(detmat)
+            #draw_ellipse(w_param, wa_param, sigma_w, sigma_wa, Cov_w_wa)
         sigma_Om = np.median(params_fit['sigma_Om'])
         mean_w = np.median(params_fit['w0'])
         mean_Om = np.median(params_fit['Om'])
@@ -83,7 +109,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
             ddf_dd, zcomp_dd, nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, year = decode_scen(
                 scen, runtype=runtype)
             bn = [conf, mean_Om, sigma_Om, mean_w, sigma_w, std, ddf_dd, zcomp_dd,
-                  nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09, nsn_ultra, nsn_ultra_z_08, nsn_dd, nsn_dd_z_05, year]
+                  nseasons_dd, ddf_ultra, zcomp_ultra, nseasons_ultra, nsn_DD, nsn_z_09, nsn_ultra, nsn_ultra_z_08, nsn_dd, nsn_dd_z_05, year, sigma_wa, fom, detfom, sigma_wp]
             bn += [nsn_spectro_ultra_yearly, nsn_spectro_ultra_tot,
                    nsn_spectro_deep_yearly, nsn_spectro_deep_tot]
             for field in fields:
@@ -101,7 +127,7 @@ def make_summary(fis, cosmo_scen, runtype='deep_rolling'):
         colfields += ['nsn_DD_{}'.format(field)]
 
     ccols = ['conf', 'Om', 'sigma_Om', 'w', 'sigma_w', 'sigma_w_std', 'ddf_dd', 'zcomp_dd',
-             'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09', 'nsn_ultra', 'nsn_ultra_z_08', 'nsn_dd', 'nsn_dd_z_05', 'year']
+             'nseasons_dd', 'ddf_ultra', 'zcomp_ultra', 'nseasons_ultra', 'nsn_DD', 'nsn_z_09', 'nsn_ultra', 'nsn_ultra_z_08', 'nsn_dd', 'nsn_dd_z_05', 'year', 'sigma_wa', 'fom', 'detfom', 'sigma_wp']
 
     ccols += ['nsn_spectro_ultra_yearly', 'nsn_spectro_ultra_tot',
               'nsn_spectro_deep_yearly', 'nsn_spectro_deep_tot']
@@ -315,6 +341,8 @@ parser.add_option('--outName', type=str, default='config_cosmoSN_dr_0.9.hdf5',
                   help='output file name [%default]')
 parser.add_option('--outDir', type=str, default='cosmo_files',
                   help='output directory[%default]')
+parser.add_option('--Ny', type=int, default=40,
+                  help='max Ny band visits [%default]')
 
 
 opts, args = parser.parse_args()
@@ -323,6 +351,7 @@ confName = opts.config.split('.')[0].split('FitParams_conf_')[-1]
 confName = '_'.join(vv for vv in confName.split('_')[2:])
 outDir = opts.outDir
 outName = opts.outName
+Ny = opts.Ny
 
 # check if this dir exist (and create it if necessary)
 if not os.path.exists(outDir):
@@ -336,12 +365,12 @@ cosmo_scen = pd.read_csv(opts.config, delimiter=';', comment='#')
 
 print('ggg', len(fis), cosmo_scen)
 
-#print('looking for', outName)
+# print('looking for', outName)
 # if not os.path.isfile(outName):
 #    print('moving to summ')
 res = make_summary(fis, cosmo_scen, runtype=opts.runtype)
 # get Ny visits
-Ny = int(opts.fileDir.split('_')[-3])
+# Ny = int(opts.fileDir.split('_')[-3])
 res['Ny'] = Ny
 """
 outName = opts.config.replace('config_', '').replace(
