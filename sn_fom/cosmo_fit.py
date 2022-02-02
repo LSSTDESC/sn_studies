@@ -644,13 +644,15 @@ class FitData_mu:
       list of cosmo parameters to fit (default: Om,w0)
     fit_prior: int, opt
      to apply a prior for the fit (default: 0)
+    sigma_prior: float, opt
+      sigma for the fit prior (default: 0.012)
     surveyType: str, opt
       type of survey to consider (default: full)
 
 
     """
 
-    def __init__(self, data, params_fit=['Om', 'w0'], fit_prior=0, surveyType='full'):
+    def __init__(self, data, params_fit=['Om', 'w0'], fit_prior=0, sigma_prior=0.012, surveyType='full'):
         # print('Number of SN for fit', len(data))
         # print set([d[name]['idr.subset'] for name in d.keys()]
 
@@ -701,7 +703,7 @@ class FitData_mu:
         """
         # instance of the fit functions here
         self.fit = FitCosmo_mu(Z_SN, mu_SN, sigma_mu_SN, sigma_mu_bias, sigma_mu_photoz,
-                               params_fit=params_fit, fit_prior=fit_prior)
+                               params_fit=params_fit, fit_prior=fit_prior, sigma_prior=sigma_prior)
 
         # plot_syste(data)
 
@@ -1221,7 +1223,7 @@ class FitCosmo_mu(CosmoDist):
     """
 
     def __init__(self, Z, mu, sigma_mu, sigma_bias, sigma_mu_photoz,
-                 params_fit=['Om', 'w0'], fit_prior=0,
+                 params_fit=['Om', 'w0'], fit_prior=0, sigma_prior=0.012,
                  H0=70., c=299792.458):
         super().__init__(H0, c)
 
@@ -1238,7 +1240,7 @@ class FitCosmo_mu(CosmoDist):
 
         self.fit_prior = fit_prior
         self.Om_prior = 0.3
-        self.sigma_prior = 0.012
+        self.sigma_prior = sigma_prior
 
     def plot_modulus(self, offset=0):
         z = np.arange(0.001, 0.12, 0.001)

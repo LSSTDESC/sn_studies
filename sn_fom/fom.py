@@ -164,6 +164,8 @@ parser.add_option("--fit_parameters", type=str, default='Om,w0,wa',
                   help="parameters to fit [%default]")
 parser.add_option("--fit_prior", type=int, default=0,
                   help="apply a prior for the fit [%default]")
+parser.add_option("--sigma_prior", type=float, default=0.0073,
+                  help="sigma for the fit prior [%default]")
 parser.add_option("--Ny", type=int, default=40,
                   help="y-band visits max at 0.9 [%default]")
 parser.add_option("--sigma_mu_photoz", type=str, default='',
@@ -231,6 +233,7 @@ nsn_spectro_deep_yearly = opts.nsn_spectro_deep_yearly
 nsn_spectro_deep_tot = opts.nsn_spectro_deep_tot
 nsn_spectro_tuned = opts.nsn_spectro_tuned
 fit_prior = opts.fit_prior
+sigma_prior = opts.sigma_prior
 
 """
 dbC = []
@@ -296,6 +299,7 @@ params['snType'] = snType
 params['sigma_mu'] = sigma_mu_from_simu
 params['params_fit'] = parameter_to_fit
 params['fit_prior'] = fit_prior
+params['sigma_prior'] = sigma_prior
 params['nsn_bias'] = nsn_bias
 params['sn_wfd'] = sn_wfd
 params['sigma_bias_x1_color'] = pd.DataFrame()

@@ -32,7 +32,9 @@ class fit_SN_mu:
     params_fit: list(str)
       list of cosmology parameters to fit
     fit_prior: bool, opt
-      to apply a prior when fitting
+      to apply a prior when fitting (default: 0)
+    sigma_prior: float, opt
+      sigma for the fit prior (default: 0.012)
     saveSN: str, opt
       dir where to save produced SN (default: '')
     sigmaInt: float, opt
@@ -70,6 +72,7 @@ class fit_SN_mu:
                  sn_wfd=pd.DataFrame(),
                  params_fit=['Om', 'w0', 'wa'],
                  fit_prior=0,
+                 sigma_prior=0.012,
                  saveSN='', sigmaInt=0.12,
                  sigma_bias_x1_color=pd.DataFrame(),
                  binned_cosmology=False, surveyType='full',
@@ -163,7 +166,9 @@ class fit_SN_mu:
         """
         # FitCosmo instance
         fit = FitData_mu(data_sn, params_fit=params_fit,
-                         fit_prior=fit_prior, surveyType=surveyType)
+                         fit_prior=fit_prior,
+                         sigma_prior=sigma_prior,
+                         surveyType=surveyType)
 
         # make the fit and get the parameters
         params_fit = fit()
@@ -996,6 +1001,7 @@ def multifit_mu(index, params, j=0, output_q=None):
     sigma_mu_from_simu = params['sigma_mu']
     params_for_fit = params['params_fit']
     fit_prior = params['fit_prior']
+    sigma_prior = params['sigma_prior']
     nsn_bias = params['nsn_bias']
     sn_wfd = params['sn_wfd']
     sigma_bias_x1_color = params['sigma_bias_x1_color']
@@ -1025,6 +1031,7 @@ def multifit_mu(index, params, j=0, output_q=None):
         fitpar = fit_SN_mu(fileDir, dbNames, config,
                            fields, snType, sigma_mu_from_simu,
                            nsn_bias, sn_wfd, params_for_fit, fit_prior,
+                           sigma_prior,
                            saveSN=saveSN_f, sigmaInt=sigmaInt,
                            sigma_bias_x1_color=sigma_bias_x1_color,
                            binned_cosmology=binned_cosmology,
