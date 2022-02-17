@@ -65,6 +65,8 @@ class fit_SN_mu:
       number of SN with zspectro (deep) total (default: 2500)
     nsn_spectro_tuned: bool, opt
       to adjust the number of SN with spectro host (default: False)
+    pfs_curent_strategy: bool, opt
+      tag for PFS current strategy (default: False)
     """
 
     def __init__(self, fileDir, dbNames, config, fields,
@@ -86,7 +88,8 @@ class fit_SN_mu:
                  nsn_spectro_ultra_tot=2000,
                  nsn_spectro_deep_yearly=500,
                  nsn_spectro_deep_tot=2500,
-                 nsn_spectro_tuned=False):
+                 nsn_spectro_tuned=False,
+                 pfs_current_strategy=False):
 
         self.fileDir = fileDir
         self.dbNames = dbNames
@@ -106,6 +109,7 @@ class fit_SN_mu:
         self.nsn_spectro_deep_yearly = nsn_spectro_deep_yearly
         self.nsn_spectro_deep_tot = nsn_spectro_deep_tot
         self.nsn_spectro_tuned = nsn_spectro_tuned
+        self.pfs_current_strategy = pfs_current_strategy
 
         self.interp_field = {}
         if not self.sigma_mu_photoz.empty:
@@ -668,9 +672,19 @@ class fit_SN_mu:
             nosel_data = nosel_data.reset_index()
             data_new = pd.concat((data_new, nosel_data))
             n_host_spectro = len(sel_data)
-            if n_host_spectro > self.n_host_obs[dd_type]:
+            n_host_spectro_max = self.n_host_obs[dd_type]
+            """
+            if self.pfs_current_strategy:
+                n_host_spectro_max = min(
+                    (n_host_spectro/2, n_host_spectro_max))
+            """
+            if dd_type == 'ultra_dd' and self.pfs_current_strategy:
+                n_host_spectro_max = min(
+                    (int(n_host_spectro/2), n_host_spectro_max))
+
+            if n_host_spectro > n_host_spectro_max:
                 # too many SN with host spectro -> to be corrected
-                part_spectro = sel_data.sample(n=self.n_host_obs[dd_type])
+                part_spectro = sel_data.sample(n=n_host_spectro_max)
                 part_host_photoz = sel_data.drop(part_spectro.index)
                 part_host_photoz['sigma_mu_photoz'] = self.sigmu_interp(
                     part_host_photoz['z_SN'])
@@ -816,7 +830,6 @@ class fit_SN_mu:
             new_df = pd.concat((part_host, part_no_host))
             res_df = pd.concat((res_df, new_df))
 
-        print('ici cols', res_df.columns)
         return res_df
 
     def get_nseasons(self, fieldList):
@@ -841,6 +854,7 @@ class fit_SN_mu:
         # n_host = int(effi*nSN)
         # print('from host efficiency', n_host, nSN)
         n_host = int(interp(zmean)*len(grp))
+
         if len(grp) == 0:
             return grp
         if len(grp) <= n_host:
@@ -1019,6 +1033,7 @@ def multifit_mu(index, params, j=0, output_q=None):
     nsn_spectro_deep_yearly = params['nsn_spectro_deep_yearly']
     nsn_spectro_deep_tot = params['nsn_spectro_deep_tot']
     nsn_spectro_tuned = params['nsn_spectro_tuned']
+    pfs_current_strategy = params['pfs_current_strategy']
 
     params_fit = pd.DataFrame()
     np.random.seed(123456+j)
@@ -1046,7 +1061,8 @@ def multifit_mu(index, params, j=0, output_q=None):
                            nsn_spectro_ultra_tot=nsn_spectro_ultra_tot,
                            nsn_spectro_deep_yearly=nsn_spectro_deep_yearly,
                            nsn_spectro_deep_tot=nsn_spectro_deep_tot,
-                           nsn_spectro_tuned=nsn_spectro_tuned)
+                           nsn_spectro_tuned=nsn_spectro_tuned,
+                           pfs_current_strategy=pfs_current_strategy)
 
         params_fit = pd.concat((params_fit, fitpar.params_fit))
 

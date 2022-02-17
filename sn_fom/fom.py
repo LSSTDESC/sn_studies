@@ -196,6 +196,8 @@ parser.add_option("--nsn_spectro_deep_tot", type=int, default=2500,
                   help="number of spectro-z host for deep fields (total) [%default]")
 parser.add_option("--nsn_spectro_tuned", type=int, default=0,
                   help="to tune the number of host spectro [%default]")
+parser.add_option("--pfs_current_strategy", type=int, default=0,
+                  help="to activate PFS current strategy [%default]")
 
 
 opts, args = parser.parse_args()
@@ -234,6 +236,7 @@ nsn_spectro_deep_tot = opts.nsn_spectro_deep_tot
 nsn_spectro_tuned = opts.nsn_spectro_tuned
 fit_prior = opts.fit_prior
 sigma_prior = opts.sigma_prior
+pfs_current_strategy = opts.pfs_current_strategy
 
 """
 dbC = []
@@ -323,6 +326,7 @@ params['nsn_spectro_ultra_tot'] = nsn_spectro_ultra_tot
 params['nsn_spectro_deep_yearly'] = nsn_spectro_deep_yearly
 params['nsn_spectro_deep_tot'] = nsn_spectro_deep_tot
 params['nsn_spectro_tuned'] = nsn_spectro_tuned
+params['pfs_current_strategy'] = pfs_current_strategy
 
 go_fit(nMC, params, nproc, fitparName)
 
