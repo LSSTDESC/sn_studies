@@ -335,10 +335,20 @@ print('NSN DD/WFD',
       np.median(params_fit['nsn_DD']), np.median(params_fit['nsn_WFD']))
 if 'sigma_wa' in params_fit.columns:
     print('result wa', np.median(params_fit['sigma_wa']),
-          np.std(params_fit['sigma_wa']), np.median(params_fit['Cov_w0_wa']))
-    fom, rho = FoM(np.median(params_fit['sigma_w0']), np.median(
-        params_fit['sigma_wa']), np.median(np.sqrt(params_fit['Cov_w0_wa'])))
-    print('FoM', fom)
+          np.median(params_fit['sigma_wa']), np.median(params_fit['Cov_w0_wa']))
+
+    sigma_w = np.median(params_fit['sigma_w0'])
+    sigma_wa = np.median(params_fit['sigma_wa'])
+    Cov_w_wa = np.median(params_fit['Cov_w0_wa'])
+    fom, rho = FoM(sigma_w, sigma_wa, Cov_w_wa)
+    C = np.zeros((2, 2))
+    C[0][0] = sigma_w**2
+    C[1][1] = sigma_wa**2
+    C[1][0] = Cov_w_wa
+    C[0][1] = C[1][0]
+    detmat = np.linalg.det(C)
+    detfom = 1./np.sqrt(detmat)
+    print('detFoM', fom, rho, detfom/6.17)
 # plotFitResults(params_fit)
 """
 Om = 0.3
