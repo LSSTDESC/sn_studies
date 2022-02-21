@@ -563,11 +563,12 @@ class Plot_NSN:
 
     def __init__(self, nsn_bias,
                  zcomps=['0.90', '0.80', '0.70', '0.65'],
-                 fieldNames=['COSMOS', 'XMM-LSS', 'CDFS', 'ELAIS', 'ADFS']):
+                 fieldNames=['COSMOS', 'XMM-LSS', 'CDFS', 'ELAIS', 'ADFS'],
+                 plotNames=['COSMOS', 'XMM-LSS', 'CDF-S', 'ELAIS-S1', 'Euclid/Roman']):
 
         data = {}
         data_syste = {}
-
+        ccor = dict(zip(fieldNames, plotNames))
         for fichName in nsn_bias:
             data[fichName] = pd.read_hdf('{}.hdf5'.format(fichName))
 
@@ -576,7 +577,7 @@ class Plot_NSN:
 
         for field in fieldNames:
             fig, ax = plt.subplots(figsize=(12, 9))
-            fig.suptitle('{}'.format(field))
+            fig.suptitle('{}'.format(ccor[field]))
             for key, vals in data.items():
                 idx = vals['fieldName'] == field
                 sel = vals[idx]
@@ -723,7 +724,7 @@ sigma_mu_syste = opts.sigma_mu_syste.split(',')
 # NSN_Syste(nsn_bias, nsn_bias_syste, fieldNames=[
 #          'COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'])
 
-Plot_NSN(nsn_bias, fieldNames=['CDFS'])
+Plot_NSN(nsn_bias, fieldNames=['CDFS'], plotNames=['CDF-S'])
 #Plot_Sigma_mu(sigma_mu, sigma_mu_syste)
 # Plot_Sigma_Components(sigma_mu, dbNames=['DD_0.90', 'DD_0.65'])
 plt.show()
