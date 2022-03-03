@@ -7,6 +7,8 @@ from . import plt
 from sn_tools.sn_utils import multiproc
 import time
 from scipy.ndimage.filters import gaussian_filter
+from sn_saturation.mag_saturation import smooth_It
+
 
 class LC:
     """
@@ -93,7 +95,7 @@ class SaturationTime:
         prodid = 'Saturation_{}_{}_{}_{}_{}_{}_0'.format(
             nexp, exptime, x1, color, cadence, season)
 
-        print('getting LC file',nexp,exptime)
+        print('getting LC file', nexp, exptime)
         self.lc = LC(dirFile, prodid)
         self.band = band
 
@@ -113,7 +115,7 @@ class SaturationTime:
         # print(self.lc.simuPars)
 
     def multi_time(self, full_well, nexp, expt, npp=8):
-       
+
         params = {}
         params['full_well'] = full_well
         params['nexp'] = nexp
@@ -121,7 +123,7 @@ class SaturationTime:
 
         df = multiproc(self.lc.simuPars, params,
                        self.time_of_saturation, npp)
-        
+
         return df
 
     def time_of_saturation(self, simuPars, params, j=0, output_q=None):
@@ -153,9 +155,9 @@ class SaturationTime:
             # for b in np.unique(lc['band']):
             # io = lc['band'] == b
             # mydf = pd.DataFrame(np.array(lc[io]))
-            
+
             dg = self.time_saturation_band(
-                mydf, full_well, lc.meta['daymax'],expt)
+                mydf, full_well, lc.meta['daymax'], expt)
             dg['x1'] = lc.meta['x1']
             dg['color'] = lc.meta['color']
             dg['daymax'] = lc.meta['daymax']
@@ -184,7 +186,7 @@ class SaturationTime:
         else:
             return dfres
 
-    def time_saturation_band(self, grp, full_well, T0,expt):
+    def time_saturation_band(self, grp, full_well, T0, expt):
         """
         Method to estimate the saturation time per band
 
@@ -203,12 +205,12 @@ class SaturationTime:
 
         """
         # print(grp[['band','flux_e_sec','visitExposureTime','time']])
-        grp['flux_e'] = grp['flux_e_sec']*expt* \
+        grp['flux_e'] = grp['flux_e_sec']*expt * \
             self.pixel_max(grp[self.seeing_simu])
 
         isnr = grp['snr_m5'] >= 5.
         lcsnr = grp[isnr]
-    
+
         """
         import matplotlib.pyplot as plt
         plt.suptitle('{} band '.format(np.unique(grp['band'])))
@@ -220,7 +222,7 @@ class SaturationTime:
         timeBegin = 0.
         timeSat = 0.
         timeSat_interp = 0.
-        
+
         tmin = np.min(grp['time'])
         tmax = np.max(grp['time'])
 
@@ -229,7 +231,7 @@ class SaturationTime:
         lcinterp = interp1d(lcsnr['time'], lcsnr['flux_e'],
                             fill_value=0.0, bounds_error=False)
         fluxtime = lcinterp(ttime)
-        
+
         isat = lcsnr['flux_e'] >= full_well
         lcsat = lcsnr[isat]
         inosat = lcsnr['flux_e'] < full_well
@@ -274,100 +276,112 @@ def plotTimeSaturationContour(x1, color, prefix='TimeSat', cadence=1, band='g'):
     df = pd.DataFrame(np.copy(data[idx]))
     df['deltaT'] = df['tSat_interp']-df['tBeg']
 
-    dfeffi = df.groupby(['band', 'full_well', 'exptime', 'z']).apply(lambda x: effi(x)).reset_index()
+    dfeffi = df.groupby(['band', 'full_well', 'exptime', 'z']).apply(
+        lambda x: effi(x)).reset_index()
     print(dfeffi)
-    
+
     data = dfeffi.to_records(index=False)
     print('dd', data.dtype)
     full_wells = np.unique(data['full_well'])
-    plotEffiContour(data,full_wells)
-    plotSatDeltaT(data,full_wells)
-    plotSatPeak(data,full_wells)
-    #plotEffiContour(data,full_wells,var='deltaT_min',zzv=[1,3,5,7,10,15],percent=False)
-    
+    plotEffiContour(data, full_wells)
+    plotSatDeltaT(data, full_wells)
+    plotSatPeak(data, full_wells)
+    # plotEffiContour(data,full_wells,var='deltaT_min',zzv=[1,3,5,7,10,15],percent=False)
+
+
 def plotSatDeltaT(data, full_wells):
-    
-    fig, ax = plt.subplots(figsize=(12,8))
-    expts = [5.,15.,30.]
-    colors = dict(zip(expts,['k','r','b']))
-    ls = dict(zip(full_wells,['solid','dashed']))
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    expts = [5., 15., 30.]
+    colors = dict(zip(expts, ['k', 'r', 'b']))
+    mm = dict(zip(expts, ['.', 's', '^']))
+    ls = dict(zip(full_wells, ['solid', 'dashed']))
     vvals = ['deltaT_med']
     for full_well in full_wells:
         idx = data['full_well'] == full_well
         sel = data[idx]
         for exptt in expts:
-            label = '({} s, {} kpe)'.format(int(exptt),int(full_well/1000))
-            idd = np.abs(sel['exptime']-exptt)<1.e-5
-            idd &= sel['deltaT_med']>0.
+            label = '({} s, {} kpe)'.format(int(exptt), int(full_well/1000))
+            idd = np.abs(sel['exptime']-exptt) < 1.e-5
+            idd &= sel['deltaT_med'] > 0.
             ssol = sel[idd]
-            print('yop',ssol)
+            print('yop', ssol)
             for vv in vvals:
-                ax.plot(ssol['z'],gaussian_filter(ssol[vv],1.1),ls=ls[full_well],color=colors[exptt],label=label)
-          
+                ax.plot(ssol['z'], gaussian_filter(ssol[vv], 1.1),
+                        ls=ls[full_well], color=colors[exptt], label=label, marker=mm[exptt], markerfacecolor='none', ms=10)
+
     ax.set_ylabel('$\Delta$t [day]')
     ax.set_xlabel('$z$')
 
-    ax.set_xlim([0.01,0.04])
+    ax.set_xlim([0.01, 0.035])
     ax.grid()
     handles, labels = ax.get_legend_handles_labels()
     # sort both labels and handles by labels
     labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
 
-    for vs in [(0,4),(1,5),(2,4),(3,5)]:
-        labels = swap(vs[0],vs[1],labels)
-        handles = swap(vs[0],vs[1],handles)
-        
-        
-    ax.legend(handles, labels,loc='upper left', bbox_to_anchor=(-0.01, 1.16),ncol=3,frameon=False,columnspacing=1.)
-    
-def swap(i,j,thelist):
+    for vs in [(0, 4), (1, 5), (2, 4), (3, 5)]:
+        labels = swap(vs[0], vs[1], labels)
+        handles = swap(vs[0], vs[1], handles)
+
+    ax.legend(handles, labels, loc='upper left', bbox_to_anchor=(-0.01,
+              1.16), ncol=3, frameon=False, columnspacing=1.)
+
+
+def swap(i, j, thelist):
 
     mylist = np.copy(thelist)
-    mylist[i],mylist[j] = mylist[j],mylist[i]
+    mylist[i], mylist[j] = mylist[j], mylist[i]
     return mylist
 
+
 def plotSatPeak(data, full_wells):
-    
-    fig, ax = plt.subplots(figsize=(12,8))
-    expts = [5.,15.,30.]
-    colors = dict(zip(expts,['k','r','b']))
-    ls = dict(zip(full_wells,['solid','dashed']))
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    expts = [5., 15., 30.]
+    colors = dict(zip(expts, ['k', 'r', 'b']))
+    mm = dict(zip(expts, ['.', 's', '^']))
+    ls = dict(zip(full_wells, ['solid', 'dashed']))
     vv = 'effi_peak'
     for full_well in full_wells:
         idx = data['full_well'] == full_well
         sel = data[idx]
-        for exptt in [5.,15.,30.]:
-            label = '({} s, {} kpe)'.format(int(exptt),int(full_well/1000))
-            idd = np.abs(sel['exptime']-exptt)<1.e-5
+        for exptt in expts:
+            label = '({} s, {} kpe)'.format(int(exptt), int(full_well/1000))
+            idd = np.abs(sel['exptime']-exptt) < 1.e-5
             #idd &= sel['deltaT_med']>0.
             ssol = sel[idd]
-            ax.plot(ssol['z'],gaussian_filter(ssol[vv],1.1),ls=ls[full_well],color=colors[exptt],label=label)
-            ax.errorbar(ssol['z'],gaussian_filter(ssol[vv],1.1),yerr=ssol['{}_err'.format(vv)],color=colors[exptt],marker='.',ls='None')
-       
+            ax.plot(ssol['z'], gaussian_filter(ssol[vv], 1.1),
+                    ls=ls[full_well], color=colors[exptt], marker=mm[exptt], label=label, ms=10, markerfacecolor='none')
+            """
+            ax.errorbar(ssol['z'], gaussian_filter(ssol[vv], 1.1), yerr=ssol['{}_err'.format(
+                vv)], color=colors[exptt], marker=mm[exptt], ls='None')
+            """
     ax.set_ylabel('Efficiency')
     ax.set_xlabel('$z$')
-    
+
     handles, labels = ax.get_legend_handles_labels()
     # sort both labels and handles by labels
     labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
-    
-    for vs in [(0,4),(1,5),(2,4),(3,5)]:
-        labels = swap(vs[0],vs[1],labels)
-        handles = swap(vs[0],vs[1],handles)
-        
-        
-    ax.legend(handles, labels,loc='upper left', bbox_to_anchor=(-0.01, 1.16),ncol=3,frameon=False,columnspacing=1.)
-    
+
+    for vs in [(0, 4), (1, 5), (2, 4), (3, 5)]:
+        labels = swap(vs[0], vs[1], labels)
+        handles = swap(vs[0], vs[1], handles)
+
+    ax.legend(handles, labels, loc='upper left', bbox_to_anchor=(-0.01,
+              1.16), ncol=3, frameon=False, columnspacing=1.)
+
     #ax.legend(loc='upper left', bbox_to_anchor=(0.0, 1.16),ncol=3,frameon=False)
-    ax.set_xlim([0.01,0.04])
+    ax.set_xlim([0.01, 0.04])
+    ax.set_ylim([0.0, None])
     ax.grid()
-    
-def plotEffiContour(data, full_wells,var='effi_deltaT',zzv=[0.05,0.20,0.5,0.75,0.99],percent=True):
-    
-    fig, ax = plt.subplots(figsize=(12,8))
-    colors = dict(zip(full_wells,['k','r']))
-    ls = dict(zip(full_wells,['solid','dashed']))
-    
+
+
+def plotEffiContour(data, full_wells, var='effi_deltaT', zzv=[0.05, 0.20, 0.5, 0.75, 0.99], percent=True):
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    colors = dict(zip(full_wells, ['k', 'r']))
+    ls = dict(zip(full_wells, ['solid', 'dashed']))
+
     for full_well in full_wells:
         idx = data['full_well'] == full_well
         sel = data[idx]
@@ -377,15 +391,18 @@ def plotEffiContour(data, full_wells,var='effi_deltaT',zzv=[0.05,0.20,0.5,0.75,0
         ssol = sel[idd]
         ax.plot(ssol['z'],ssol['deltaT_med'],'ko')
         """
-        timeSat = tSat(sel,varout=var)
+        timeSat = tSat(sel, varout=var)
         print('ooo', sel)
-        plotSatContour(ax, timeSat,color=colors[full_well],ls = ls[full_well],label='full well {} kpe'.format(int(full_well/1000)),zzv=zzv,percent=percent)
-    
+        plotSatContour(ax, timeSat, color=colors[full_well], ls=ls[full_well], label='full well {} kpe'.format(
+            int(full_well/1000)), zzv=zzv, percent=percent)
+
     ax.set_xlabel('Exposure Time [s]')
     ax.set_ylabel('$z$')
-    ax.legend(loc='upper left', bbox_to_anchor=(0.1, 1.1),ncol=2,frameon=False)
-    ax.set_xlim([1,60])
-    
+    ax.legend(loc='upper left', bbox_to_anchor=(
+        0.1, 1.1), ncol=2, frameon=False)
+    ax.set_xlim([1, 60])
+
+
 def effi(grp):
     """
     Method to estimate grp efficiency
@@ -401,16 +418,16 @@ def effi(grp):
     """
 
     # event with saturation
-    idx = grp['deltaT'] >0
+    idx = grp['deltaT'] > 0
     isel = grp['npts_around_max'] >= 3
 
     sel = grp[idx]
     selnp = grp[isel]
-    
+
     vmin = 0.
     vmax = 0.
     vmed = 0.
-    
+
     if len(sel) > 0:
         vmin = sel['deltaT'].min()
         vmax = sel['deltaT'].max()
@@ -420,7 +437,7 @@ def effi(grp):
     effi_deltaT_err = np.sqrt(sel.size*(1.-effi_deltaT))/grp.size
     effi_peak = selnp.size/grp.size
     effi_peak_err = np.sqrt(selnp.size*(1.-effi_peak))/grp.size
-    
+
     return pd.DataFrame({'effi_deltaT': [effi_deltaT],
                          'effi_deltaT_err': [effi_deltaT_err],
                          'deltaT_min': [vmin],
@@ -429,8 +446,8 @@ def effi(grp):
                          'effi_peak': [effi_peak],
                          'effi_peak_err': [effi_peak_err]})
 
-    
-def plotSatContour(ax, dd, color='k', ls='solid', label='',zzv=[0.05,0.20,0.5,0.75,0.99],percent=True):
+
+def plotSatContour(ax, dd, color='k', ls='solid', label='', zzv=[0.05, 0.20, 0.5, 0.75, 0.99], percent=True):
 
     exptmin, exptmax = 1., 60.
     zmin, zmax = 0.01, 0.05
@@ -452,16 +469,16 @@ def plotSatContour(ax, dd, color='k', ls='solid', label='',zzv=[0.05,0.20,0.5,0.
     zzv = [0.05,0.20,0.5,0.75,0.99]
     """
     print('hhhh', label)
-    CS = ax.contour(EXPT, Z, gaussian_filter(TSAT,10), zzv, colors=color,
+    CS = ax.contour(EXPT, Z, gaussian_filter(TSAT, 10), zzv, colors=color,
                     linestyles=ls)
-    #CS = ax.contour(EXPT, Z, TSAT, zzv, colors=color,
+    # CS = ax.contour(EXPT, Z, TSAT, zzv, colors=color,
     #              linestyles=ls)
     fmt = {}
     strs = ['$%i$' % (100*zz) for zz in zzv]
     if percent:
         strs = ['{}$\%$'.format(int(100*zz)) for zz in zzv]
     else:
-       strs = ['{}'.format(int(zz)) for zz in zzv] 
+        strs = ['{}'.format(int(zz)) for zz in zzv]
     # strs = ['{}%'.format(np.int(zz)) for zz in zzvc]
     for l, s in zip(CS.levels, strs):
         fmt[l] = s

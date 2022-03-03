@@ -2,7 +2,20 @@ from sn_tools.sn_telescope import Telescope
 from . import plt
 import numpy as np
 import numpy.lib.recfunctions as rf
-from scipy.interpolate import interp1d, RegularGridInterpolator
+from scipy.interpolate import interp1d, RegularGridInterpolator, make_interp_spline, UnivariateSpline
+from scipy.ndimage.filters import gaussian_filter
+
+
+def smooth_It(vals, xvar, yvar, kk=3):
+
+    xmin, xmax = np.min(vals[xvar]), np.max(vals[xvar])
+    xnew = np.linspace(xmin, xmax, 100)
+    spl = make_interp_spline(
+        vals[xvar], vals[yvar], k=1)  # type: BSpline
+    spl = UnivariateSpline(vals[xvar], vals[yvar], k=kk)
+    spl.set_smoothing_factor(0.5)
+    spl_smooth = spl(xnew)
+    return xnew, spl_smooth
 
 
 class MagToFlux:
@@ -103,22 +116,27 @@ class MagToFlux:
 
         """
 
-        # plt.ticklabel_format(style='scientific', axis='y',useMathText=True)
-        plt.figure()
-        plt.gca().get_yaxis().get_major_formatter().set_powerlimits((0, 0))
+        # plt.ticklabel_format(style='scientific', axis='y',useMathText=True) f
+        ig, ax = plt.subplots(figsize=(12, 8))
+        # plt.figure()
+        #plt.gca().get_yaxis().get_major_formatter().set_powerlimits((0, 0))
+        ls = dict(zip(self.bands, ['solid', 'dashed', 'dotted']))
         for band in self.bands:
             idx = self.data['band'] == band
             sel = self.data[idx]
-            plt.semilogy(sel['mag'], sel['flux_e_sec'],
-                         color=self.filtcols[band], label='{} band'.format(band))
-
+            ax.semilogy(sel['mag'], sel['flux_e_sec'],
+                        color=self.filtcols[band], label='{} band'.format(band), ls=ls[band])
+            """
+            ax.plot(sel['mag'], sel['flux_e_sec'],
+                    color=self.filtcols[band], label='{} band'.format(band), ls=ls[band])
+            """
             # plt.ticklabel_format(style='scientific', axis='y',useMathText=True)
-        plt.xlabel('mag')
-        plt.ylabel('flux [pe/s]')
-        plt.xlim([14., 20.])
-        plt.ylim([1e3, 1e6])
-        plt.legend()
-        plt.grid()
+        ax.set_xlabel('mag')
+        ax.set_ylabel('flux [pe/s]')
+        ax.set_xlim([14., 20.])
+        ax.set_ylim([1e3, 1e6])
+        ax.legend()
+        ax.grid()
         if savePlot:
             plt.savefig('flux_mag.png')
 
@@ -272,7 +290,7 @@ def plotMagSat(bands, restot, psf_type='single_gauss'):
                 """
         if pos == 1:
             # ax[pos][0].legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),
-              # ncol=1, fancybox=True, shadow=True)
+            # ncol=1, fancybox=True, shadow=True)
             ax[pos].legend(loc='center left', bbox_to_anchor=(
                 1, 0.5), ncol=1, fontsize=fontsize)
         ax[pos].set_ylabel('mag', fontsize=fontsize)
@@ -352,6 +370,7 @@ def plotMagContour(fName, band='g'):
     ax.set_ylabel('Seeing [\'\']')
     ax.legend(loc='upper left', bbox_to_anchor=(0.1, 1.1),
               ncol=2, frameon=False)
+    ax.grid()
 
 
 def plotContour(ax, mags, color='k', ls='solid', label=''):
@@ -387,8 +406,10 @@ def plotContour(ax, mags, color='k', ls='solid', label=''):
     zzv = [0.01, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15]
     zzv = [15., 16., 17.]
     zzv = np.arange(14., 18., 0.5)
+    #zzv = np.arange(14., 18., 1.)
     print('hhhh', label)
-    CS = ax.contour(EXP, SEE, MAG, zzv, colors=color,
+    MMAG = gaussian_filter(MAG, 5)
+    CS = ax.contour(EXP, SEE, MMAG, zzv, colors=color,
                     linestyles=ls)
 
     fmt = {}
@@ -400,6 +421,7 @@ def plotContour(ax, mags, color='k', ls='solid', label=''):
               colors=color, fmt=fmt)
 
     CS.collections[0].set_label(label)
+    ax.grid()
 
 
 def magInterp(tab, band):
