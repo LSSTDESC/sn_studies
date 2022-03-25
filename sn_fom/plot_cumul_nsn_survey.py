@@ -30,7 +30,8 @@ dfa = pd.DataFrame(resa)
 dfb = pd.DataFrame(resb)
 dfa['nsn_cum'] = np.cumsum(resa['nsn'])/(np.cumsum(resa['nsn'])[-1])
 dfb['nsn_cum'] = np.cumsum(resb['nsn'])/(np.cumsum(resb['nsn'])[-1])
-
+dfa['nsn_cum'] = 1.-dfa['nsn_cum']
+dfb['nsn_cum'] = 1.-dfb['nsn_cum']
 dfa = dfa.to_records(index=False)
 dfb = dfb.to_records(index=False)
 #ax.plot(dfa['z'], dfa['nsn_cum'], color='r')
@@ -50,7 +51,7 @@ ax.plot([0.0, zref], [ib, ib], ls='dotted', color='k')
 ax.text(0.2, ib+0.02, '{}'.format(np.round(ib, 2)), fontsize=20)
 ax.grid()
 
-ax.set_ylabel('$N_{SN}^{frac} (\leq z)$')
+ax.set_ylabel('$N_{SN}^{frac} (\geq z)$')
 ax.set_xlabel('$z$')
 ax.set_xlim([0.1, 1.07])
 ax.set_ylim([0.0, 1.])
