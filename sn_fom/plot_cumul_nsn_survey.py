@@ -23,7 +23,7 @@ def smooth_it(vals, xvar, yvar, zval=0.80):
 resa = pd.read_hdf('edr_0.80_4.hdf5').to_records(index=False)
 resb = pd.read_hdf('universal_3.hdf5').to_records(index=False)
 
-fig, ax = plt.subplots(figsize=(12, 9))
+fig, ax = plt.subplots(figsize=(12, 8))
 
 print(np.cumsum(resa['nsn']))
 dfa = pd.DataFrame(resa)
@@ -40,7 +40,7 @@ dfb = dfb.to_records(index=False)
 zref = 0.8
 xa, ya, ia = smooth_it(dfa, 'z', 'nsn_cum', zval=zref)
 xb, yb, ib = smooth_it(dfb, 'z', 'nsn_cum', zval=zref)
-ax.plot(xa, ya, color='r', lw=2, label='EDR$_{0.80}^{0.60}$')
+ax.plot(xa, ya, color='r', lw=2, label='IDR$_{0.80}^{0.60}$')
 ax.plot([zref, zref], [0.0, ia], ls='dotted', color='k')
 ax.plot([0.0, zref], [ia, ia], ls='dotted', color='k')
 print('alors', ia)
