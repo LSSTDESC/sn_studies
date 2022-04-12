@@ -18,23 +18,24 @@
 
 #for vv in 200 300 400 500 600 700 800
 addwa=_wa
-#addwa=''
+addwa=''
 sigp='_sigp'
 fitDir=Fit_bias${sigp}_Ny_40_Om_w0${addwa}
-for vv in 2000abs allspectro
-	  do
-	      python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_zspectro_x1c_1sigma_uy_${vv}/${fitDir} --config config_cosmoSN_universal_yearly.csv --runtype universal --outName cosmoSN_universal_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_zspectro_x1c_1sigma${addwa}${sigp}_uy_${vv}
-python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_zspectro_x1c_1sigma_uy_${vv}/${fitDir} --config config_cosmoSN_deep_rolling_2_2_mini_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_2_2_mini_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_zspectro_x1c_1sigma${addwa}${sigp}_uy_${vv}
-python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_zspectro_x1c_1sigma_uy_${vv}/${fitDir} --config config_cosmoSN_deep_rolling_0.80_0.80_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_0.80_0.80_yearly_Ny_40  --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_zspectro_x1c_1sigma${addwa}${sigp}_uy_${vv}
-done
+#for vv in pfscurrent 20000tenyears 1200yearly
+#for vv in 1200yearly
+#	  do
+#	      python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_zspectro_x1c_1sigma_uy_${vv}/${fitDir} --config config_cosmoSN_universal_yearly.csv --runtype universal --outName cosmoSN_universal_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_zspectro_x1c_1sigma${addwa}${sigp}_uy_${vv}
+#python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_zspectro_x1c_1sigma_uy_${vv}/${fitDir} --config config_cosmoSN_deep_rolling_2_2_mini_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_2_2_mini_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_zspectro_x1c_1sigma${addwa}${sigp}_uy_${vv}
+#python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_zspectro_x1c_1sigma_uy_${vv}/${fitDir} --config config_cosmoSN_deep_rolling_0.80_0.80_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_0.80_0.80_yearly_Ny_40  --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_zspectro_x1c_1sigma${addwa}${sigp}_uy_${vv}
+#done
 
 #python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_new_x1c_2sigma/Fit_bias_Ny_40_Om_w0 --config config_cosmoSN_universal_yearly.csv --runtype universal --outName cosmoSN_universal_yearly_Ny_40  --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_new_x1c_2sigma
 #python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_new_x1c_2sigma/Fit_bias_Ny_40_Om_w0 --config config_cosmoSN_deep_rolling_2_2_mini_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_2_2_mini_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_new_x1c_2sigma
 #python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_new_x1c_2sigma/Fit_bias_Ny_40_Om_w0 --config config_cosmoSN_deep_rolling_0.80_0.80_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_0.80_0.80_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_new_x1c_2sigma
 
-#python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_nosyste/Fit_bias_Ny_40_Om_w0 --config config_cosmoSN_universal_yearly.csv --runtype yearly --outName cosmoSN_universal_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_nosyste
-#python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_nosyste/Fit_bias_Ny_40_Om_w0 --config config_cosmoSN_deep_rolling_2_2_mini_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_2_2_mini_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_nosyste
-#python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_nosyste/Fit_bias_Ny_40_Om_w0 --config config_cosmoSN_deep_rolling_0.80_0.80_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_0.80_0.80_yearly_Ny_40  --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_nosyste
+python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_nosyste/Fit_bias_Ny_40_Om_w0 --config config_cosmoSN_universal_yearly.csv --runtype universal --outName cosmoSN_universal_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_nosyste
+python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_nosyste/Fit_bias_Ny_40_Om_w0 --config config_cosmoSN_deep_rolling_2_2_mini_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_2_2_mini_yearly_Ny_40 --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_nosyste
+python sn_studies/sn_fom/cosmo_plot.py --fileDir cosmofit_yearly_nosyste/Fit_bias_Ny_40_Om_w0 --config config_cosmoSN_deep_rolling_0.80_0.80_yearly.csv --runtype deep_rolling --outName cosmoSN_deep_rolling_0.80_0.80_yearly_Ny_40  --outDir /home/philippe/LSST/sn_dd_opti/cosmo_files_yearly_nosyste
 
 
 

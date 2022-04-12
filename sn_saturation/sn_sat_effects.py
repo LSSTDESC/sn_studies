@@ -270,10 +270,13 @@ def plotTimeSaturationContour(x1, color, prefix='TimeSat', cadence=1, band='g'):
     data = np.load('{}_{}_{}.npy'.format(
         prefix, cadence, band), allow_pickle=True)
 
+    """
     idx = np.abs(data['x1']-x1) < 1.e-5
     idx &= np.abs(data['color']-color) < 1.e-5
 
     df = pd.DataFrame(np.copy(data[idx]))
+    """
+    df = pd.DataFrame(np.copy(data))
     df['deltaT'] = df['tSat_interp']-df['tBeg']
 
     dfeffi = df.groupby(['band', 'full_well', 'exptime', 'z']).apply(
@@ -350,7 +353,9 @@ def plotSatPeak(data, full_wells):
             idd = np.abs(sel['exptime']-exptt) < 1.e-5
             #idd &= sel['deltaT_med']>0.
             ssol = sel[idd]
-            ax.plot(ssol['z'], gaussian_filter(ssol[vv], 1.1),
+            gg = gaussian_filter(ssol[vv], 1.1)
+            gg = ssol[vv]
+            ax.plot(ssol['z'], gg,
                     ls=ls[full_well], color=colors[exptt], marker=mm[exptt], label=label, ms=10, markerfacecolor='none')
             """
             ax.errorbar(ssol['z'], gaussian_filter(ssol[vv], 1.1), yerr=ssol['{}_err'.format(
