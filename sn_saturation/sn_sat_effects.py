@@ -316,7 +316,7 @@ def plotSatDeltaT(data, full_wells):
     ax.set_ylabel('$\Delta$t [day]')
     ax.set_xlabel('$z$')
 
-    ax.set_xlim([0.01, 0.035])
+    ax.set_xlim([0.01, 0.03])
     ax.grid()
     handles, labels = ax.get_legend_handles_labels()
     # sort both labels and handles by labels
@@ -354,12 +354,16 @@ def plotSatPeak(data, full_wells):
             #idd &= sel['deltaT_med']>0.
             ssol = sel[idd]
             gg = gaussian_filter(ssol[vv], 1.1)
-            gg = ssol[vv]
+            #gg = ssol[vv]
+
             ax.plot(ssol['z'], gg,
                     ls=ls[full_well], color=colors[exptt], marker=mm[exptt], label=label, ms=10, markerfacecolor='none')
             """
-            ax.errorbar(ssol['z'], gaussian_filter(ssol[vv], 1.1), yerr=ssol['{}_err'.format(
-                vv)], color=colors[exptt], marker=mm[exptt], ls='None')
+            print(ssol.dtype)
+            errv = '{}_err'.format(vv)
+            print(ssol[errv])
+            ax.errorbar(ssol['z'], gg, yerr=ssol[errv],
+                        color=colors[exptt], marker=mm[exptt], label=label, markerfacecolor='none', ms=10)
             """
     ax.set_ylabel('Efficiency')
     ax.set_xlabel('$z$')
@@ -376,7 +380,7 @@ def plotSatPeak(data, full_wells):
               1.16), ncol=3, frameon=False, columnspacing=1.)
 
     #ax.legend(loc='upper left', bbox_to_anchor=(0.0, 1.16),ncol=3,frameon=False)
-    ax.set_xlim([0.01, 0.04])
+    ax.set_xlim([0.01, 0.03])
     ax.set_ylim([0.0, None])
     ax.grid()
 
@@ -440,16 +444,20 @@ def effi(grp):
 
     effi_deltaT = sel.size/grp.size
     effi_deltaT_err = np.sqrt(sel.size*(1.-effi_deltaT))/grp.size
+    effi_deltaT_sigma = np.sqrt(sel.size*(1.-effi_deltaT))
     effi_peak = selnp.size/grp.size
     effi_peak_err = np.sqrt(selnp.size*(1.-effi_peak))/grp.size
+    effi_peak_sigma = np.sqrt(selnp.size*(1.-effi_peak))
 
     return pd.DataFrame({'effi_deltaT': [effi_deltaT],
                          'effi_deltaT_err': [effi_deltaT_err],
+                         'effi_deltaT_sigma': [effi_deltaT_sigma],
                          'deltaT_min': [vmin],
                          'deltaT_max': [vmax],
                          'deltaT_med': [vmed],
                          'effi_peak': [effi_peak],
-                         'effi_peak_err': [effi_peak_err]})
+                         'effi_peak_err': [effi_peak_err],
+                         'effi_peak_sigma': [effi_peak_sigma]})
 
 
 def plotSatContour(ax, dd, color='k', ls='solid', label='', zzv=[0.05, 0.20, 0.5, 0.75, 0.99], percent=True):
