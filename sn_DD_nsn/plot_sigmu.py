@@ -2,9 +2,11 @@ from sn_DD_nsn import plt, filtercolors
 from optparse import OptionParser
 import h5py
 from sn_tools.sn_io import loopStack
-#import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import interp1d
+
+lw = 3
 
 
 def loadFile(fileDir, fileName):
@@ -29,30 +31,30 @@ def plot(ax, sna):
     idx = sna['z'] <= 0.8
     sn = sna[idx]
     sn.sort('z')
-    #ax.plot(sn['z'], sn['sigma_mu'], color='k',label='$\sigma_{\mu}$')
+    # ax.plot(sn['z'], sn['sigma_mu'], color='k',label='$\sigma_{\mu}$')
     alph = '$\\alpha$'
     bet = '$\\beta$'
     ax.plot(sn['z'], sn['beta']*np.sqrt(sn['Cov_colorcolor']),
-            color='r', label=bet+'$\sigma_C$')
+            color='r', label=bet+'$\sigma_C$', lw=lw)
     ax.plot(sn['z'], sn['alpha']*np.sqrt(sn['Cov_x1x1']),
-            color='b', label=alph+'$\sigma_{x1}$', ls='dashed')
+            color='b', label=alph+'$\sigma_{x1}$', ls='dashed', lw=lw)
     ax.plot(sn['z'], np.sqrt(sn['Cov_mbmb']),
-            color='g', label='$\sigma_{m_b}$', ls='dotted')
+            color='g', label='$\sigma_{m_b}$', ls='dotted', lw=lw)
 
     miny = np.min(sn['alpha']*np.sqrt(sn['Cov_x1x1']))
     ax.grid()
-    #ax.legend(loc='upper left')
+    # ax.legend(loc='upper left')
     ax.legend(bbox_to_anchor=(0.5, 1.12), ncol=3,
               frameon=False, loc='upper center')
-    ax.set_xlim([0.3, 0.8])
+    ax.set_xlim([0.3, 0.75])
     ax.set_ylim([0., None])
     ax.set_xlabel(r'$z$')
     ax.set_ylabel(r'Error budget [mag]')
-
+    ax.set_ylim([0.0, 0.16])
     interp = interp1d(sn['beta']*np.sqrt(sn['Cov_colorcolor']), sn['z'])
     zlim = interp(0.12)
-    ax.plot([0.3, zlim], [0.12]*2, color='k', lw=2, ls=(0, (5, 1)))
-    ax.plot([zlim]*2, [0., 0.12], color='k', lw=2, ls=(0, (5, 1)))
+    ax.plot([0.3, zlim], [0.12]*2, color='k', lw=lw, ls=(0, (5, 1)))
+    ax.plot([zlim]*2, [0., 0.12], color='k', lw=lw, ls=(0, (5, 1)))
     zlimstr = '$z_{limit}$'
     ax.text(0.63, 0.125, zlimstr+' = {}'.format(np.round(zlim, 2)))
 
@@ -71,7 +73,7 @@ def plot_snr_sigmaC(sna):
         idx = sna[var] > 0.
         sel = sna[idx]
         ax.plot(sel[var], np.sqrt(sel['Cov_colorcolor']),
-                color=filtercolors[b], label='${}$ band'.format(b), ls=lsb[b])
+                color=filtercolors[b], label='${}$ band'.format(b), ls=lsb[b], lw=lw)
         ii = interp1d(np.sqrt(sna['Cov_colorcolor']), sna['SNR_{}'.format(b)])
         snrmin[b] = ii(0.04)
 
@@ -85,9 +87,9 @@ def plot_snr_sigmaC(sna):
               frameon=False, loc='upper center')
     for b in bands:
         ax.plot([0., snrmin[b]], [0.04]*2,
-                color='k', lw=2, ls=(0, (5, 1)))
+                color='k', lw=lw, ls=(0, (5, 1)))
         ax.plot([snrmin[b]]*2, [0., 0.04],
-                color='k', lw=2, ls=(0, (5, 1)))
+                color='k', lw=lw, ls=(0, (5, 1)))
         ffi = 'SNR$_{'+b+'}$'
         ax.text(snrmin[b]-10, 0.041, '{} = {}'.format(ffi,
                                                       np.round(snrmin[b])), color=filtercolors[b])
@@ -112,7 +114,7 @@ fileName = opts.fileName
 fileNameb = opts.fileNameb
 
 sn = loadFile(fileDir, fileName)
-#sna = loadFile(opts.fileDirb, fileName.replace('error_model', '380.0_800.0'))
+# sna = loadFile(opts.fileDirb, fileName.replace('error_model', '380.0_800.0'))
 snb = loadFile(fileDir, fileNameb)
 
 plot_errorbud_z(sn, None)
