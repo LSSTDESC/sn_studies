@@ -49,8 +49,8 @@ def plotcontour(ax, Nfields, Nseasons, cadence, nvmin, nvmax, slmin, slmax, colo
     NV, SL, BUD = budplot(Nfields, Nseasons, cadence,
                           nvmin, nvmax, slmin, slmax)
     #plt.figure(figsize=(8, 6))
-    ax.imshow(BUD, extent=(
-        nvmin, nvmax, slmin, slmax), aspect='auto', alpha=0.25, cmap='hsv')
+    # ax.imshow(BUD, extent=(
+    #    nvmin, nvmax, slmin, slmax), aspect='auto', alpha=0.25, cmap='hsv')
 
     zzv = [0.01, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.15]
     #zzv = [0.03, 0.05, 0.07, 0.09, 0.11, 0.13, 0.15]

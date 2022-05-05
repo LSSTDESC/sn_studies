@@ -142,12 +142,15 @@ class Plot_Sigma_mu:
         data = pd.read_hdf('{}.hdf5'.format(fichName[0]))
 
         data_syste = {}
-        for fichName in sigmamu_syste:
-            data_syste[fichName] = pd.read_hdf('{}.hdf5'.format(fichName))
+        syste = pd.DataFrame()
+        print('allll', sigma_mu_syste)
+        if sigma_mu_syste is not None:
+            for fichName in sigmamu_syste:
+                data_syste[fichName] = pd.read_hdf('{}.hdf5'.format(fichName))
 
-        # estimate systematics here
-        syste = self.estimate_syste(data, data_syste)
-        print('syste', syste)
+            # estimate systematics here
+            syste = self.estimate_syste(data, data_syste)
+            print('syste', syste)
         self.plot_sigma_mu(data, syste)
 
     def plot_sigma_mu(self, dd, syste):
@@ -718,15 +721,17 @@ opts, args = parser.parse_args()
 nsn_bias = opts.nsn_bias.split(',')
 nsn_bias_syste = opts.nsn_bias_syste.split(',')
 sigma_mu = opts.sigma_mu.split(',')
-sigma_mu_syste = opts.sigma_mu_syste.split(',')
+sigma_mu_syste = None
+if opts.sigma_mu_syste != 'None':
+    sigma_mu_syste = opts.sigma_mu_syste.split(',')
 
 # this is to plot with systematics
 # NSN_Syste(nsn_bias, nsn_bias_syste, fieldNames=[
 #          'COSMOS', 'XMM-LSS', 'ELAIS', 'CDFS', 'ADFS'])
 
 Plot_NSN(nsn_bias, fieldNames=['CDFS'], plotNames=['CDF-S'])
-#Plot_Sigma_mu(sigma_mu, sigma_mu_syste)
-# Plot_Sigma_Components(sigma_mu, dbNames=['DD_0.90', 'DD_0.65'])
+Plot_Sigma_mu(sigma_mu, sigma_mu_syste)
+#Plot_Sigma_Components(sigma_mu, dbNames=['DD_0.90', 'DD_0.65'])
 plt.show()
 # save sigma_mb vs z
 # get_sigma_mb_z(sigma_mu)

@@ -4,6 +4,8 @@ import numpy as np
 #from scipy.ndimage.filters import gaussian_filter
 from scipy.interpolate import interp1d, make_interp_spline
 
+lw = 3
+
 
 def smooth_it(vals, xvar, yvar, zval=0.80):
     xmin, xmax = np.min(vals[xvar]), np.max(vals[xvar])
@@ -40,14 +42,14 @@ dfb = dfb.to_records(index=False)
 zref = 0.8
 xa, ya, ia = smooth_it(dfa, 'z', 'nsn_cum', zval=zref)
 xb, yb, ib = smooth_it(dfb, 'z', 'nsn_cum', zval=zref)
-ax.plot(xa, ya, color='r', lw=2, label='IDR$_{0.80}^{0.60}$')
-ax.plot([zref, zref], [0.0, ia], ls='dotted', color='k')
-ax.plot([0.0, zref], [ia, ia], ls='dotted', color='k')
+ax.plot(xa, ya, color='r', lw=lw, label='IDR$_{0.80}^{0.60}$')
+ax.plot([zref, zref], [0.0, ia], ls='dotted', color='k', lw=lw)
+ax.plot([0.0, zref], [ia, ia], ls='dotted', color='k', lw=lw)
 print('alors', ia)
 ax.text(0.2, ia+0.02, '{}'.format(np.round(ia, 2)), fontsize=20)
-ax.plot(xb, yb, color='b', lw=2, label='DU$^{0.65}$', ls='dashed')
-ax.plot([zref, zref], [0.0, ib], ls='dotted', color='k')
-ax.plot([0.0, zref], [ib, ib], ls='dotted', color='k')
+ax.plot(xb, yb, color='b', lw=lw, label='DU$^{0.65}$', ls='dashed')
+ax.plot([zref, zref], [0.0, ib], ls='dotted', color='k', lw=lw)
+ax.plot([0.0, zref], [ib, ib], ls='dotted', color='k', lw=lw)
 ax.text(0.2, ib+0.02, '{}'.format(np.round(ib, 2)), fontsize=20)
 ax.grid()
 
