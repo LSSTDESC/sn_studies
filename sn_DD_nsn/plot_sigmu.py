@@ -90,9 +90,9 @@ def plot_snr_sigmaC(sna):
                 color='k', lw=lw, ls=(0, (5, 1)))
         ax.plot([snrmin[b]]*2, [0., 0.04],
                 color='k', lw=lw, ls=(0, (5, 1)))
-        ffi = 'SNR$_{'+b+'}$'
-        ax.text(snrmin[b]-10, 0.041, '{} = {}'.format(ffi,
-                                                      np.round(snrmin[b])), color=filtercolors[b])
+        ffi = 'SNR$^{'+b+'}$'
+        ax.text(snrmin[b]-10.5, 0.041, '{} = {}'.format(ffi,
+                                                        np.round(snrmin[b])), color=filtercolors[b])
 
 
 parser = OptionParser()
