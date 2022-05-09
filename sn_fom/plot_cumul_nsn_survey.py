@@ -25,7 +25,7 @@ def smooth_it(vals, xvar, yvar, zval=0.80):
 resa = pd.read_hdf('edr_0.80_4.hdf5').to_records(index=False)
 resb = pd.read_hdf('universal_3.hdf5').to_records(index=False)
 
-fig, ax = plt.subplots(figsize=(12, 8))
+fig, ax = plt.subplots(figsize=(8, 8))
 
 print(np.cumsum(resa['nsn']))
 dfa = pd.DataFrame(resa)
@@ -60,4 +60,5 @@ ax.set_ylim([0.0, 1.])
 ax.legend(loc='upper left', bbox_to_anchor=(
     0., 1.15), ncol=2, frameon=False)
 # fig.tight_layout()
+plt.subplots_adjust(left=0.15)
 plt.show()

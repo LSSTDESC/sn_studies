@@ -75,7 +75,7 @@ nvmin, nvmax = 5, 250
 slmin, slmax = 120, 240
 
 coords = [(12.41, 180), (41.5, 180.), (61.05, 180.), (208.05, 180.)]
-fig, ax = plt.subplots(figsize=(12, 10))
+fig, ax = plt.subplots(figsize=(10, 10))
 plotcontour(ax, Nfields, Nseasons, cadence, nvmin, nvmax, slmin, slmax)
 #coords = [62.0, 208.05]
 coords = [36.46, 208.05]
@@ -92,7 +92,8 @@ ax.plot(coords, [180.]*2,  'ro', markersize=9.)
 
 ax.set_xlabel('$\mathrm{N_{visits}}$', weight='normal')
 ax.set_ylabel('Season length [days]', weight='normal')
-ax.grid(alpha=0.3)
+# ax.grid(alpha=0.3)
+ax.grid()
 """
 Nfields = 5
 Nseasons=10
