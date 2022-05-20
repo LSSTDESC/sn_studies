@@ -36,8 +36,10 @@ class PSF_pixels:
             self.PSF = self.PSF_single_gauss
         if psf_type == 'double_gauss':
             self.PSF = self.PSF_double_gauss
+        if psf_type == 'moffat':
+            self.PSF = self.PSF_moffat
 
-    def PSF_single_gauss(self, x, y, xc, yc, sigma):
+    def PSF_single_gauss(self, x, y, xc, yc, nsigma=1):
         """
         Method to estimate a single gaussian PSF
 
@@ -59,20 +61,20 @@ class PSF_pixels:
         flux in the pixel (float)
 
         """
-        #sigma = self.seeing_pixel/2.355
+        # sigma = self.seeing_pixel/2.355
         if isinstance(x, np.ndarray):
             val = (x[..., None]-xc)**2+(y[..., None]-yc)**2
-            #val = (x[...,None]-xc)**2
+            # val = (x[...,None]-xc)**2
         else:
             val = (x-xc)**2+(y-yc)**2
-
+        sigma = nsigma*self.seeing_pixel/2.355
         func = np.exp(-val/2./sigma**2)
         func /= (2.*np.pi*sigma**2)
-        #func /= (2.*np.pi)
-        #func /= (sigma*np.sqrt(2.*np.pi))
+        # func /= (2.*np.pi)
+        # func /= (sigma*np.sqrt(2.*np.pi))
         return self.flux*func
 
-    def PSF_double_gauss(self, x, y, xc, yc, sigma):
+    def PSF_double_gauss(self, x, y, xc, yc):
         """
         Method to estimate a double-gaussian PSF
 
@@ -94,7 +96,46 @@ class PSF_pixels:
         flux in the pixel (float)
 
         """
-        return 0.909*(self.PSF_single_gauss(x, y, xc, yc, sigma)+0.1*self.PSF_single_gauss(x, y, xc, yc, 2.*sigma))
+        return 0.909*(self.PSF_single_gauss(x, y, xc, yc)+0.1*self.PSF_single_gauss(x, y, xc, yc, 2))
+
+    def PSF_moffat(self, x, y, xc, yc, beta=2.5):
+        """
+        Method to estimate a moffat PSF
+
+        Parameters
+        --------------
+        x: float
+          x-coordinate where the PSF has to be estimated
+        y: float
+          y-coordinate where the PSF has to be estimated
+        xc: float
+           x-center of the pixel
+        yc: float
+           y-center of the pixel
+        beta: float,opt
+          moffat beta value (default: 2.5)
+
+        Returns
+        ---------
+        flux in the pixel (float)
+
+        """
+        # sigma = self.seeing_pixel/2.355
+        if isinstance(x, np.ndarray):
+            val = (x[..., None]-xc)**2+(y[..., None]-yc)**2
+            # val = (x[...,None]-xc)**2
+        else:
+            val = (x-xc)**2+(y-yc)**2
+
+        alpha = self.seeing_pixel
+        vv = 2.*np.sqrt(2**(1/beta)-1)
+        alpha /= vv
+        func = val/alpha**2
+        func = func**beta
+        func = 1./func
+        # func /= (2.*np.pi)
+        # func /= (sigma*np.sqrt(2.*np.pi))
+        return self.flux*func
 
     def GetCenters(self, xmin, xmax, dx, ymin, ymax, dy):
         """
@@ -162,15 +203,15 @@ class PSF_pixels:
 
         xc_bary, yc_bary = self.GetCenters(
             xmin, xmax, dx_new, ymin, ymax, dy_new)
-        sigma = self.seeing_pixel/2.355
+        # sigma = self.seeing_pixel/2.355
         if integ_type == 'num':
             flux_pixel = self.PSF(xc_bary, yc_bary, xc,
-                                  yc, sigma)*dx_new*dy_new
+                                  yc)*dx_new*dy_new
         if integ_type == 'quad':
             flux_from_psf_vect = np.vectorize(self.integr)
             flux_pixel = flux_from_psf_vect(
-                xmin, xmax, ymin, ymax, xc, yc, sigma)
-            #flux_pixel = flux_from_psf_vect(xmin,xmax,0,0,xc,yc,sigma)
+                xmin, xmax, ymin, ymax, xc, yc)
+            # flux_pixel = flux_from_psf_vect(xmin,xmax,0,0,xc,yc,sigma)
 
         if flux_pixel.ndim > 1:
             res = np.array(np.sum(flux_pixel, axis=(0, 1)) /
@@ -202,8 +243,9 @@ class PSF_pixels:
         return dblquad(self.PSF, xmin, xmax, lambda x: ymin, lambda y: ymax,
                        args=(xc, yc, sigma))[0]
         """
-        res = quad(lambda x : np.exp(-(x-xc)**2/2./sigma**2)/np.sqrt(2.*np.pi)/sigma,xmin,xmax)[0]
-        #print('hello',xmin,xmax,xc,yc,sigma,res)
+        res = quad(lambda x : np.exp(-(x-xc)**2/2./sigma**2)/ \
+                   np.sqrt(2.*np.pi)/sigma,xmin,xmax)[0]
+        # print('hello',xmin,xmax,xc,yc,sigma,res)
         return self.flux*res
         """
 
@@ -222,7 +264,7 @@ class PSF_pixels:
         numpy array with the following fields:
 
         pixel_frac: fraction of signal in the pixel
-        xc: x position of the flux 
+        xc: x position of the flux
         yc: y position of the flux
         seein: seeing value
         xpixel: x coodrinate of the pixel center
@@ -234,10 +276,10 @@ class PSF_pixels:
         dx, dy = 1., 1.
         dgrid = int(2.15*self.seeing_pixel)  # 5 sigma
         # dgrid = int(5*self.seeing_pixel)  # 5 sigma
-        #print('dgrid', dgrid, self.seeing)
+        # print('dgrid', dgrid, self.seeing)
         if dgrid < 3:
             dgrid = 5
-        #dgrid = 1
+        # dgrid = 1
         valgrid = (dgrid-1)
         xmin, xmax = -dx/2.-valgrid, dx/2.+valgrid
         ymin, ymax = -dy/2.-valgrid, dy/2.+valgrid
@@ -328,7 +370,7 @@ class PSF_pixels:
         -------
         numpy array with the following fields:
         pixel_frac: fraction of signal in the pixel
-        xc: x position of the flux 
+        xc: x position of the flux
         yc: y position of the flux
         seein: seeing value
         xpixel: x coordinate of the pixel center
@@ -391,10 +433,10 @@ def PlotMaxFrac(psf_type='single_gauss', title='Single gaussian profile'):
 
     grp = df.groupby(['seeing']).apply(lambda x: pd.DataFrame({'pixel_frac_max': [x['pixel_frac'].max()],
                                                                'pixel_frac_min': [x['pixel_frac'].min()],
-                                                               'pixel_frac_med': [x['pixel_frac'].median()]})).reset_index()
+                                                              'pixel_frac_med': [x['pixel_frac'].median()]})).reset_index()
     print(grp)
 
-    #fontsize = 20
+    # fontsize = 20
     fig, ax = plt.subplots(figsize=(12, 8))
     # ax.set_title(title,fontsize=fontsize)
     ax.set_title(title)
@@ -412,7 +454,7 @@ def PlotMaxFrac(psf_type='single_gauss', title='Single gaussian profile'):
     """
     ax.set_xlabel(r'seeing ["]')
     ax.set_ylabel(r'Max frac pixel flux')
-    #ax.tick_params(labelsize = fontsize)
+    # ax.tick_params(labelsize = fontsize)
     plt.savefig('max_frac_seeing_{}.png'.format(psf_type))
 
 
@@ -450,7 +492,7 @@ def PlotPixel(seeing, psf_type, varxsel, xp, varysel, yp, varxplot, varyplot, ti
     fig, ax = plt.subplots(figsize=(10, 10))
     seeing_pix = seeing/0.2  # seeing in arcsec - pixel LSST = 0.2"
     sigma = seeing_pix/2.355
-    #titleform = 'seeing: {} - sigma: {} pixel'.format(np.round(seeing,2),np.round(sigma,2))
+    # titleform = 'seeing: {} - sigma: {} pixel'.format(np.round(seeing,2),np.round(sigma,2))
     titleform = '{} - seeing: {}"'.format(titleadd, np.round(seeing, 2))
     # fig.suptitle(titleform,fontsize=fontsize)
     # ax.set_title(titleform,fontsize=fontsize)
@@ -466,7 +508,7 @@ def PlotPixel(seeing, psf_type, varxsel, xp, varysel, yp, varxplot, varyplot, ti
     if type_plot == 'imshow':
         CS = ax.imshow(Zc, extent=[np.min(xcm), np.max(
             xcm), np.min(ycm), np.max(ycm)])
-    #ax.plot(xxc_m, yyc_m, 'k.')
+    # ax.plot(xxc_m, yyc_m, 'k.')
     vmin = np.min(sel['pixel_frac'])
     vmax = np.max(sel['pixel_frac'])
     vmin = np.round(vmin, 2)
@@ -477,7 +519,8 @@ def PlotPixel(seeing, psf_type, varxsel, xp, varysel, yp, varxplot, varyplot, ti
     cbar = fig.colorbar(CS, ax=ax, ticks=np.arange(
         vmin, vmax, 0.01), shrink=shrink)
     """
-    cbar.set_label('Flux fraction', rotation=270, fontsize=fontsize,labelpad=30)# position=(12.,0.5))
+    cbar.set_label('Flux fraction', rotation=270,
+                   fontsize=fontsize,labelpad=30)# position=(12.,0.5))
     cbar.ax.tick_params(labelsize=fontsize)
     ax.set_xlabel(r'x [pixel]',fontsize=fontsize)
     ax.set_ylabel(r'y [pixel]',fontsize=fontsize)
@@ -488,12 +531,12 @@ def PlotPixel(seeing, psf_type, varxsel, xp, varysel, yp, varxplot, varyplot, ti
     # cbar.ax.tick_params(labelsize=fontsize)
     ax.set_xlabel(r'x [pixel]')
     ax.set_ylabel(r'y [pixel]')
-    #ax.tick_params(labelsize = fontsize)
+    # ax.tick_params(labelsize = fontsize)
     ax = plt.gca()
     ax.set_aspect('equal')
     # ax.set_xlim([-3.,3.])
     # ax.set_ylim([-3.,3.])
-    #cbar.set_clim(np.round(vmin,1), np.round(vmax,1))
+    # cbar.set_clim(np.round(vmin,1), np.round(vmax,1))
     # plt.show()
     plt.savefig('flux_dist_center_position.png')
 
@@ -521,13 +564,13 @@ def test_newmethod():
         flux in the pixel (float)
 
         """
-        #sigma = self.seeing_pixel/2.355
+        # sigma = self.seeing_pixel/2.355
         val = (x-xc)**2+(y-yc)**2
 
         func = np.exp(-val/2./sigma**2)
         func /= (2.*np.pi*sigma**2)
-        #func /= (2.*np.pi)
-        #func /= (sigma*np.sqrt(2.*np.pi))
+        # func /= (2.*np.pi)
+        # func /= (sigma*np.sqrt(2.*np.pi))
         return func
 
     dx = 0.1
