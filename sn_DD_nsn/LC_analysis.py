@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import healpy as hp
 import pandas as pd
-from astropy.table import Table,vstack
+from astropy.table import Table, vstack
 import sncosmo
-from sn_tools.sn_telescope import Telescope
+from sn_telmodel.sn_telescope import Telescope
 import astropy.units as u
 import multiprocessing
 from optparse import OptionParser

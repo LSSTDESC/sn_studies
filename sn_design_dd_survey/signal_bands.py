@@ -1,5 +1,5 @@
 import numpy as np
-from sn_tools.sn_telescope import Telescope
+from sn_telmodel.sn_telescope import Telescope
 import numpy.lib.recfunctions as rf
 from . import plt, filtercolors
 from scipy import interpolate

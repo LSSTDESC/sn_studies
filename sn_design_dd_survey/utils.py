@@ -1,4 +1,4 @@
-from sn_tools.sn_telescope import Telescope
+from sn_telmodel.sn_telescope import Telescope
 import numpy as np
 from scipy import interpolate
 from sn_tools.sn_io import loopStack
@@ -31,7 +31,7 @@ def flux5_to_m5(bands):
     f5_dict = {}
     for band in bands:
         flux_5 = telescope.mag_to_flux_e_sec(
-            m5_range, [band]*len(m5_range), [30.]*len(m5_range),[1]*len(m5_range))[:, 1]
+            m5_range, [band]*len(m5_range), [30.]*len(m5_range), [1]*len(m5_range))[:, 1]
         f5_dict[band] = interpolate.interp1d(
             flux_5, m5_range, bounds_error=False, fill_value=0.0)
 

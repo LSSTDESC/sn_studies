@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import glob
-from sn_tools.sn_telescope import Telescope
+from sn_telmodel.sn_telescope import Telescope
 import os
 from sn_tools.sn_obs import season
 from sn_tools.sn_utils import multiproc

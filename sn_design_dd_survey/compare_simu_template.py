@@ -67,7 +67,7 @@ class ErrorModel_Study:
         flux_e_sec_to_mag: dict
           dict of interp1d(flux->mag), keys=bands.
         """
-        from sn_tools.sn_telescope import Telescope
+        from sn_telmodel.sn_telescope import Telescope
         telescope = Telescope(airmass=1.2)
 
         mags = np.arange(15., 30., 0.1)

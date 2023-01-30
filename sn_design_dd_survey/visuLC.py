@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 from sn_tools.sn_io import loopStack
-from sn_tools.sn_telescope import Telescope
+from sn_telmodel.sn_telescope import Telescope
 
 
 class VisuLC:

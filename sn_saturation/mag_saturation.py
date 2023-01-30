@@ -1,4 +1,4 @@
-from sn_tools.sn_telescope import Telescope
+from sn_telmodel.sn_telescope import Telescope
 from . import plt
 import numpy as np
 import numpy.lib.recfunctions as rf
@@ -261,7 +261,7 @@ def plotMagSat(bands, restot, psf_type='single_gauss'):
     """
 
     fig, ax = plt.subplots(ncols=1, nrows=3, figsize=(14, 15))
-    fig.subplots_adjust(right=0.75)
+    fig.subplots_adjust(right=0.85)
     ipos = dict(zip(bands, [0, 1, 2]))
     lstyle_all = ['-', ':', '--']
     colors_all = ['b', 'r', 'k']

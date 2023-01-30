@@ -7,10 +7,10 @@ import time
 import itertools
 from optparse import OptionParser
 from sn_tools.sn_obs import season
-from sn_tools.sn_telescope import Telescope
+from sn_telmodel.sn_telescope import Telescope
 import matplotlib.pyplot as plt
 from sn_tools.sn_utils import multiproc
-from sn_stackers.coadd_stacker import CoaddStacker
+from sn_tools.sn_stackers import CoaddStacker
 
 
 class Coadd:
@@ -82,7 +82,7 @@ class Coadd:
     def load(self, dirFile, dbName, fieldName):
 
         search_path = '{}/{}/*{}*'.format(dirFiles, dbName, fieldName)
-        print('looking for',search_path)
+        print('looking for', search_path)
         fis = glob.glob(search_path)
 
         res = None
@@ -146,7 +146,7 @@ class ObsSlidingWindow:
         season_min = np.min(selobs[self.mjdCol])
         season_max = np.max(selobs[self.mjdCol])
         season_length = season_max-season_min
-        
+
         selobs.sort(order=[self.mjdCol])
         ddf = pd.DataFrame(np.copy(selobs))
         do = ddf.groupby(['night'])[self.mjdCol].median(
