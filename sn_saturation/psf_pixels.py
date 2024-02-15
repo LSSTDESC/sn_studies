@@ -98,7 +98,7 @@ class PSF_pixels:
         """
         return 0.909*(self.PSF_single_gauss(x, y, xc, yc)+0.1*self.PSF_single_gauss(x, y, xc, yc, 2))
 
-    def PSF_moffat(self, x, y, xc, yc, beta=2.5):
+    def PSF_moffat(self, x, y, xc, yc):
         """
         Method to estimate a moffat PSF
 
@@ -127,14 +127,15 @@ class PSF_pixels:
         else:
             val = (x-xc)**2+(y-yc)**2
 
+        beta = 2.5
         alpha = self.seeing_pixel
         vv = 2.*np.sqrt(2**(1/beta)-1)
         alpha /= vv
-        func = val/alpha**2
-        func = func**beta
-        func = 1./func
+        func = 1.+val/alpha**2
+        func = func**(-beta)
+        #func = 1./func
         # func /= (2.*np.pi)
-        # func /= (sigma*np.sqrt(2.*np.pi))
+        func *= (beta-1)/(np.pi*alpha**2)
         return self.flux*func
 
     def GetCenters(self, xmin, xmax, dx, ymin, ymax, dy):
@@ -274,6 +275,7 @@ class PSF_pixels:
         """
         # limits of the grid
         dx, dy = 1., 1.
+        # dgrid = int(1.*self.seeing_pixel)
         dgrid = int(2.15*self.seeing_pixel)  # 5 sigma
         # dgrid = int(5*self.seeing_pixel)  # 5 sigma
         # print('dgrid', dgrid, self.seeing)
